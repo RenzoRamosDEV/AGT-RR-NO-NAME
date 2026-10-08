@@ -24,7 +24,7 @@ from testcontainers.community.postgres import PostgresContainer
 from review_arena.adapters.persistence.db import create_engine, create_session_factory
 from review_arena.adapters.persistence.models import ProjectModel
 
-BACKEND_DIR = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(scope="module")

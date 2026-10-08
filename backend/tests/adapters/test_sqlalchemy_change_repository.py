@@ -14,7 +14,7 @@ from review_arena.adapters.persistence.models import ChangeModel, EventModel
 from review_arena.application.ingest_change import ingest_change
 from review_arena.domain.change import Change, ChangeKind
 from review_arena.domain.events import ChangeCreated
-from tests.adapters.conftest import create_project
+from tests.conftest import create_project
 
 
 async def test_ingest_change_persists_change_and_event_atomically(

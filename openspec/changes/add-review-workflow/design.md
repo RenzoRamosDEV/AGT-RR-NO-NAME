@@ -73,6 +73,18 @@ decisión ya tomada y documentada como binding en `openspec/config.yaml`; introd
 ahora con `FakeAgent` evita reescribir la frontera entre colas cuando Fase 3 necesite que
 el worker `agents` corra de verdad fuera de Docker.
 
+**`ReviewActivities` recibe fábricas de repositorio inyectadas, no instancia
+`SqlAlchemy*Repository` directamente.** *Descubierto durante la implementación (tarea
+5.1):* `import-linter` rechazó `workflows/activities.py` importando
+`adapters/persistence/*` - `entrypoints`, `adapters` y `workflows` son capas hermanas en
+la regla de capas (`domain <- application <- adapters/entrypoints/workflows`), ninguna
+puede importar a otra. `ReviewActivities` ahora recibe `change_repository` y
+`review_repository` como `Callable[[AsyncSession], Puerto]` (la clase concreta del
+adaptador, p. ej. `SqlAlchemyChangeRepository`, ya es ese callable); quien construye la
+instancia (el test, y más adelante el entrypoint del worker `agents`) es quien conoce
+ambas capas y hace la composición. `workflows/` queda dependiendo solo de
+`application.ports` y `application.record_review`, igual que ya hacía `entrypoints/api`.
+
 ## Risks / Trade-offs
 
 - [Riesgo] Primera vez que el proyecto usa Temporal - curva de aprendizaje del SDK

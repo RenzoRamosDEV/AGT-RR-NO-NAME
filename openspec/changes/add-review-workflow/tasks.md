@@ -57,14 +57,14 @@
 
 ## 5. Workflows de Temporal
 
-- [ ] 5.1 Añadir `temporalio` a `backend/pyproject.toml`; crear
+- [x] 5.1 Añadir `temporalio` a `backend/pyproject.toml`; crear
       `workflows/review_change.py` con `ReviewChangeWorkflow`: una activity
       `run_review(change_id, agent_name, run)` en `task_queue="agents"` que carga el
       `Change` (vía `ChangeRepository.get`, en una activity de `task_queue="platform"`
       separada) y ejecuta `FakeAgent.review()` + `record_review`, lanzada dos veces en
       paralelo (`asyncio.gather`) para dos agentes distintos; verificar que el código del
       workflow no hace I/O directo (todo vive en activities) revisando el diff a mano.
-- [ ] 5.2 Crear `workflows/review_commit.py` con `ReviewCommitWorkflow` (ID determinista
+- [x] 5.2 Crear `workflows/review_commit.py` con `ReviewCommitWorkflow` (ID determinista
       `commit-{project_id}-{sha}` o equivalente con lo disponible hoy) que arranca
       `ReviewChangeWorkflow` como hijo una vez; verificar con un test que arrancarlo dos
       veces con el mismo ID no duplica el workflow (comportamiento nativo de Temporal por
@@ -72,11 +72,11 @@
 
 ## 6. Verificación con Temporal time-skipping
 
-- [ ] 6.1 Test con `WorkflowEnvironment.start_time_skipping()`: arrancar
+- [x] 6.1 Test con `WorkflowEnvironment.start_time_skipping()`: arrancar
       `ReviewChangeWorkflow` para un `change_id` persistido de antemano (con fakes o
       contra Postgres real, decidir según velocidad) y confirmar que produce dos
       `Review`; verificar con `uv run pytest backend/tests/workflows/ -q`.
-- [ ] 6.2 Test de fallo parcial: un `FakeAgent` configurado para fallar, confirmar que la
+- [x] 6.2 Test de fallo parcial: un `FakeAgent` configurado para fallar, confirmar que la
       `Review` del otro agente igual queda persistida y que el workflow no se cae entero;
       verificar en el mismo archivo de tests que la tarea 6.1.
 - [ ] 6.3 Verificación manual contra Temporal real: `just dev` (ya incluye Temporal +
