@@ -53,7 +53,7 @@
 
 ## 5. Verificación de integración (testcontainers)
 
-- [ ] 5.1 Escribir el test de integración en
+- [x] 5.1 Escribir el test de integración en
       `backend/tests/adapters/test_sqlalchemy_change_repository.py` usando
       `testcontainers[postgres]`: levanta un Postgres real, aplica las migraciones de
       Alembic, y verifica los dos escenarios del spec `change-ingestion` (persistencia
@@ -67,7 +67,7 @@
 
 ## 6. Cierre de la fase
 
-- [ ] 6.1 Actualizar `docs/architecture.md` con un enlace a este change una vez archivado,
+- [x] 6.1 Actualizar `docs/architecture.md` con un enlace a este change una vez archivado,
       y confirmar que `just test` (ahora incluyendo los tests nuevos) sigue en verde de
       punta a punta; verificar con `just ci`.
 

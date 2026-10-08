@@ -14,10 +14,21 @@ dev:
 down:
     {{compose}} --profile infra --profile app down
 
-# Corre los tests de backend y frontend
+# Corre los tests de backend y frontend (los de testcontainers necesitan Docker o Podman)
 test:
-    cd backend && uv run pytest
-    cd frontend && pnpm build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd backend
+    if command -v docker >/dev/null 2>&1; then
+        uv run pytest
+    else
+        # Sin `docker` (p. ej. Podman-only): apuntar testcontainers al socket de Podman
+        # y desactivar Ryuk, su sidecar de limpieza, que no funciona bien en rootless.
+        DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock" \
+        TESTCONTAINERS_RYUK_DISABLED=true \
+        uv run pytest
+    fi
+    cd ../frontend && pnpm build
 
 # Lint + tipos en todo el repo (mismos checks que corre el CI)
 lint:
