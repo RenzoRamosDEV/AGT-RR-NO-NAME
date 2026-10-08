@@ -46,6 +46,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.isort]
+# El directorio de migraciones backend/alembic/ comparte nombre con el paquete
+# de terceros `alembic`; sin esto, la detección de primera/tercera parte de
+# ruff clasifica los imports de `alembic` de forma inconsistente.
+known-third-party = ["alembic"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

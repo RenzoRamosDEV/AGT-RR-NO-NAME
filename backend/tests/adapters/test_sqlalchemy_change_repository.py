@@ -16,12 +16,12 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from testcontainers.community.postgres import PostgresContainer
 
-from alembic import command
-from alembic.config import Config
 from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
 from review_arena.adapters.persistence.db import create_engine, create_session_factory
 from review_arena.adapters.persistence.models import ChangeModel, EventModel, ProjectModel
