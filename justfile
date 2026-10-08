@@ -4,7 +4,7 @@ compose := "podman-compose"
 dev:
     {{compose}} --profile infra --profile app up -d --build
     @echo "Esperando a que la API responda en /health..."
-    @for i in $(seq 1 30); do \
+    @for _ in $(seq 1 30); do \
         curl -sf http://localhost:8000/health > /dev/null && echo "API lista." && exit 0; \
         sleep 1; \
     done; \

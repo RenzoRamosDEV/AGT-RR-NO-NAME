@@ -117,7 +117,7 @@ jobs:
       - name: Levantar el contenedor y probar /health
         run: |
           docker run -d --name smoke -p 8000:8000 review-arena-api-smoke
-          for i in $(seq 1 15); do
+          for _ in $(seq 1 15); do
             curl -sf http://localhost:8000/health && exit 0
             sleep 1
           done
