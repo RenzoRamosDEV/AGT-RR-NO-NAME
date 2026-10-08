@@ -97,3 +97,48 @@ async def test_add_inserts_event_when_insert_succeeds() -> None:
 
     assert result is change
     assert session.execute.await_count == 2
+
+
+async def test_get_returns_none_when_row_missing() -> None:
+    select_result = MagicMock()
+    select_result.scalar_one_or_none.return_value = None
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=select_result)
+
+    repo = SqlAlchemyChangeRepository(session)
+
+    assert await repo.get(uuid4()) is None
+
+
+async def test_get_returns_the_change_when_row_exists() -> None:
+    project_id = uuid4()
+    change = _make_change(project_id)
+
+    row = MagicMock()
+    row.id = change.id
+    row.project_id = project_id
+    row.kind = "commit"
+    row.ref = change.ref
+    row.head_sha = change.head_sha
+    row.title = change.title
+    row.author = change.author
+    row.url = change.url
+    row.diff = change.diff
+    row.diff_truncated = change.diff_truncated
+    row.status = change.status
+    row.run = change.run
+    row.created_at = change.created_at
+
+    select_result = MagicMock()
+    select_result.scalar_one_or_none.return_value = row
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=select_result)
+
+    repo = SqlAlchemyChangeRepository(session)
+    result = await repo.get(change.id)
+
+    assert result is not None
+    assert result.id == change.id
+    assert result.head_sha == change.head_sha

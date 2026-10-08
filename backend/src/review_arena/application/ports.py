@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Protocol
+from uuid import UUID
 
 from review_arena.domain.change import Change
 from review_arena.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
@@ -14,6 +15,10 @@ class ChangeRepository(Protocol):
         Si ya existía un `Change` con la misma identidad natural
         (project_id, kind, head_sha), lo devuelve sin crear un segundo evento.
         """
+        ...
+
+    async def get(self, change_id: UUID) -> Change | None:
+        """Devuelve el `Change` con ese id, o `None` si no existe."""
         ...
 
 

@@ -49,3 +49,22 @@ class EventModel(Base):
     type: Mapped[str] = mapped_column(String(100))
     payload: Mapped[dict[str, object]] = mapped_column(JSONB())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReviewModel(Base):
+    __tablename__ = "reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    change_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("changes.id", ondelete="CASCADE")
+    )
+    agent: Mapped[str] = mapped_column(String(50))
+    run: Mapped[int] = mapped_column(Integer(), default=1)
+    status: Mapped[str] = mapped_column(String(20))
+    summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    score: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    findings: Mapped[list[dict[str, object]]] = mapped_column(JSONB(), default=list)
+    raw_output: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

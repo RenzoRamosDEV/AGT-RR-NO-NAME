@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy import insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +62,12 @@ class SqlAlchemyChangeRepository:
                 )
             )
             return change
+
+    async def get(self, change_id: UUID) -> Change | None:
+        row = (
+            await self._session.execute(select(ChangeModel).where(ChangeModel.id == change_id))
+        ).scalar_one_or_none()
+        return _to_domain(row) if row is not None else None
 
 
 def _to_domain(row: ChangeModel) -> Change:

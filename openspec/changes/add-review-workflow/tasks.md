@@ -31,25 +31,25 @@
 
 ## 3. Ampliar ChangeRepository con lectura
 
-- [ ] 3.1 Añadir `get(self, change_id: UUID) -> Change | None` al puerto
+- [x] 3.1 Añadir `get(self, change_id: UUID) -> Change | None` al puerto
       `ChangeRepository` en `application/ports.py`; actualizar `FakeChangeRepository`
       (tarea ya completada en `add-change-ingestion`) para implementarlo; verificar con
       un test que devuelve `None` para un id inexistente y el `Change` correcto para uno
       existente.
-- [ ] 3.2 Implementar `get()` en `SqlAlchemyChangeRepository`; verificar con un test
+- [x] 3.2 Implementar `get()` en `SqlAlchemyChangeRepository`; verificar con un test
       unitario de sesión mockeada (mismo estilo que `add()`).
 
 ## 4. Persistencia de reviews
 
-- [ ] 4.1 Migración Alembic: tabla `reviews` (id, change_id FK, agent, run, status,
+- [x] 4.1 Migración Alembic: tabla `reviews` (id, change_id FK, agent, run, status,
       summary, score, findings jsonb, raw_output, duration_ms, error, created_at) con
       `UNIQUE (change_id, agent, run)`; verificar con `uv run alembic upgrade head` +
       `downgrade base` (reversible) contra Postgres real.
-- [ ] 4.2 Modelos SQLAlchemy (`ReviewModel`) y `SqlAlchemyReviewRepository.add()` con
+- [x] 4.2 Modelos SQLAlchemy (`ReviewModel`) y `SqlAlchemyReviewRepository.add()` con
       `INSERT ... ON CONFLICT (change_id, agent, run) DO NOTHING RETURNING id` (mismo
       patrón que `SqlAlchemyChangeRepository`, ver `design.md` de `add-change-ingestion`);
       verificar con un test unitario de sesión mockeada para el camino de conflicto.
-- [ ] 4.3 Test de integración con testcontainers: persistir dos `Review` para el mismo
+- [x] 4.3 Test de integración con testcontainers: persistir dos `Review` para el mismo
       `change_id` con agentes distintos, confirmar idempotencia reintentando la misma
       `(change_id, agent, run)`, y confirmar que el evento (`review.completed` /
       `review.failed`) queda en la tabla `events`; verificar con
