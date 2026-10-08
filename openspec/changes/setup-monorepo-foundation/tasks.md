@@ -56,7 +56,7 @@
 
 ## 6. CI en GitHub Actions
 
-- [ ] 6.1 Crear `.github/workflows/ci.yml` con jobs de lint (Ruff, mypy strict, Biome),
+- [x] 6.1 Crear `.github/workflows/ci.yml` con jobs de lint (Ruff, mypy strict, Biome),
       build del frontend y tests de backend (`pytest`, incluyendo el test de `/health`);
       verificar abriendo una PR vacía (sin cambios funcionales) y confirmando que todos
       los jobs terminan en verde.
