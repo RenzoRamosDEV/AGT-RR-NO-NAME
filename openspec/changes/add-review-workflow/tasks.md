@@ -2,28 +2,28 @@
 
 ## 1. Dominio puro
 
-- [ ] 1.1 Crear `domain/review.py`: VO `Finding` (severity, file, line, message),
+- [x] 1.1 Crear `domain/review.py`: VO `Finding` (severity, file, line, message),
       `ReviewResult` (summary, score, findings) y la entidad `Review` (id, change_id,
       agent, run, status, summary, score, findings, raw_output, duration_ms, error,
       created_at); verificar con `uv run lint-imports` y un test unitario que construye
       una `Review` exitosa y una fallida.
-- [ ] 1.2 Modelar los eventos `ReviewCompleted` y `ReviewFailed` en `domain/events.py`
+- [x] 1.2 Modelar los eventos `ReviewCompleted` y `ReviewFailed` en `domain/events.py`
       (mismo patrón que `ChangeCreated`); verificar con un test que cada uno serializa su
       payload sin perder campos.
 
 ## 2. Puertos y caso de uso (con fakes)
 
-- [ ] 2.1 Definir el puerto `ReviewAgent` en `application/ports.py`
+- [x] 2.1 Definir el puerto `ReviewAgent` en `application/ports.py`
       (`async def review(self, change: Change) -> ReviewResult`); implementar `FakeAgent`
       en `adapters/agents/fake.py` (constructor recibe `name: str`, devuelve un
       `ReviewResult` fijo o configurable para simular fallo); verificar con un test que
       dos instancias de `FakeAgent` con nombres distintos son independientes.
-- [ ] 2.2 Definir el puerto `ReviewRepository` en `application/ports.py`
+- [x] 2.2 Definir el puerto `ReviewRepository` en `application/ports.py`
       (`async def add(self, review: Review) -> Review`, idempotente por
       `(change_id, agent, run)`, mismo patrón que `ChangeRepository.add`); implementar
       `FakeReviewRepository` en `backend/tests/fakes/`; verificar que cumple el
       `Protocol` (`uv run mypy`).
-- [ ] 2.3 Implementar el caso de uso `record_review` en `application/record_review.py`;
+- [x] 2.3 Implementar el caso de uso `record_review` en `application/record_review.py`;
       verificar con tests contra los fakes que cubren los tres requirements del spec
       `change-review`: dos reviews por change, idempotencia por natural key, y que
       registrar un fallo no lanza excepción (se persiste como `Review` con estado de

@@ -21,3 +21,41 @@ class ChangeCreated:
             "kind": self.kind,
             "head_sha": self.head_sha,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewCompleted:
+    review_id: UUID
+    change_id: UUID
+    project_id: UUID
+    agent: str
+
+    type: str = "review.completed"
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "review_id": str(self.review_id),
+            "change_id": str(self.change_id),
+            "project_id": str(self.project_id),
+            "agent": self.agent,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewFailed:
+    review_id: UUID
+    change_id: UUID
+    project_id: UUID
+    agent: str
+    error: str
+
+    type: str = "review.failed"
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "review_id": str(self.review_id),
+            "change_id": str(self.change_id),
+            "project_id": str(self.project_id),
+            "agent": self.agent,
+            "error": self.error,
+        }
