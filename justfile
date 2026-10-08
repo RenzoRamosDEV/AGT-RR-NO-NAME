@@ -19,9 +19,9 @@ test:
     cd backend && uv run pytest
     cd frontend && pnpm build
 
-# Lint + tipos en todo el repo
+# Lint + tipos en todo el repo (mismos checks que corre el CI)
 lint:
-    cd backend && uv run ruff check . && uv run mypy src/ && uv run lint-imports
+    cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run lint-imports
     cd frontend && pnpm exec biome check .
 
 # Genera el cliente TypeScript a partir del OpenAPI (placeholder hasta que haya endpoints reales)

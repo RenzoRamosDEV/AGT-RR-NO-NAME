@@ -13,6 +13,7 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "httpx>=0.27",
     "ruff>=0.7",
     "mypy>=1.13",
@@ -29,6 +30,10 @@ packages = ["src/review_arena"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=review_arena --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/review_arena"]
 
 [tool.ruff]
 line-length = 100

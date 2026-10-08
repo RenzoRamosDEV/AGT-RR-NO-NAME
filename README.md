@@ -13,7 +13,7 @@ cada fase del plan de implementación es un *change* en `openspec/changes/`.
 
 - [`uv`](https://docs.astral.sh/uv/) (gestiona Python 3.12 automáticamente, no hace falta
   instalarlo aparte)
-- Node.js 20+ con `pnpm` (vía `corepack enable pnpm`)
+- Node.js 22+ con `pnpm` (vía `corepack enable pnpm`) - misma versión que usa el CI
 - [`just`](https://github.com/casey/just) como task runner
 - Un runtime de contenedores compatible con Docker Compose: `docker` + `docker compose`,
   o `podman` + `podman-compose` (este repo usa `podman-compose` por defecto en el

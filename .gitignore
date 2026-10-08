@@ -26,3 +26,8 @@ frontend/dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/

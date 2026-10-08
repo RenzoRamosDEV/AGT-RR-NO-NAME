@@ -7,8 +7,13 @@ COPY README.md ./
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim-bookworm
+RUN useradd --create-home --no-log-init appuser
 WORKDIR /app
 COPY --from=builder /app /app
+RUN chown -R appuser:appuser /app
+USER appuser
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=2)" || exit 1
 CMD ["uvicorn", "review_arena.entrypoints.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
