@@ -27,3 +27,8 @@ lint:
 # Genera el cliente TypeScript a partir del OpenAPI (placeholder hasta que haya endpoints reales)
 gen-client:
     @echo "gen-client: pendiente hasta que exista un contrato OpenAPI que exportar (fase 4)."
+
+# Reproduce localmente lo que corre el CI (sin gitleaks/osv-scanner/hadolint, que necesitan sus binarios aparte)
+ci: lint test
+    {{compose}} --profile infra config
+    {{compose}} --profile app config
