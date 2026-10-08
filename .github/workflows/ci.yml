@@ -110,7 +110,17 @@ jobs:
       - uses: wagoid/commitlint-github-action@v6
 
   osv-scan:
+    if: github.event_name == 'push'
     permissions:
+      actions: read
       contents: read
       security-events: write
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-unified-workflow.yml@v2
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2
+
+  osv-scan-pr:
+    if: github.event_name == 'pull_request'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2
