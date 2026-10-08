@@ -60,7 +60,7 @@
       atómica del change+evento, e idempotencia por `(project_id, kind, head_sha)` incluso
       para dos proyectos distintos con el mismo `head_sha`); verificar con
       `uv run pytest backend/tests/adapters/ -q` (requiere Docker/Podman local).
-- [ ] 5.2 Añadir el job (o pasos) de testcontainers al `backend-test` de
+- [x] 5.2 Añadir el job (o pasos) de testcontainers al `backend-test` de
       `.github/workflows/ci.yml` (el runner de GitHub Actions trae Docker, no hace falta
       Podman ahí); verificar abriendo una PR y confirmando que el test de integración corre
       y pasa en el CI real, no solo en local.
