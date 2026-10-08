@@ -29,27 +29,27 @@
 
 ## 3. Esquema y migración
 
-- [ ] 3.1 Configurar Alembic en `backend/alembic/` (`alembic init` + `env.py` apuntando a
+- [x] 3.1 Configurar Alembic en `backend/alembic/` (`alembic init` + `env.py` apuntando a
       `DATABASE_URL` vía variable de entorno) y añadir `alembic` + `sqlalchemy[asyncio]` +
       `asyncpg` a `backend/pyproject.toml`; verificar con `uv run alembic current` sin
       errores contra una base vacía.
-- [ ] 3.2 Escribir la migración inicial: tablas `projects` (id, slug mínimo), `changes`
+- [x] 3.2 Escribir la migración inicial: tablas `projects` (id, slug mínimo), `changes`
       (con `UNIQUE (project_id, kind, head_sha)`), `events` (id bigserial, project_id,
       type, payload jsonb, created_at); verificar con `uv run alembic upgrade head` seguido
       de `uv run alembic downgrade base` sin errores (migración reversible).
 
 ## 4. Adaptador SQLAlchemy
 
-- [ ] 4.1 Crear los modelos SQLAlchemy 2.0 async en `adapters/persistence/models.py`
+- [x] 4.1 Crear los modelos SQLAlchemy 2.0 async en `adapters/persistence/models.py`
       (mapeados a las tablas de la tarea 3.2) y el engine/sesión async en
       `adapters/persistence/db.py`; verificar que `adapters/` es el único paquete que
       importa `sqlalchemy` (`uv run lint-imports`).
-- [ ] 4.2 Implementar `SqlAlchemyChangeRepository.add()`: inserta `change` + `event` en una
-      sola transacción; si la constraint `UNIQUE` salta, captura la violación, recupera el
-      `Change` existente dentro de la misma transacción y lo devuelve sin insertar un
-      segundo evento (documentar en un comentario qué excepción de `asyncpg` se captura y
-      por qué, según `design.md - Decisions`); verificar con un test unitario que mockea la
-      sesión para el camino de violación de unicidad.
+- [x] 4.2 Implementar `SqlAlchemyChangeRepository.add()`: inserta `change` con
+      `INSERT ... ON CONFLICT (project_id, kind, head_sha) DO NOTHING RETURNING id` y el
+      `event` en la misma transacción (ver refinamiento en `design.md - Decisions`); si el
+      `INSERT` no devuelve fila, recupera el `Change` existente con un `SELECT` de
+      seguimiento sin insertar un segundo evento; verificar con un test unitario que mockea
+      la sesión para el camino sin fila devuelta.
 
 ## 5. Verificación de integración (testcontainers)
 

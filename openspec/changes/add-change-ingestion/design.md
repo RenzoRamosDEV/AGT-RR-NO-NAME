@@ -49,11 +49,18 @@ abstracción prematura que el proyecto quiere evitar.
 
 **Idempotencia resuelta con una restricción `UNIQUE` en Postgres, no con un `SELECT`
 previo.** El caso de uso no hace `find_by_natural_key` y luego `insert` (hay una carrera
-entre ambas operaciones bajo concurrencia); el adaptador intenta el `INSERT` y captura la
-violación de unicidad de Postgres (`(project_id, kind, head_sha)`) para decidir que la
-ingesta ya existía y devolver el `Change` existente sin crear un segundo evento. Alternativa
-descartada: `SELECT ... FOR UPDATE` antes de insertar - añade una vuelta extra a la base de
-datos para resolver algo que la restricción ya resuelve de forma atómica.
+entre ambas operaciones bajo concurrencia); el adaptador intenta el `INSERT` directamente.
+
+*Refinado durante la implementación (tarea 4.2):* en vez de capturar la excepción de
+violación de unicidad del driver (lo que planeaba este documento originalmente), el
+adaptador usa `INSERT ... ON CONFLICT (project_id, kind, head_sha) DO NOTHING RETURNING id`.
+Si no devuelve fila, la ingesta ya existía y se hace un `SELECT` de seguimiento para
+devolver el `Change` existente. Mismo resultado (sin carrera, un solo intento de insert),
+pero sin acoplar el adaptador a un código de error específico de `asyncpg`/`psycopg` - la
+semántica de conflicto la resuelve Postgres de forma declarativa, no una captura de
+excepción de la aplicación. Alternativa descartada: `SELECT ... FOR UPDATE` antes de
+insertar - añade una vuelta extra a la base de datos para resolver algo que la constraint
+ya resuelve de forma atómica.
 
 **`Project` mínimo (solo `id`, `slug`) en esta migración, no el modelo completo del spec.**
 Evita diseñar `settings` (jsonb), `ingest_token_hash` y demás antes de que algo los use
@@ -89,10 +96,9 @@ sustituto).
   Mitigación: por ahora el test de integración se ejecuta localmente (`uv run pytest`, el
   desarrollador tiene Postgres/Docker); añadirlo al job `backend-test` de CI es una tarea
   explícita de este change (`tasks.md`), no una sorpresa de scope.
-- [Riesgo] Capturar la violación de unicidad de Postgres acopla el adaptador a un código de
-  error específico de `asyncpg`/`psycopg` → Mitigación: se aísla en un único punto del
-  adaptador (un `try/except` alrededor del `INSERT`), documentado con un comentario que
-  explica qué código de error se captura y por qué.
+- [Riesgo] `ON CONFLICT ... DO NOTHING` es sintaxis específica de Postgres, no portable a
+  otro motor → Mitigación: aceptado a propósito - el proyecto ya fija Postgres como único
+  motor soportado (`openspec/config.yaml`), portabilidad entre motores no es un objetivo.
 
 ## Open Questions
 
