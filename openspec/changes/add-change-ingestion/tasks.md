@@ -2,26 +2,26 @@
 
 ## 1. Dominio puro
 
-- [ ] 1.1 Crear `domain/change.py` con la entidad `Change` (id, project_id, kind, ref,
+- [x] 1.1 Crear `domain/change.py` con la entidad `Change` (id, project_id, kind, ref,
       head_sha, title, author, url, diff, diff_truncated, status, run, created_at) y el VO
       `ChangeKind` (`commit` | `pr`); sin imports de `application`, `adapters` ni librerías
       externas de infraestructura; verificar con `uv run lint-imports` y un test unitario
       que construye un `Change` válido y uno que rechaza un `ChangeKind` inválido.
-- [ ] 1.2 Modelar el evento de dominio `ChangeCreated` (tipo + payload mínimo: change_id,
+- [x] 1.2 Modelar el evento de dominio `ChangeCreated` (tipo + payload mínimo: change_id,
       project_id, kind, head_sha) como dataclass simple en `domain/events.py`; verificar
       con un test que serializa su payload a dict sin perder campos.
 
 ## 2. Puerto y caso de uso (con repositorio falso)
 
-- [ ] 2.1 Definir el puerto `ChangeRepository` en `application/ports.py` (`Protocol`) con
+- [x] 2.1 Definir el puerto `ChangeRepository` en `application/ports.py` (`Protocol`) con
       `async def add(self, change: Change, event: ChangeCreated) -> Change` (devuelve el
       `Change` persistido o el existente si ya estaba, ver tarea 2.3); verificar que
       `application/` sigue sin importar SQLAlchemy (`uv run lint-imports`).
-- [ ] 2.2 Implementar `FakeChangeRepository` en `backend/tests/fakes/` (diccionario en
+- [x] 2.2 Implementar `FakeChangeRepository` en `backend/tests/fakes/` (diccionario en
       memoria, sin Postgres) para usar en los tests del caso de uso; verificar que cumple
       el `Protocol` (`uv run mypy` no debe quejarse al pasarlo donde se espera
       `ChangeRepository`).
-- [ ] 2.3 Implementar el caso de uso `ingest_change` en `application/ingest_change.py`;
+- [x] 2.3 Implementar el caso de uso `ingest_change` en `application/ingest_change.py`;
       verificar con tests contra `FakeChangeRepository` que cubren los dos requirements del
       spec: ingesta exitosa crea `change` + evento, y reingestar el mismo
       `(project_id, kind, head_sha)` es idempotente (no crea un segundo evento) - correr con
