@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from review_arena.adapters.persistence.models import EventModel, ReviewModel
 from review_arena.domain.events import ReviewCompleted, ReviewFailed
-from review_arena.domain.review import Finding, Review
+from review_arena.domain.review import Finding, Review, ReviewStatus
 
 
 class SqlAlchemyReviewRepository:
@@ -24,7 +24,7 @@ class SqlAlchemyReviewRepository:
                     change_id=review.change_id,
                     agent=review.agent,
                     run=review.run,
-                    status=review.status,
+                    status=review.status.value,
                     summary=review.summary,
                     score=review.score,
                     findings=[
@@ -73,7 +73,7 @@ def _to_domain(row: ReviewModel) -> Review:
         change_id=row.change_id,
         agent=row.agent,
         run=row.run,
-        status=row.status,
+        status=ReviewStatus(row.status),
         summary=row.summary,
         score=row.score,
         findings=tuple(

@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.change import Change, ChangeKind
+from review_arena.domain.change import Change, ChangeKind, ChangeStatus
 
 
 def test_new_change_is_valid() -> None:
@@ -21,6 +21,7 @@ def test_new_change_is_valid() -> None:
     )
 
     assert change.kind is ChangeKind.COMMIT
+    assert change.status is ChangeStatus.PENDING
     assert change.status == "pending"
     assert change.run == 1
 

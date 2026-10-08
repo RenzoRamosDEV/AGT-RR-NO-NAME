@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from review_arena.adapters.persistence.models import ChangeModel, EventModel
-from review_arena.domain.change import Change, ChangeKind
+from review_arena.domain.change import Change, ChangeKind, ChangeStatus
 from review_arena.domain.events import ChangeCreated
 
 
@@ -32,7 +32,7 @@ class SqlAlchemyChangeRepository:
                     url=change.url,
                     diff=change.diff,
                     diff_truncated=change.diff_truncated,
-                    status=change.status,
+                    status=change.status.value,
                     run=change.run,
                     created_at=change.created_at,
                 )
@@ -82,7 +82,7 @@ def _to_domain(row: ChangeModel) -> Change:
         url=row.url,
         diff=row.diff,
         diff_truncated=row.diff_truncated,
-        status=row.status,
+        status=ChangeStatus(row.status),
         run=row.run,
         created_at=row.created_at,
     )

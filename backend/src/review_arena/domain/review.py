@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
+
+
+class ReviewStatus(StrEnum):
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +32,7 @@ class Review:
     change_id: UUID
     agent: str
     run: int
-    status: str
+    status: ReviewStatus
     summary: str | None
     score: int | None
     findings: tuple[Finding, ...]
@@ -52,7 +58,7 @@ class Review:
             change_id=change_id,
             agent=agent,
             run=run,
-            status="completed",
+            status=ReviewStatus.COMPLETED,
             summary=result.summary,
             score=result.score,
             findings=result.findings,
@@ -80,7 +86,7 @@ class Review:
             change_id=change_id,
             agent=agent,
             run=run,
-            status="failed",
+            status=ReviewStatus.FAILED,
             summary=None,
             score=None,
             findings=(),

@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.review import Finding, Review, ReviewResult
+from review_arena.domain.review import Finding, Review, ReviewResult, ReviewStatus
 
 
 def test_succeeded_review_keeps_result_fields() -> None:
@@ -23,6 +23,7 @@ def test_succeeded_review_keeps_result_fields() -> None:
         created_at=datetime.now(UTC),
     )
 
+    assert review.status is ReviewStatus.COMPLETED
     assert review.status == "completed"
     assert review.summary == "todo bien"
     assert review.score == 8
@@ -40,6 +41,7 @@ def test_failed_review_has_no_result_fields() -> None:
         created_at=datetime.now(UTC),
     )
 
+    assert review.status is ReviewStatus.FAILED
     assert review.status == "failed"
     assert review.summary is None
     assert review.score is None

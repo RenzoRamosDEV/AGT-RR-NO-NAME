@@ -11,6 +11,10 @@ class ChangeKind(StrEnum):
     PR = "pr"
 
 
+class ChangeStatus(StrEnum):
+    PENDING = "pending"
+
+
 @dataclass(frozen=True, slots=True)
 class Change:
     id: UUID
@@ -23,7 +27,7 @@ class Change:
     url: str
     diff: str
     diff_truncated: bool
-    status: str
+    status: ChangeStatus
     run: int
     created_at: datetime
 
@@ -55,7 +59,7 @@ class Change:
             url=url,
             diff=diff,
             diff_truncated=diff_truncated,
-            status="pending",
+            status=ChangeStatus.PENDING,
             run=1,
             created_at=created_at,
         )

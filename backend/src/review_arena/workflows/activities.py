@@ -10,7 +10,7 @@ from temporalio.exceptions import ApplicationError
 
 from review_arena.application.ports import ChangeRepository, ReviewAgent, ReviewRepository
 from review_arena.application.record_review import record_review_failure, record_review_success
-from review_arena.workflows.dto import ChangeDTO, RunReviewInput, RunReviewResult
+from review_arena.workflows.dto import RunReviewInput, RunReviewResult
 
 
 class ReviewActivities:
@@ -36,19 +36,22 @@ class ReviewActivities:
         self._agents = agents
 
     @activity.defn
-    async def load_change(self, change_id: str) -> ChangeDTO:
+    async def run_review(self, review_input: RunReviewInput) -> RunReviewResult:
+        # Un agente que no existe en el registro es un error de configuración del
+        # sistema, no un fallo del agente al revisar: no se reintenta ni se persiste
+        # una Review (contaminaría las estadísticas).
+        agent = self._agents.get(review_input.agent_name)
+        if agent is None:
+            raise ApplicationError(
+                f"Agente desconocido: {review_input.agent_name}", non_retryable=True
+            )
+
+        # El diff nunca viaja por Temporal: la activity carga el Change por su id.
         async with self._session_factory() as session:
-            change = await self._change_repository(session).get(UUID(change_id))
+            change = await self._change_repository(session).get(UUID(review_input.change_id))
 
         if change is None:
-            raise ApplicationError(f"Change {change_id} no existe", non_retryable=True)
-
-        return ChangeDTO.from_domain(change)
-
-    @activity.defn
-    async def run_review(self, review_input: RunReviewInput) -> RunReviewResult:
-        change = review_input.change.to_domain()
-        agent = self._agents[review_input.agent_name]
+            raise ApplicationError(f"Change {review_input.change_id} no existe", non_retryable=True)
 
         start = time.monotonic()
         try:
@@ -64,7 +67,7 @@ class ReviewActivities:
                     error=str(exc),
                     duration_ms=duration_ms,
                 )
-            return RunReviewResult(status="failed", review_id=str(review.id))
+            return RunReviewResult(status=review.status.value, review_id=str(review.id))
 
         duration_ms = int((time.monotonic() - start) * 1000)
         async with self._session_factory() as session:
@@ -77,4 +80,4 @@ class ReviewActivities:
                 raw_output=None,
                 duration_ms=duration_ms,
             )
-        return RunReviewResult(status="completed", review_id=str(review.id))
+        return RunReviewResult(status=review.status.value, review_id=str(review.id))

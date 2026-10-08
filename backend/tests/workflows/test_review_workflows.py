@@ -2,7 +2,7 @@
 (servidor de test efímero, sin necesidad de Temporal real ni Docker Compose).
 
 Requiere testcontainers para el Postgres real donde vive el Change ya persistido -
-mismas fixtures de tests/adapters/conftest.py (database_url, session_factory).
+mismas fixtures de tests/conftest.py (database_url, session_factory).
 """
 
 from __future__ import annotations
@@ -10,20 +10,26 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Awaitable, Callable
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from temporalio.exceptions import WorkflowAlreadyStartedError
+from temporalio.client import WorkflowFailureError
+from temporalio.exceptions import ActivityError, ApplicationError, WorkflowAlreadyStartedError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from review_arena.adapters.agents.fake import FakeAgent
 from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from review_arena.adapters.persistence.models import ReviewModel
 from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
 from review_arena.application.ingest_change import ingest_change
 from review_arena.domain.change import Change, ChangeKind
 from review_arena.workflows.activities import ReviewActivities
+from review_arena.workflows.dto import ReviewChangeInput, ReviewCommitInput
 from review_arena.workflows.review_change import ReviewChangeWorkflow
 from review_arena.workflows.review_commit import ReviewCommitWorkflow
 from tests.conftest import create_project
+
+BOTH_AGENTS = ["agent_1", "agent_2"]
 
 
 async def _persist_change(session_factory: async_sessionmaker, head_sha: str) -> Change:
@@ -41,6 +47,12 @@ async def _persist_change(session_factory: async_sessionmaker, head_sha: str) ->
             diff="diff --git a/x b/x",
             diff_truncated=False,
         )
+
+
+async def _reviews_for(session_factory: async_sessionmaker, change: Change) -> list[ReviewModel]:
+    async with session_factory() as session:
+        rows = await session.execute(select(ReviewModel).where(ReviewModel.change_id == change.id))
+        return list(rows.scalars().all())
 
 
 @pytest.fixture
@@ -66,7 +78,6 @@ async def _run_with_workers[T](
             env.client,
             task_queue="platform",
             workflows=[ReviewChangeWorkflow, ReviewCommitWorkflow],
-            activities=[activities.load_change],
         ),
         Worker(
             env.client,
@@ -87,7 +98,7 @@ async def test_two_agents_produce_two_reviews(
     async def _run(env: WorkflowEnvironment):
         return await env.client.execute_workflow(
             ReviewChangeWorkflow.run,
-            args=[str(change.id), ["agent_1", "agent_2"]],
+            ReviewChangeInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=f"review-{change.id}",
             task_queue="platform",
         )
@@ -112,7 +123,7 @@ async def test_partial_failure_does_not_lose_the_successful_review(
     async def _run(env: WorkflowEnvironment):
         return await env.client.execute_workflow(
             ReviewChangeWorkflow.run,
-            args=[str(change.id), ["agent_1", "agent_2"]],
+            ReviewChangeInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=f"review-{change.id}",
             task_queue="platform",
         )
@@ -132,7 +143,7 @@ async def test_review_commit_workflow_starts_the_child_and_returns_its_result(
     async def _run(env: WorkflowEnvironment):
         return await env.client.execute_workflow(
             ReviewCommitWorkflow.run,
-            args=[str(change.id), ["agent_1", "agent_2"]],
+            ReviewCommitInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=f"commit-{change.id}",
             task_queue="platform",
         )
@@ -151,22 +162,17 @@ async def test_starting_same_workflow_id_twice_while_running_is_rejected(
     commit dos veces no produce dos ejecuciones concurrentes - la segunda falla."""
     change = await _persist_change(session_factory, head_sha="d" * 40)
     agents = {"agent_1": FakeAgent("agent_1"), "agent_2": FakeAgent("agent_2")}
+    commit_input = ReviewCommitInput(change_id=str(change.id), agent_names=BOTH_AGENTS)
 
     async def _run(env: WorkflowEnvironment) -> bool:
         workflow_id = f"commit-{change.id}"
         await env.client.start_workflow(
-            ReviewCommitWorkflow.run,
-            args=[str(change.id), ["agent_1", "agent_2"]],
-            id=workflow_id,
-            task_queue="platform",
+            ReviewCommitWorkflow.run, commit_input, id=workflow_id, task_queue="platform"
         )
 
         try:
             await env.client.start_workflow(
-                ReviewCommitWorkflow.run,
-                args=[str(change.id), ["agent_1", "agent_2"]],
-                id=workflow_id,
-                task_queue="platform",
+                ReviewCommitWorkflow.run, commit_input, id=workflow_id, task_queue="platform"
             )
         except WorkflowAlreadyStartedError:
             return True
@@ -175,3 +181,52 @@ async def test_starting_same_workflow_id_twice_while_running_is_rejected(
     was_rejected = await _run_with_workers(temporal_env, session_factory, agents, _run)
 
     assert was_rejected is True
+
+
+async def test_run_number_is_propagated_to_the_persisted_reviews(
+    temporal_env: WorkflowEnvironment,
+    session_factory: async_sessionmaker,
+) -> None:
+    change = await _persist_change(session_factory, head_sha="f" * 40)
+    agents = {"agent_1": FakeAgent("agent_1"), "agent_2": FakeAgent("agent_2")}
+
+    async def _run(env: WorkflowEnvironment):
+        return await env.client.execute_workflow(
+            ReviewCommitWorkflow.run,
+            ReviewCommitInput(change_id=str(change.id), agent_names=BOTH_AGENTS, run=2),
+            id=f"commit-{change.id}-r2",
+            task_queue="platform",
+        )
+
+    await _run_with_workers(temporal_env, session_factory, agents, _run)
+
+    reviews = await _reviews_for(session_factory, change)
+    assert len(reviews) == 2
+    assert {r.run for r in reviews} == {2}
+
+
+async def test_unknown_agent_fails_without_retries_and_persists_nothing(
+    temporal_env: WorkflowEnvironment,
+    session_factory: async_sessionmaker,
+) -> None:
+    change = await _persist_change(session_factory, head_sha="9" * 40)
+    agents = {"agent_1": FakeAgent("agent_1")}
+
+    async def _run(env: WorkflowEnvironment) -> WorkflowFailureError:
+        with pytest.raises(WorkflowFailureError) as exc_info:
+            await env.client.execute_workflow(
+                ReviewChangeWorkflow.run,
+                ReviewChangeInput(change_id=str(change.id), agent_names=["ghost"]),
+                id=f"review-{change.id}",
+                task_queue="platform",
+            )
+        return exc_info.value
+
+    failure = await _run_with_workers(temporal_env, session_factory, agents, _run)
+
+    activity_error = failure.cause
+    assert isinstance(activity_error, ActivityError)
+    app_error = activity_error.cause
+    assert isinstance(app_error, ApplicationError)
+    assert app_error.non_retryable is True
+    assert await _reviews_for(session_factory, change) == []
