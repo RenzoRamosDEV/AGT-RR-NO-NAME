@@ -37,3 +37,15 @@ SHALL ser una operación idempotente, no SHALL crear una fila duplicada.
 - **WHEN** dos proyectos distintos ingestan un change con el mismo `head_sha`
 - **THEN** ambos quedan persistidos como `Change` independientes, cada uno con su propio
   evento
+
+### Requirement: Recuperar un Change por su identificador
+El sistema SHALL permitir recuperar un `Change` previamente persistido a partir de su
+identificador, devolviendo nada si no existe.
+
+#### Scenario: El change existe
+- **WHEN** se solicita un `Change` por un id que fue persistido antes
+- **THEN** se devuelve ese `Change` con todos sus campos
+
+#### Scenario: El change no existe
+- **WHEN** se solicita un `Change` por un id que nunca fue persistido
+- **THEN** no se devuelve ningún `Change` (sin lanzar error)

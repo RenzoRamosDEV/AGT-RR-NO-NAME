@@ -79,7 +79,7 @@
 - [x] 6.2 Test de fallo parcial: un `FakeAgent` configurado para fallar, confirmar que la
       `Review` del otro agente igual queda persistida y que el workflow no se cae entero;
       verificar en el mismo archivo de tests que la tarea 6.1.
-- [ ] 6.3 Verificación manual contra Temporal real: `just dev` (ya incluye Temporal +
+- [x] 6.3 Verificación manual contra Temporal real: `just dev` (ya incluye Temporal +
       Temporal UI desde Fase 0), arrancar `ReviewCommitWorkflow` a mano (script o REPL) y
       confirmar en la Temporal Web UI (`localhost:8080`) que el workflow corrió y las dos
       `Review` quedaron en Postgres; verificar con una consulta SQL directa.
