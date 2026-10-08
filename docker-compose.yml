@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    profiles: ["infra"]
+    environment:
+      POSTGRES_USER: review_arena
+      POSTGRES_PASSWORD: review_arena
+      POSTGRES_DB: review_arena
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U review_arena"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: docker.io/temporalio/auto-setup:1.24.2
+    profiles: ["infra"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: review_arena
+      POSTGRES_PWD: review_arena
+      POSTGRES_SEEDS: postgres
+    ports:
+      - "7233:7233"
+
+  temporal-ui:
+    image: docker.io/temporalio/ui:2.31.2
+    profiles: ["infra"]
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: "http://localhost:3000"
+    ports:
+      - "8080:8080"
+
+  api:
+    build:
+      context: ./backend
+    profiles: ["app"]
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:

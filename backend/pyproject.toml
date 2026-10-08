@@ -1,0 +1,56 @@
+[project]
+name = "review-arena"
+version = "0.1.0"
+description = "Review Arena backend - hexagonal monolith (API, platform worker, agents worker)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "import-linter>=2.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/review_arena"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["review_arena"]
+
+[tool.importlinter]
+root_package = "review_arena"
+
+[[tool.importlinter.contracts]]
+name = "Hexagonal layering: domain <- application <- adapters/entrypoints/workflows"
+type = "layers"
+layers = [
+    "review_arena.entrypoints | review_arena.adapters | review_arena.workflows",
+    "review_arena.application",
+    "review_arena.domain",
+]

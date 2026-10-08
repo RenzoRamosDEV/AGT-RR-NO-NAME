@@ -1,0 +1,90 @@
+schema: spec-driven
+
+context: |
+  Project: "Review Arena" (provisional name) - a portfolio project. A web app where every
+  tracked repo is a Slack-style channel; each commit/PR triggers Claude Code and Codex to
+  review it in parallel, the user votes blind on which review was more useful, and a
+  dashboard compares agents. Full spec lives at docs/spec/review-arena.md - read it for
+  details beyond this summary; this context only lists what an agent cannot infer by
+  reading code.
+
+  Write all OpenSpec artifacts (proposal, design, tasks, specs) in Spanish, matching the
+  project's documentation language. Code identifiers, comments, and commit messages stay
+  in English as usual.
+
+  Delivery is phased per docs/spec/review-arena.md's "Plan de implementacion" (7 phases,
+  Fase 0 to Fase 6). Each OpenSpec change should scope to one phase (or a coherent slice
+  of one) rather than the whole system at once, and should follow that phase's
+  "Hecho cuando" (done-when) criterion as its acceptance bar. Do not jump ahead to a later
+  phase's capabilities (e.g. no PR workflow or blind voting before the base skeleton and
+  domain/workflow layers exist).
+
+  Architecture (binding, do not deviate without an ADR):
+  - Hexagonal / ports & adapters. Domain (Change, Review, Finding, Vote) and use cases
+    import nothing from infrastructure. Temporal, FastAPI, Postgres, GitHub, and each
+    review agent are adapters behind ports: ReviewAgent, CodeHost, ChangeRepository,
+    EventPublisher.
+  - Dependency rule enforced by import-linter in CI: domain <- application <- adapters /
+    entrypoints / workflows.
+  - Single Python monolith package with three processes: API, worker `platform`
+    (Dockerized), worker `agents` (runs on the user's own machine, where Claude Code and
+    Codex CLIs are logged in - never containerize this worker).
+  - Temporal workflows/activities receive IDs only, never raw diffs; diffs live in
+    Postgres. Activities must be idempotent (upsert on natural keys).
+  - Outbox pattern: every state change writes its row to the `events` table in the same
+    transaction; a trigger does NOTIFY; the API serves SSE from it with Last-Event-ID
+    replay.
+  - OpenAPI/Pydantic models are the source of truth; the frontend TS client is generated
+    from them (openapi-typescript + openapi-fetch) and CI fails on drift.
+
+  Tech stack (pinned, do not substitute without an ADR):
+  - Backend: Python 3.12, uv, FastAPI, SQLAlchemy 2.0 async + Alembic, pydantic-settings.
+  - Workflows: Temporal (temporalio SDK), two task queues (`platform`, `agents`,
+    max_concurrent_activities=2 on `agents`).
+  - Realtime: Server-Sent Events via sse-starlette + Postgres LISTEN/NOTIFY.
+  - Frontend: React 19 + Vite + TypeScript strict, Tailwind + shadcn/ui, TanStack Query +
+    Router, react-markdown + Monaco diff editor, pnpm.
+  - Review agents: Claude Agent SDK (Python) for Claude Code, `codex exec` for Codex, plus
+    a FakeAgent adapter used in tests/demo mode - all behind the same ReviewAgent port and
+    the same JSON review contract.
+  - Infra: Docker Compose (Postgres, Temporal, Temporal UI, API, worker `platform`) with
+    profiles; `just` as the task runner (just dev, just test, just gen-client).
+  - Quality gates: Ruff, mypy strict, Biome, pre-commit, gitleaks, import-linter,
+    Conventional Commits, GitHub Actions CI, Renovate.
+  - Observability/eval: OpenTelemetry + structlog, Langfuse for per-review traces and vote
+    scores, promptfoo for the offline benchmark (run manually or via a weekly Temporal
+    Schedule, never in CI, to avoid burning the agents' subscription usage).
+
+  Repo layout is a monorepo: backend/ (hexagonal src/review_arena/{domain,application,
+  adapters,workflows,entrypoints}), frontend/ (feature-organized src/features/*), e2e/
+  (Playwright with FakeAgent), benchmark/ (promptfoo), prompts/review/v{n}.md (versioned
+  agent prompts), docs/adr/ (one ADR per significant decision), scripts/install-hook.sh.
+
+  Hard constraints:
+  - No multi-user/login, no auto-applying agent suggestions, no desktop app - web only,
+    single local user (demo mode is read-only and public, separate concern).
+  - Review agents run read-only (no Edit/Write/Bash tools for Claude; --sandbox read-only
+    for Codex) and are driven via the user's own CLI subscriptions, not API keys - the
+    `agents` worker must run outside Docker, on the developer's machine.
+  - Secrets must never reach an agent: gitleaks scans the diff in `prepare_context` before
+    any agent sees it; if it finds something, the review is blocked, not sent.
+  - Diffs passed to agent prompts must be fenced as data, never as instructions (prompt
+    injection mitigation).
+
+rules:
+  tasks:
+    - Break tasks into vertical slices that each end in something runnable/testable, per
+      the project's phase-based delivery plan - never a single "implement everything" task.
+  design:
+    - Record any deviation from the pinned architecture/stack above as an explicit
+      trade-off, and suggest it become an ADR in docs/adr/.
+
+operations:
+  apply:
+    guidance:
+      - Keep test summaries concise; name which test level (unit/integration/workflow/e2e)
+        covered each acceptance criterion.
+  archive:
+    guidance:
+      - Summarize the archive outcome before finishing, and note which phase of
+        docs/spec/review-arena.md it closes out.

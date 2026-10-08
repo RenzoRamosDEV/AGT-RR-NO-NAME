@@ -1,0 +1,38 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (backend, strict)
+        entry: bash -c 'cd backend && uv run mypy src/'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
+
+      - id: import-linter
+        name: import-linter (hexagonal layering)
+        entry: bash -c 'cd backend && uv run lint-imports'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
+
+      - id: biome-check
+        name: biome check (frontend)
+        entry: bash -c 'cd frontend && pnpm exec biome check .'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css)$
+        pass_filenames: false
+
+      - id: gitleaks
+        name: gitleaks (secret scan)
+        entry: gitleaks protect --staged --redact --no-banner
+        language: system
+        pass_filenames: false
