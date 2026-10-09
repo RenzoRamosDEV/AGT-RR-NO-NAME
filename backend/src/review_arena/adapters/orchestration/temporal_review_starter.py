@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from review_arena.adapters.orchestration.temporal_client import LazyTemporalClient
@@ -24,6 +25,9 @@ class TemporalReviewStarter:
                 ReviewCommitInput(change_id=str(change.id), agent_names=self._agent_names),
                 id=f"commit-{change.project_id}-{change.head_sha}",
                 task_queue="platform",
+                # Una review completada no se relanza al reenviar el commit (gastaría a los
+                # agentes otra vez); una que falló o se canceló sí puede reintentarse.
+                id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,
             )
         except WorkflowAlreadyStartedError:
             return

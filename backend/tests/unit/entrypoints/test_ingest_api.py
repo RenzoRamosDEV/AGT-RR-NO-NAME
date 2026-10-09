@@ -196,6 +196,7 @@ async def test_unknown_fields_are_rejected() -> None:
         {"head_sha": "a\x00b"},
         {"ref": "refs/\x00"},
         {"project": ""},
+        {"project": "a\x00b"},
         {"head_sha": ""},
     ],
     ids=lambda o: next(iter(o)),

@@ -15,3 +15,9 @@ async def test_returns_the_existing_project_by_slug(session_factory: async_sessi
 
 async def test_returns_none_for_an_unknown_slug(session_factory: async_sessionmaker) -> None:
     assert await SqlAlchemyProjectRepository(session_factory).get_by_slug("no-existe") is None
+
+
+async def test_a_slug_with_nul_is_simply_unknown_instead_of_failing(
+    session_factory: async_sessionmaker,
+) -> None:
+    assert await SqlAlchemyProjectRepository(session_factory).get_by_slug("a\x00b") is None

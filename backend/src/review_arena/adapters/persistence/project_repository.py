@@ -15,6 +15,8 @@ class SqlAlchemyProjectRepository:
         self._session_factory = session_factory
 
     async def get_by_slug(self, slug: str) -> Project | None:
+        if "\x00" in slug:  # ningún proyecto puede llamarse así y Postgres rechazaría la consulta
+            return None
         async with self._session_factory() as session:
             row = (
                 await session.execute(select(ProjectModel).where(ProjectModel.slug == slug))
