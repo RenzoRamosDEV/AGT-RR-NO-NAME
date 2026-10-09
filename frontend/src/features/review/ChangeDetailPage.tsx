@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { CopyButton } from "../../components/CopyButton";
 import { ReviewCard } from "../../components/ReviewCard";
 import { Badge } from "../../components/ui/Badge";
 import { useDataSource } from "../../data/source";
 import { UNNAMED_FILE, diffFiles, parseDiff } from "../../lib/diff";
+import { projectPath } from "../../lib/projectPath";
 import { AGGREGATE_LABEL, AGGREGATE_TONE, isRetryable } from "../../lib/reviewStatus";
 import { safeHttpUrl, shortSha } from "../../lib/url";
 import { useAsync } from "../../lib/useAsync";
@@ -14,8 +15,7 @@ import { RetryReview } from "./RetryReview";
 
 const fileAnchor = (rowId: number) => `diff-file-${rowId}`;
 
-export function ChangeDetailPage() {
-  const { slug = "", id = "" } = useParams();
+export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
   const source = useDataSource();
   const state = useAsync(useCallback(() => source.change(id), [source, id]));
   const [note, setNote] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function ChangeDetailPage() {
             <div className="page-header">
               <div>
                 <p>
-                  <Link to={`/p/${slug}`}>#{slug}</Link> /{" "}
+                  <Link to={projectPath(slug)}>#{slug}</Link> /{" "}
                   <span className="mono">{shortSha(change.sha)}</span>
                 </p>
                 <h1>{change.title}</h1>

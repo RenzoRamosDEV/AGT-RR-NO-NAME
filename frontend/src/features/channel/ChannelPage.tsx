@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { CopyButton } from "../../components/CopyButton";
 import { ReviewCard } from "../../components/ReviewCard";
@@ -11,6 +11,7 @@ import { ApiError } from "../../lib/api";
 import type { StateFilter } from "../../lib/channelQuery";
 import { ingestCommand } from "../../lib/ingestHint";
 import { useNow } from "../../lib/now";
+import { changePath } from "../../lib/projectPath";
 import { relativeTime } from "../../lib/relativeTime";
 import { AGGREGATE_LABEL, AGGREGATE_TONE } from "../../lib/reviewStatus";
 import { summarizeReviews } from "../../lib/reviewSummary";
@@ -86,7 +87,7 @@ function ChangeThread({
     <Card className={compact ? "change-row" : undefined}>
       <div className="row">
         <Badge>{change.kind === "pr" ? "PR" : "Commit"}</Badge>
-        <Link to={`/p/${slug}/changes/${change.id}`}>
+        <Link to={changePath(slug, change.id)}>
           <strong>{change.title}</strong>
         </Link>
       </div>
@@ -139,8 +140,7 @@ function EmptyChannel({ slug }: { slug: string }) {
   );
 }
 
-export function ChannelPage() {
-  const { slug = "" } = useParams();
+export function ChannelPage({ slug }: { slug: string }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [query, setQuery] = useState("");

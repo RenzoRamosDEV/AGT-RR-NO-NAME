@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "../components/ui/Button";
 import { useDataSource } from "../data/source";
+import { projectPath } from "../lib/projectPath";
 import { useAsync } from "../lib/useAsync";
 
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
@@ -50,7 +51,7 @@ export function Shell() {
                 <p className="muted">Sin proyectos.</p>
               ) : (
                 projects.data.map((p) => (
-                  <NavLink key={p.slug} to={`/p/${p.slug}`} className={link}>
+                  <NavLink key={p.slug} to={projectPath(p.slug)} className={link}>
                     <span aria-hidden="true">#</span> {p.name}
                   </NavLink>
                 ))

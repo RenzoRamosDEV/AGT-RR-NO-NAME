@@ -166,7 +166,7 @@ export const projects: Project[] = [
       },
     ],
   },
-  { slug: "demo-api", name: "demo-api", changes: [] },
+  { slug: "acme/widgets", name: "acme/widgets", changes: [] },
 ];
 
 export const agentStats: AgentStat[] = [

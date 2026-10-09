@@ -46,13 +46,13 @@ describe("navigation", () => {
 
   it("reaches interactive controls in order with Tab", async () => {
     renderAt("/p/duelo");
-    await screen.findByRole("link", { name: /demo-api/ });
+    await screen.findByRole("link", { name: /acme\/widgets/ });
     await userEvent.tab();
     expect(screen.getByRole("button", { name: "Menú" })).toHaveFocus();
     await userEvent.tab();
     expect(screen.getByRole("link", { name: /duelo/ })).toHaveFocus();
     await userEvent.tab();
-    expect(screen.getByRole("link", { name: /demo-api/ })).toHaveFocus();
+    expect(screen.getByRole("link", { name: /acme\/widgets/ })).toHaveFocus();
   });
 });
 
@@ -91,7 +91,7 @@ describe("channel search and summary", () => {
   });
 
   it("tells an empty channel apart from no matches", async () => {
-    renderAt("/p/demo-api");
+    renderAt("/p/acme/widgets");
     expect(await screen.findByText("Aún no hay cambios en este canal.")).toBeInTheDocument();
   });
 
