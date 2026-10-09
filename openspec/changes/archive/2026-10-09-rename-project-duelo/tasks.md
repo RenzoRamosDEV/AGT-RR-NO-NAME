@@ -12,7 +12,7 @@
 
 ## 2. Cierre
 
-- [ ] 2.1 Commit, push y CI de GitHub en verde; archivar el change.
+- [x] 2.1 Commit, push y CI de GitHub en verde; archivar el change.
 - [ ] 2.2 Renombrar la carpeta local a `Duelo`, migrar la memoria de Claude Code a la nueva
       ruta y reparar el worktree auxiliar; verificar `git status` y `just test-unit` desde
       la nueva ruta.
