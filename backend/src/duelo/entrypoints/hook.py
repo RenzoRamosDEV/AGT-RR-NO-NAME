@@ -177,16 +177,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--project", required=True)
     parser.add_argument("--stdin-file")
     parser.add_argument("--env-file")
-    parser.add_argument("remote", nargs="*")
     try:
-        args = parser.parse_args(argv)
+        # Git añade `<remoto> <url>` tras nuestros argumentos en pre-push. Un posicional con
+        # `nargs="*"` se queda sin esos valores según la versión de argparse, así que se
+        # leen de los sobrantes.
+        args, remote = parser.parse_known_args(argv)
         if args.event == "post-commit":
             commits = [(_git("rev-parse", "HEAD").strip(), current_branch())]
         else:
             stdin_text = (
                 Path(args.stdin_file).read_text(encoding="utf-8") if args.stdin_file else ""
             )
-            commits = pushed_commits(stdin_text, args.remote[0] if args.remote else "origin")
+            commits = pushed_commits(stdin_text, remote[0] if remote else "origin")
         if commits:
             project = args.project
             env_path = Path(args.env_file) if args.env_file else None

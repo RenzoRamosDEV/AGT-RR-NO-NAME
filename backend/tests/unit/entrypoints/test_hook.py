@@ -249,6 +249,31 @@ def test_pre_push_reads_the_refs_from_the_file_and_sends_each_commit(
     assert (body["head_sha"], body["title"]) == (new, "dos")
 
 
+@pytest.mark.regression
+@pytest.mark.parametrize("position", ["after_options", "right_after_event"])
+def test_pre_push_accepts_the_remote_and_url_git_appends_wherever_they_land(
+    position: str, repo: Path, api: Recorder, inline: None, tmp_path: Path
+) -> None:
+    """Origen: en CI (Python 3.12 más reciente) `pre-push` fallaba con «unrecognized arguments:
+    origin u» porque el posicional `remote` con `nargs="*"` se quedaba vacío; en local pasaba."""
+    creds = env_file(tmp_path, api)
+    base = commit_file(repo, "a.txt", "1\n", "uno")
+    new = commit_file(repo, "b.txt", "2\n", "dos")
+    refs = tmp_path / "refs"
+    refs.write_text(_push_line(new, base))
+    options = ["--project", "a/b", "--env-file", creds, "--stdin-file", str(refs)]
+    argv = (
+        ["pre-push", *options, "origin", "u"]
+        if position == "after_options"
+        else ["pre-push", "origin", "u", *options]
+    )
+
+    assert hook.main(argv) == 0
+
+    (body,) = api.wait_for(1)
+    assert body["head_sha"] == new
+
+
 def test_a_failing_commit_does_not_stop_the_rest(
     repo: Path, api: Recorder, inline: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
