@@ -259,3 +259,116 @@ describe("createHttpSource retry", () => {
     expect(error.status).toBeNull();
   });
 });
+
+describe("createHttpSource local projects", () => {
+  it("maps the path, hooks and GitHub flag of the project list", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse([
+        {
+          id: "p1",
+          slug: "acme/widgets",
+          path: "/home/me/widgets",
+          hooks_installed: true,
+          github: "acme/widgets",
+        },
+        { id: "p2", slug: "old", path: null, hooks_installed: null, github: null },
+      ]),
+    );
+    expect(await createHttpSource("http://api.test", fetchMock).projects()).toEqual([
+      {
+        slug: "acme/widgets",
+        name: "acme/widgets",
+        path: "/home/me/widgets",
+        hooksInstalled: true,
+        github: true,
+      },
+      { slug: "old", name: "old" },
+    ]);
+  });
+
+  it("POSTs the path as JSON with the token and maps the created project", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        { id: "p1", slug: "acme/widgets", path: "/r", hooks_installed: true, github: false },
+        201,
+      ),
+    );
+    const project = await createHttpSource("http://api.test", fetchMock).addProject("/r", "tok");
+    expect(project).toEqual({
+      slug: "acme/widgets",
+      name: "acme/widgets",
+      path: "/r",
+      hooksInstalled: true,
+      github: false,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/projects",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ path: "/r" }),
+        headers: expect.objectContaining({
+          "X-Ingest-Token": "tok",
+          "Content-Type": "application/json",
+        }),
+      }),
+    );
+  });
+
+  it.each([401, 404, 409, 422])("raises an ApiError with status %i on add", async (status) => {
+    const source = createHttpSource("http://api.test", async () => jsonResponse({}, status));
+    const error = (await source.addProject("/r", "t").catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(status);
+  });
+
+  it("DELETEs an owner/repo slug as a path and accepts the empty 204 body", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    await expect(
+      createHttpSource("http://api.test", fetchMock).removeProject("acme/wid gets", "tok"),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/projects/acme/wid%20gets",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({ "X-Ingest-Token": "tok" }),
+      }),
+    );
+  });
+
+  it("POSTs sync-prs and returns the counters", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ synced: 3, created: 1 }));
+    const result = await createHttpSource("http://api.test", fetchMock).syncPrs(
+      "acme/widgets",
+      "t",
+    );
+    expect(result).toEqual({ synced: 3, created: 1 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/projects/acme/widgets/sync-prs",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("uses the textual `detail` of an error as its message", async () => {
+    const source = createHttpSource("http://api.test", async () =>
+      jsonResponse({ detail: "gh no está instalado" }, 503),
+    );
+    const error = (await source.syncPrs("a/b", "t").catch((e: unknown) => e)) as ApiError;
+    expect(error.status).toBe(503);
+    expect(error.message).toBe("gh no está instalado");
+  });
+
+  it("keeps the generic message when `detail` is a validation list or the body is not JSON", async () => {
+    const list = createHttpSource("http://api.test", async () =>
+      jsonResponse({ detail: [{ msg: "bad", loc: ["body"] }] }, 422),
+    );
+    const listError = (await list.addProject("/r", "t").catch((e: unknown) => e)) as ApiError;
+    expect(listError.message).toBe("El servidor respondió 422.");
+
+    const html = createHttpSource(
+      "http://api.test",
+      async () => new Response("<html>", { status: 502 }),
+    );
+    const htmlError = (await html.addProject("/r", "t").catch((e: unknown) => e)) as ApiError;
+    expect(htmlError.message).toBe("El servidor respondió 502.");
+  });
+});

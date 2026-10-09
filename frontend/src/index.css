@@ -654,3 +654,81 @@ th[aria-sort="descending"] .sort-button::after {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* Local projects: add/remove dialog, project rows, live indicator */
+dialog.modal {
+  position: fixed;
+  inset: 0;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  padding: 20px;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--fg);
+}
+
+dialog.modal::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+dialog.modal h2 {
+  margin-top: 0;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-form p {
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: var(--danger);
+  color: var(--accent-fg);
+}
+
+.project-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.project-row .mono {
+  overflow-wrap: anywhere;
+}
+
+.project-message {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.updated {
+  display: inline-block;
+  font-size: 12.5px;
+}
+
+.sidebar .nav-group > .btn {
+  margin-top: 8px;
+  width: 100%;
+}

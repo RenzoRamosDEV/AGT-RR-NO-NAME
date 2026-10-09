@@ -41,6 +41,15 @@ export function makeSource(overrides: Partial<DataSource> = {}): DataSource {
     retry: async () => {
       throw new ApiError("no", 404);
     },
+    addProject: async () => {
+      throw new ApiError("no", 404);
+    },
+    removeProject: async () => {
+      throw new ApiError("no", 404);
+    },
+    syncPrs: async () => {
+      throw new ApiError("no", 404);
+    },
     ...overrides,
   };
 }

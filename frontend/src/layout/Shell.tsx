@@ -1,18 +1,24 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "../components/ui/Button";
-import { useDataSource } from "../data/source";
+import { ProjectsProvider, useProjects } from "../features/projects/ProjectsContext";
 import { projectPath } from "../lib/projectPath";
-import { useAsync } from "../lib/useAsync";
 
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
 
 export function Shell() {
+  return (
+    <ProjectsProvider>
+      <ShellLayout />
+    </ProjectsProvider>
+  );
+}
+
+function ShellLayout() {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const { pathname } = useLocation();
-  const source = useDataSource();
-  const projects = useAsync(useCallback(() => source.projects(), [source]));
+  const { projects, openAddProject } = useProjects();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the menu whenever the route changes
   useEffect(() => setOpen(false), [pathname]);
@@ -56,6 +62,7 @@ export function Shell() {
                   </NavLink>
                 ))
               ))}
+            <Button onClick={openAddProject}>Añadir proyecto</Button>
           </div>
           <div className="nav-group">
             <div className="nav-title">General</div>

@@ -4,12 +4,15 @@ import { BrowserRouter } from "react-router";
 import "./index.css";
 import App from "./App.tsx";
 import { NowProvider } from "./lib/now";
+import { PollingProvider } from "./lib/polling";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <NowProvider>
-        <App />
+        <PollingProvider>
+          <App />
+        </PollingProvider>
       </NowProvider>
     </BrowserRouter>
   </StrictMode>,
