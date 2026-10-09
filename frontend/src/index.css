@@ -512,3 +512,100 @@ a.btn {
   align-items: center;
   gap: 8px;
 }
+
+/* Round 3: diff file navigator, sortable stats, compact channel, empty state */
+.diff-files {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.diff-files h2 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.diff-files ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.add-count {
+  color: var(--success);
+  font-family: var(--font-mono);
+}
+
+.del-count {
+  color: var(--danger);
+  font-family: var(--font-mono);
+}
+
+.diff-row.meta {
+  color: var(--fg-muted);
+}
+
+.diff-row {
+  scroll-margin-top: 16px;
+}
+
+.sort-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: var(--fg);
+}
+
+th[aria-sort="ascending"] .sort-button::after {
+  content: " ▲";
+}
+
+th[aria-sort="descending"] .sort-button::after {
+  content: " ▼";
+}
+
+.change-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 14px;
+}
+
+.change-row > p,
+.change-row > .review-summary {
+  margin: 0;
+}
+
+.change-row .thread {
+  flex: 1 1 100%;
+}
+
+.empty .command {
+  margin: 12px 0;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+@media (max-width: 760px) {
+  .change-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

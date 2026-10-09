@@ -14,6 +14,7 @@ interface ChangeSummaryDto {
   title: string;
   author: string;
   url: string;
+  created_at: string;
   diff_truncated: boolean;
 }
 
@@ -87,6 +88,7 @@ function toChange(dto: ChangeSummaryDto): Change {
     sha: dto.head_sha,
     ref: dto.ref,
     url: dto.url,
+    createdAt: dto.created_at,
     diff: "",
     truncated: dto.diff_truncated,
   };

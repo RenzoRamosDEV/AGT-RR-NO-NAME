@@ -16,6 +16,7 @@ const summary = {
   title: "feat: x",
   author: "renzo",
   url: "https://github.com/o/r/pull/1",
+  created_at: "2026-10-09T10:00:00Z",
   diff_truncated: true,
 };
 
@@ -41,6 +42,7 @@ describe("createHttpSource", () => {
       kind: "pr",
       sha: summary.head_sha,
       ref: "feat/x",
+      createdAt: "2026-10-09T10:00:00Z",
       truncated: true,
     });
     expect(page.items[0].reviews).toBeUndefined();

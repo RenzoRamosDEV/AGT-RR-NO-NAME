@@ -28,6 +28,8 @@ export interface Change {
   sha: string;
   ref: string;
   url: string;
+  /** ISO timestamp; absent when the source does not report it. */
+  createdAt?: string;
   diff: string;
   truncated?: boolean;
   /** Absent when the source does not report reviews (the API channel listing). */
@@ -48,6 +50,8 @@ const DIFF = `@@ src/ingest.py
 -    if token == settings.ingest_token:
 -        return accept(request)`;
 
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
 export const projects: Project[] = [
   {
     slug: "duelo",
@@ -61,6 +65,7 @@ export const projects: Project[] = [
         sha: "a41f9c2",
         ref: "main",
         url: "https://github.com/RenzoRamosDEV/Duelo/commit/a41f9c2",
+        createdAt: minutesAgo(12),
         diff: DIFF,
         reviews: [
           {
@@ -94,6 +99,7 @@ export const projects: Project[] = [
         sha: "9be03d1",
         ref: "feat/ingest-commits",
         url: "https://github.com/RenzoRamosDEV/Duelo/pull/7",
+        createdAt: minutesAgo(3 * 60),
         diff: DIFF,
         truncated: true,
         reviews: [

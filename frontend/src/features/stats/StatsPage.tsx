@@ -1,6 +1,24 @@
+import { useState } from "react";
 import { agentLabel } from "../../components/ui/AgentAvatar";
 import { stats } from "../../data/mock";
 import { ratio } from "../../lib/meter";
+import { type SortDirection, nextSort, sortRows } from "../../lib/sort";
+
+type Row = (typeof stats)[number];
+type SortKey = keyof Row;
+interface Sort {
+  key: SortKey;
+  direction: SortDirection;
+}
+
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "agent", label: "Agente" },
+  { key: "prompt", label: "Prompt" },
+  { key: "useful", label: "% útiles" },
+  { key: "score", label: "Nota" },
+  { key: "seconds", label: "Duración" },
+  { key: "failures", label: "Fallos" },
+];
 
 function Meter({ percent, tone }: { percent: number; tone?: "danger" }) {
   return (
@@ -13,6 +31,8 @@ function Meter({ percent, tone }: { percent: number; tone?: "danger" }) {
 export function StatsPage() {
   const maxSeconds = Math.max(...stats.map((s) => s.seconds));
   const maxFailures = Math.max(...stats.map((s) => s.failures));
+  const [sort, setSort] = useState<Sort | null>(null);
+  const rows = sort ? sortRows(stats, sort.key, sort.direction) : stats;
   return (
     <div className="page">
       <div className="page-header">
@@ -24,16 +44,25 @@ export function StatsPage() {
       <table className="stats">
         <thead>
           <tr>
-            <th scope="col">Agente</th>
-            <th scope="col">Prompt</th>
-            <th scope="col">% útiles</th>
-            <th scope="col">Nota</th>
-            <th scope="col">Duración</th>
-            <th scope="col">Fallos</th>
+            {COLUMNS.map((c) => (
+              <th
+                key={c.key}
+                scope="col"
+                aria-sort={sort?.key === c.key ? sort.direction : undefined}
+              >
+                <button
+                  type="button"
+                  className="sort-button"
+                  onClick={() => setSort((current) => nextSort(current, c.key))}
+                >
+                  {c.label}
+                </button>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {stats.map((s) => (
+          {rows.map((s) => (
             <tr key={s.agent}>
               <th scope="row">{agentLabel(s.agent)}</th>
               <td className="mono">{s.prompt}</td>
