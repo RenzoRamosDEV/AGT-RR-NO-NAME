@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from duelo.application.ingest_commit import IngestResult, ProjectNotFound
 from duelo.application.ports import ReviewStartError
 from duelo.entrypoints.api.auth import require_ingest_token
+from duelo.entrypoints.api.rate_limit import rate_limit
 from duelo.entrypoints.api.schemas import (
     ErrorResponse,
     IngestCommitRequest,
@@ -16,12 +17,17 @@ from duelo.entrypoints.api.schemas import (
     IngestPrResponse,
 )
 
-router = APIRouter(tags=["ingest"], dependencies=[Depends(require_ingest_token)])
+# El límite va antes que el token: los intentos con token inválido también gastan cupo.
+router = APIRouter(
+    tags=["ingest"],
+    dependencies=[Depends(rate_limit("ingest")), Depends(require_ingest_token)],
+)
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse},
     401: {"model": ErrorResponse},
     404: {"model": ErrorResponse},
+    429: {"model": ErrorResponse},
     503: {"model": ErrorResponse},
 }
 

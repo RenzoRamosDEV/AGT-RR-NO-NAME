@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from duelo.domain.review import Review, ReviewStatus
@@ -55,6 +56,20 @@ def review_status_of_run(
 # Se puede reintentar cuando la ejecución actual ya terminó con algún fallo. Una review
 # completada nunca se relanza: gastaría a los agentes otra vez.
 RETRYABLE_STATUSES = frozenset({ChangeReviewStatus.FAILED, ChangeReviewStatus.PARTIAL_FAILED})
+
+
+# Estados que aún esperan reviews: solo ellos pueden estar "atascados".
+_AWAITING_STATUSES = frozenset({ChangeReviewStatus.PENDING, ChangeReviewStatus.RUNNING})
+
+
+def is_stale(
+    status: ChangeReviewStatus, created_at: datetime, *, now: datetime, stale_after: timedelta
+) -> bool:
+    """Diagnóstico: un change que sigue esperando reviews más allá del umbral probablemente
+    perdió su ejecución. Los estados terminados nunca son `stale`, por antiguos que sean.
+
+    Mide desde la creación del change (no se guarda cuándo empezó el `run` actual)."""
+    return status in _AWAITING_STATUSES and now - created_at > stale_after
 
 
 class Severity(StrEnum):

@@ -5,14 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from duelo.application.ingest_commit import ProjectNotFound
-from duelo.entrypoints.api.schemas import AgentStatsResponse, ErrorResponse
+from duelo.entrypoints.api.schemas import NO_NUL, AgentStatsResponse, ErrorResponse
 
 router = APIRouter(tags=["stats"])
 
 MAX_PROJECT = 255
-# Sin NUL: Postgres no lo admite en texto. Al ir en el esquema, el contrato lo declara y el 422 es
-# el estándar de FastAPI (no un caso especial del handler).
-NO_NUL = r"^[^\x00]*$"
 
 
 @router.get(

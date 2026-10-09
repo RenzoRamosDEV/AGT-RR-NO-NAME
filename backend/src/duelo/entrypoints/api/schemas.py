@@ -21,6 +21,10 @@ from duelo.domain.project import Project
 from duelo.domain.review import Finding, Review, ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
 
+# Sin NUL: Postgres no lo admite en texto. Al ir en el esquema, el contrato lo declara y el 422 es
+# el estándar de FastAPI (no un caso especial del handler).
+NO_NUL = r"^[^\x00]*$"
+
 
 class IngestCommitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -113,6 +117,8 @@ class ChangeSummaryResponse(BaseModel):
     run: int
     created_at: datetime
     diff_summary: DiffSummaryResponse
+    # Diagnóstico: sigue `pending`/`running` más allá de `STALE_AFTER_SECONDS`.
+    stale: bool
 
     @classmethod
     def from_summary(cls, change: ChangeSummary) -> ChangeSummaryResponse:
@@ -131,6 +137,7 @@ class ChangeSummaryResponse(BaseModel):
             run=change.run,
             created_at=change.created_at,
             diff_summary=DiffSummaryResponse.from_domain(change.diff_summary),
+            stale=change.stale,
         )
 
 
@@ -243,6 +250,7 @@ class ChangeDetailResponse(ChangeSummaryResponse):
             run=change.run,
             created_at=change.created_at,
             diff_summary=DiffSummaryResponse.from_domain(change.diff_summary),
+            stale=detail.stale,
             diff=change.diff,
             reviews=[ReviewResponse.from_domain(r) for r in detail.reviews],
             findings_summary=FindingsSummaryResponse.from_domain(detail.findings_summary),

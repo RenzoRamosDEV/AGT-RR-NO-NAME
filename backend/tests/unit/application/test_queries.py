@@ -29,6 +29,8 @@ from tests.fakes.review_repository import FakeReviewRepository
 PROJECT = Project(id=uuid4(), slug="acme/widgets")
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 _NO_FILTER = {"status": None, "q": None, "expected_agents": 2}
+# Reloj fijo en T0: nada de lo creado a partir de T0 puede estar atascado.
+_CLOCK = {"now": T0, "stale_after": timedelta(hours=1)}
 
 
 async def _add(
@@ -66,7 +68,14 @@ async def _walk(
     after: ChangeCursor | None = None
     while True:
         page = await list_changes(
-            projects, changes, slug=PROJECT.slug, kind=kind, limit=limit, after=after, **_NO_FILTER
+            projects,
+            changes,
+            slug=PROJECT.slug,
+            kind=kind,
+            limit=limit,
+            after=after,
+            **_NO_FILTER,
+            **_CLOCK,
         )
         pages.append([c.id for c in page.items])
         if page.next_cursor is None:
@@ -157,7 +166,7 @@ async def test_next_cursor_points_at_the_last_returned_item() -> None:
         await _add(changes, f"{i:040d}", at=T0 + timedelta(minutes=i))
 
     page = await list_changes(
-        projects, changes, slug=PROJECT.slug, kind=None, limit=2, after=None, **_NO_FILTER
+        projects, changes, slug=PROJECT.slug, kind=None, limit=2, after=None, **_NO_FILTER, **_CLOCK
     )
 
     assert page.next_cursor == ChangeCursor(
@@ -175,6 +184,7 @@ async def test_unknown_project_is_reported() -> None:
             limit=5,
             after=None,
             **_NO_FILTER,
+            **_CLOCK,
         )
 
     assert error.value.slug == "no/existe"
@@ -215,7 +225,7 @@ async def test_change_detail_has_the_change_and_only_its_reviews() -> None:
     await _persist(reviews, _review(mine, "a", score=None, ms=None, fail=True), PROJECT)
     await _persist(reviews, _review(other, "a", score=1, ms=1, fail=False), PROJECT)
 
-    detail = await get_change_detail(changes, reviews, mine.id, expected_agents=2)
+    detail = await get_change_detail(changes, reviews, mine.id, expected_agents=2, **_CLOCK)
 
     assert detail is not None and detail.change == mine
     assert [r.agent for r in detail.reviews] == ["a", "b"]
@@ -225,7 +235,7 @@ async def test_change_detail_has_the_change_and_only_its_reviews() -> None:
 async def test_change_detail_of_an_unknown_change_is_none() -> None:
     assert (
         await get_change_detail(
-            FakeChangeRepository(), FakeReviewRepository(), uuid4(), expected_agents=2
+            FakeChangeRepository(), FakeReviewRepository(), uuid4(), expected_agents=2, **_CLOCK
         )
         is None
     )
@@ -285,6 +295,7 @@ async def test_the_channel_filters_by_review_status_and_exposes_it() -> None:
             status=frozenset(status) if status else None,
             q=None,
             expected_agents=2,
+            **_CLOCK,
             limit=10,
             after=None,
         )
@@ -322,6 +333,7 @@ async def test_pagination_applies_the_filter_before_the_limit() -> None:
             status=frozenset({ChangeReviewStatus.FAILED}),
             q=None,
             expected_agents=2,
+            **_CLOCK,
             limit=2,
             after=after,
         )
@@ -342,7 +354,7 @@ async def test_detail_reports_status_and_findings_of_the_current_run_only() -> N
     await _persist_review(reviews, change, "a", fail=False, run=2, severities=("Risk", "banana"))
     await _persist_review(reviews, change, "b", fail=True, run=2)
 
-    detail = await get_change_detail(changes, reviews, change.id, expected_agents=2)
+    detail = await get_change_detail(changes, reviews, change.id, expected_agents=2, **_CLOCK)
 
     assert detail is not None
     assert detail.review_status is ChangeReviewStatus.PARTIAL_FAILED
@@ -355,7 +367,7 @@ async def test_detail_of_a_change_without_reviews_is_pending_with_no_findings() 
     changes, reviews = FakeChangeRepository(), FakeReviewRepository()
     change = await _add(changes, "1" * 40, at=T0)
 
-    detail = await get_change_detail(changes, reviews, change.id, expected_agents=2)
+    detail = await get_change_detail(changes, reviews, change.id, expected_agents=2, **_CLOCK)
 
     assert detail is not None and detail.review_status is ChangeReviewStatus.PENDING
     assert detail.findings_summary.total == 0
@@ -382,6 +394,7 @@ async def test_the_search_text_and_one_extra_row_are_requested_from_the_reposito
         status=only,
         q="change 1",
         expected_agents=3,
+        **_CLOCK,
         limit=1,
         after=None,
     )
@@ -530,3 +543,64 @@ async def test_review_raw_output_returns_it_only_when_the_review_has_one() -> No
     assert await review_raw_output(reviews, quiet.id) is None
     assert await review_raw_output(reviews, broken.id) is None
     assert await review_raw_output(reviews, uuid4()) is None
+
+
+# --- reviews atascadas (reloj inyectado) -------------------------------------------------
+
+_STALE_AFTER = timedelta(hours=1)
+
+
+async def test_list_marks_stale_only_waiting_changes_older_than_the_threshold() -> None:
+    projects, reviews = FakeProjectRepository(PROJECT), FakeReviewRepository()
+    changes = FakeChangeRepository(reviews)  # el listado calcula `review_status` con ellas
+    old = await _add(changes, "1" * 40, at=T0)  # pending y antiguo
+    edge = await _add(changes, "2" * 40, at=T0 + timedelta(hours=1))  # justo en el umbral
+    done = await _add(changes, "3" * 40, at=T0)
+    await _persist(reviews, _review(done, "a", score=1, ms=1, fail=False), PROJECT)
+    await _persist(reviews, _review(done, "b", score=1, ms=1, fail=False), PROJECT)
+    now = T0 + timedelta(hours=2)
+
+    page = await list_changes(
+        projects,
+        changes,
+        slug=PROJECT.slug,
+        kind=None,
+        limit=10,
+        after=None,
+        status=None,
+        q=None,
+        expected_agents=2,
+        now=now,
+        stale_after=_STALE_AFTER,
+    )
+
+    stale = {c.id: c.stale for c in page.items}
+    assert stale == {old.id: True, edge.id: False, done.id: False}  # `done` está completed
+
+
+async def test_detail_marks_stale_from_the_aggregated_status_and_the_injected_clock() -> None:
+    changes, reviews = FakeChangeRepository(), FakeReviewRepository()
+    waiting = await _add(changes, "1" * 40, at=T0)
+    finished = await _add(changes, "2" * 40, at=T0)
+    await _persist(reviews, _review(finished, "a", score=1, ms=1, fail=False), PROJECT)
+    await _persist(reviews, _review(finished, "b", score=1, ms=1, fail=True), PROJECT)
+
+    async def detail(change: Change, *, elapsed: timedelta):
+        found = await get_change_detail(
+            changes,
+            reviews,
+            change.id,
+            expected_agents=2,
+            now=T0 + elapsed,
+            stale_after=_STALE_AFTER,
+        )
+        assert found is not None
+        return found
+
+    assert (await detail(waiting, elapsed=_STALE_AFTER)).stale is False
+    stale_waiting = await detail(waiting, elapsed=_STALE_AFTER + timedelta(seconds=1))
+    assert stale_waiting.stale is True and stale_waiting.review_status is ChangeReviewStatus.PENDING
+    # Terminado con fallos: por antiguo que sea, no es un atasco.
+    old_finished = await detail(finished, elapsed=timedelta(days=30))
+    assert old_finished.review_status is ChangeReviewStatus.PARTIAL_FAILED
+    assert old_finished.stale is False

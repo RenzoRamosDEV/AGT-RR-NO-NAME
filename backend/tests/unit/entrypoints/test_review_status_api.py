@@ -159,7 +159,8 @@ async def test_nul_in_search_uses_the_standard_validation_format() -> None:
         response = await client.get(f"/projects/{api.project.slug}/changes", params={"q": "a\x00b"})
 
     (error,) = response.json()["detail"]
-    assert error["loc"] == ["query", "q"] and "NUL" in error["msg"]
+    # El patrón del esquema (sin NUL) lo rechaza: así el contrato lo declara y no hay 500.
+    assert error["loc"] == ["query", "q"] and error["type"] == "string_pattern_mismatch"
 
 
 async def test_detail_includes_review_status_and_a_findings_summary_without_raw_output() -> None:

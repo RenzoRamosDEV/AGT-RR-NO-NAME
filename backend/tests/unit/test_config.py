@@ -115,3 +115,66 @@ def test_operator_token_must_differ_from_the_ingest_token(
 
     with pytest.raises(ValidationError, match="distinto de INGEST_TOKEN"):
         Settings()  # type: ignore[call-arg]
+
+
+def test_round4_defaults_are_safe(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("ALLOWED_ORIGINS", "RATE_LIMIT_REQUESTS", "RATE_LIMIT_WINDOW_SECONDS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("STALE_AFTER_SECONDS", raising=False)
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.allowed_origins == []  # sin CORS salvo que se pida
+    assert settings.rate_limit_requests == 300
+    assert settings.rate_limit_window_seconds == 60
+    assert settings.stale_after_seconds == 1800
+
+
+def test_allowed_origins_are_a_comma_separated_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("ALLOWED_ORIGINS", "http://localhost:5173, https://duelo.example.com:8443 ,")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.allowed_origins == ["http://localhost:5173", "https://duelo.example.com:8443"]
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["*", "localhost:5173", "http://localhost:5173/app", "ftp://host", "http://", "http://h?x=1"],
+)
+def test_allowed_origins_reject_wildcards_and_malformed_origins(
+    monkeypatch: pytest.MonkeyPatch, origin: str
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("ALLOWED_ORIGINS", origin)
+
+    with pytest.raises(ValidationError):
+        Settings()  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("RATE_LIMIT_REQUESTS", "-1"),
+        ("RATE_LIMIT_WINDOW_SECONDS", "0"),
+        ("STALE_AFTER_SECONDS", "0"),
+        ("STALE_AFTER_SECONDS", "-3"),
+    ],
+)
+def test_round4_numbers_are_validated(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings()  # type: ignore[call-arg]
+
+
+def test_rate_limit_can_be_disabled_with_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("RATE_LIMIT_REQUESTS", "0")
+
+    assert Settings().rate_limit_requests == 0  # type: ignore[call-arg]

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 
 from duelo.application import queries
 from duelo.application.ingest_commit import ChangeSubmission, IngestResult, ingest_commit, ingest_pr
+from duelo.application.ports import RateLimiter
 from duelo.application.read_models import (
     AgentStats,
     ChangeCursor,
@@ -53,10 +56,19 @@ def build_fake_api(
     max_diff_chars: int = 200_000,
     starter: FakeReviewStarter | None = None,
     operator_token: str | None = OPERATOR_TOKEN,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    stale_after_seconds: int = 1800,
+    allowed_origins: list[str] | None = None,
+    rate_limiter: RateLimiter | None = None,
 ) -> FakeApi:
     settings = Settings(
-        ingest_token=TOKEN, max_diff_chars=max_diff_chars, operator_token=operator_token
+        ingest_token=TOKEN,
+        max_diff_chars=max_diff_chars,
+        operator_token=operator_token,
+        stale_after_seconds=stale_after_seconds,
+        allowed_origins=allowed_origins or [],
     )
+    stale_after = timedelta(seconds=settings.stale_after_seconds)
     project = Project(id=uuid4(), slug=PROJECT_SLUG)
     event_log = FakeEventLog()
     reviews = FakeReviewRepository(event_log)
@@ -93,11 +105,18 @@ def build_fake_api(
             expected_agents=EXPECTED_AGENTS,
             limit=limit,
             after=after,
+            now=clock(),
+            stale_after=stale_after,
         )
 
     async def get_change(change_id: UUID) -> ChangeDetail | None:
         return await queries.get_change_detail(
-            changes, reviews, change_id, expected_agents=EXPECTED_AGENTS
+            changes,
+            reviews,
+            change_id,
+            expected_agents=EXPECTED_AGENTS,
+            now=clock(),
+            stale_after=stale_after,
         )
 
     async def retry(change_id: UUID) -> Change:
@@ -125,6 +144,7 @@ def build_fake_api(
         list_change_events=list_change_events,
         get_review_raw_output=get_review_raw_output,
         readiness_checks=checks,
+        rate_limiter=rate_limiter,
     )
     return FakeApi(
         create_app(settings, deps), changes, reviews, event_log, starter, settings, project, checks

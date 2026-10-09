@@ -51,6 +51,14 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       # Solo desarrollo local; en cualquier otro entorno se define INGEST_TOKEN de verdad.
       INGEST_TOKEN: ${INGEST_TOKEN:-dev-ingest-token}
+      # Opcional: sin él, GET /reviews/{id}/raw-output responde 404 (16+ caracteres, != INGEST_TOKEN).
+      OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
+      # Orígenes del navegador permitidos (el dev server de Vite); vacío = sin CORS.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      # Límite de ingesta/reintento por IP y ventana; 0 lo desactiva (p. ej. para `just load`).
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-300}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      STALE_AFTER_SECONDS: ${STALE_AFTER_SECONDS:-1800}
     ports:
       - "127.0.0.1:8000:8000"
 

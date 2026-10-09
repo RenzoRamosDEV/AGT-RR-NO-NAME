@@ -1,6 +1,6 @@
 """Estado agregado de las reviews de un change y normalización de severidades."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -12,6 +12,7 @@ from duelo.domain.review_status import (
     RETRYABLE_STATUSES,
     ChangeReviewStatus,
     Severity,
+    is_stale,
     normalize_severity,
     review_status_from_counts,
     review_status_of_run,
@@ -149,3 +150,31 @@ def test_summary_buckets_always_add_up_to_the_total(raw: list[str]) -> None:
     s = summarize_severities(raw)
 
     assert s.total == len(raw) == s.bug + s.risk + s.improvement + s.nit + s.other
+
+
+# --- reviews atascadas -------------------------------------------------------------------
+
+_HOUR = timedelta(hours=1)
+_CREATED = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("status", [P, R])
+def test_waiting_changes_become_stale_strictly_after_the_threshold(
+    status: ChangeReviewStatus,
+) -> None:
+    # Valor límite: justo en el umbral todavía no; un instante después, sí.
+    assert not is_stale(status, _CREATED, now=_CREATED + _HOUR, stale_after=_HOUR)
+    assert is_stale(
+        status, _CREATED, now=_CREATED + _HOUR + timedelta(microseconds=1), stale_after=_HOUR
+    )
+    assert not is_stale(status, _CREATED, now=_CREATED, stale_after=_HOUR)
+
+
+@pytest.mark.parametrize("status", [F, X, C])
+def test_finished_changes_are_never_stale_however_old(status: ChangeReviewStatus) -> None:
+    assert not is_stale(status, _CREATED, now=_CREATED + timedelta(days=365), stale_after=_HOUR)
+
+
+def test_a_change_created_in_the_future_is_not_stale() -> None:
+    # Reloj desajustado entre procesos: nunca debe dar un falso positivo.
+    assert not is_stale(P, _CREATED + timedelta(days=1), now=_CREATED, stale_after=_HOUR)

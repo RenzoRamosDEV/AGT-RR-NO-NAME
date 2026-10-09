@@ -54,6 +54,28 @@ que ya está en el spec o en `openspec/specs/`.
   de los errores ni la salida cruda) y `GET /reviews/{id}/raw-output` da la salida cruda solo
   con `OPERATOR_TOKEN`, un secreto distinto del de ingesta (404 si no está configurado; ver los
   riesgos en su `design.md`).
+- `api-cors`, `request-observability`, `rate-limiting` y `stale-reviews` (change
+  `round4-backend-api`): CORS solo para los orígenes de `ALLOWED_ORIGINS` (sin `*` ni
+  credenciales); `X-Request-ID` validado y access log JSON por petición con la plantilla de la
+  ruta (nunca query, cuerpo ni tokens); límite de peticiones por IP en `POST /ingest/*` y
+  `/changes/{id}/retry` (puerto `RateLimiter` con adaptador en memoria, 429 con `Retry-After`,
+  `RATE_LIMIT_REQUESTS=0` lo desactiva; en memoria de un proceso, ver su `design.md`);
+  `stale` en el listado y el detalle para changes `pending`/`running` más antiguos que
+  `STALE_AFTER_SECONDS`. La migración `d4a8e1b5c602` reemplaza los índices del canal y la
+  consulta del canal cuenta las reviews con un `LEFT JOIN LATERAL` (EXPLAIN con 60 000 changes:
+  de ~58 ms a <1 ms).
+
+## Variables de entorno
+
+| Variable | Por defecto | Qué hace |
+| --- | --- | --- |
+| `INGEST_TOKEN` | (obligatoria) | Secreto de ingesta y de `POST /changes/{id}/retry` |
+| `OPERATOR_TOKEN` | sin configurar | Habilita `GET /reviews/{id}/raw-output` (distinto de `INGEST_TOKEN`, 16+ caracteres); sin él responde 404 |
+| `DATABASE_URL`, `TEMPORAL_ADDRESS`, `AGENT_NAMES`, `MAX_DIFF_CHARS` | ver `config.py` | Conexiones y límites base |
+| `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes `esquema://host[:puerto]` separados por comas, p. ej. `http://localhost:5173`; no admite `*` |
+| `RATE_LIMIT_REQUESTS` | `300` | Peticiones por IP y ventana en ingesta y reintento; `0` lo desactiva |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Ventana deslizante del límite |
+| `STALE_AFTER_SECONDS` | `1800` | A partir de cuándo un change sin terminar se marca `stale` |
 
 ## Calidad y tests
 

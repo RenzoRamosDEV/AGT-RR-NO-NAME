@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from duelo.application.ingest_commit import ProjectNotFound
@@ -25,6 +27,7 @@ from duelo.domain.project import Project
 from duelo.domain.review import ReviewStatus
 from duelo.domain.review_status import (
     ChangeReviewStatus,
+    is_stale,
     review_status_of_run,
     summarize_severities,
 )
@@ -45,6 +48,8 @@ async def list_changes(
     expected_agents: int,
     limit: int,
     after: ChangeCursor | None,
+    now: datetime,
+    stale_after: timedelta,
 ) -> ChangePage:
     project = await projects.get_by_slug(slug)
     if project is None:
@@ -60,7 +65,13 @@ async def list_changes(
         limit=limit + 1,
         after=after,
     )
-    page = rows[:limit]
+    page = [
+        replace(
+            row,
+            stale=is_stale(row.review_status, row.created_at, now=now, stale_after=stale_after),
+        )
+        for row in rows[:limit]
+    ]
     last = page[-1] if len(rows) > limit else None
     next_cursor = ChangeCursor(created_at=last.created_at, id=last.id) if last else None
     return ChangePage(items=tuple(page), next_cursor=next_cursor)
@@ -72,6 +83,8 @@ async def get_change_detail(
     change_id: UUID,
     *,
     expected_agents: int,
+    now: datetime,
+    stale_after: timedelta,
 ) -> ChangeDetail | None:
     change = await changes.get(change_id)
     if change is None:
@@ -84,11 +97,13 @@ async def get_change_detail(
         if r.run == change.run and r.status is ReviewStatus.COMPLETED
         for f in r.findings
     )
+    review_status = review_status_of_run(change.run, rows, expected_agents=expected_agents)
     return ChangeDetail(
         change=change,
         reviews=tuple(rows),
-        review_status=review_status_of_run(change.run, rows, expected_agents=expected_agents),
+        review_status=review_status,
         findings_summary=findings,
+        stale=is_stale(review_status, change.created_at, now=now, stale_after=stale_after),
     )
 
 

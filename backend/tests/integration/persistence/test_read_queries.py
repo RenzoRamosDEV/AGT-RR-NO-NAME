@@ -129,6 +129,8 @@ async def test_keyset_pagination_neither_repeats_nor_skips_changes_with_equal_ti
                 limit=3,
                 after=after,
                 **NO_FILTER,
+                now=datetime.now(UTC),
+                stale_after=timedelta(hours=1),
             )
         seen += [c.id for c in page.items]
         sizes.append(len(page.items))

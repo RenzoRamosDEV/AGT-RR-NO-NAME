@@ -9,7 +9,12 @@ from duelo.application.ingest_commit import ProjectNotFound
 from duelo.domain.change import ChangeKind
 from duelo.domain.review_status import ChangeReviewStatus
 from duelo.entrypoints.api.cursor import InvalidCursor, decode_cursor, encode_cursor
-from duelo.entrypoints.api.schemas import ChangePageResponse, ErrorResponse, ProjectResponse
+from duelo.entrypoints.api.schemas import (
+    NO_NUL,
+    ChangePageResponse,
+    ErrorResponse,
+    ProjectResponse,
+)
 
 router = APIRouter(tags=["projects"])
 
@@ -42,7 +47,7 @@ async def list_changes(
     request: Request,
     kind: ChangeKind | None = None,
     status_filter: Annotated[list[ChangeReviewStatus] | None, Query(alias="status")] = None,
-    q: Annotated[str | None, Query(max_length=MAX_QUERY)] = None,
+    q: Annotated[str | None, Query(max_length=MAX_QUERY, pattern=NO_NUL)] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> ChangePageResponse:
@@ -51,9 +56,6 @@ async def list_changes(
     except InvalidCursor as exc:
         raise _invalid("cursor", str(exc), cursor) from exc
     text = q.strip() if q is not None else None
-    if text is not None and "\x00" in text:
-        # Postgres no admite NUL en texto: sin esto la consulta acabaría en un 500.
-        raise _invalid("q", "q no puede contener caracteres NUL", q)
     statuses = frozenset(status_filter) if status_filter else None
     try:
         page = await request.app.state.dependencies.list_changes(

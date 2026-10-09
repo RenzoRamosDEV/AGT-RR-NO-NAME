@@ -32,6 +32,8 @@ class ChangeSummary:
     run: int
     created_at: datetime
     diff_summary: DiffSummary
+    # Lo calcula el caso de uso con su reloj; el repositorio no lo conoce.
+    stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,7 @@ class ChangeDetail:
     reviews: tuple[Review, ...]
     review_status: ChangeReviewStatus
     findings_summary: FindingsSummary
+    stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)

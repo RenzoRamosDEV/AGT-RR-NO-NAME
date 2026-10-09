@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
@@ -108,4 +109,18 @@ class ReviewStarter(Protocol):
     async def start(self, change: Change) -> None:
         """Arranca la review de `change`. Idempotente: si ya estaba arrancada (o terminó)
         para ese change, no hace nada. Lanza `ReviewStartError` si no se pudo arrancar."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class RateLimitDecision:
+    allowed: bool
+    # Segundos (enteros, >= 1) hasta que se libere cupo; 0 si la petición está permitida.
+    retry_after_seconds: int
+
+
+class RateLimiter(Protocol):
+    async def hit(self, key: str) -> RateLimitDecision:
+        """Registra una petición de `key` y dice si cabe en el cupo. Las rechazadas no cuentan
+        contra el cupo (no prolongan el bloqueo)."""
         ...

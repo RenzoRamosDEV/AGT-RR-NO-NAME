@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from duelo.application.ingest_commit import ChangeSubmission, IngestResult
+from duelo.application.ports import RateLimiter
 from duelo.application.read_models import (
     AgentStats,
     ChangeCursor,
@@ -54,4 +55,6 @@ class ApiDependencies:
     # `None` si la review no existe o no tiene salida cruda.
     get_review_raw_output: Callable[[UUID], Awaitable[RawOutput | None]]
     readiness_checks: Mapping[str, Check] = field(default_factory=dict)
+    # `None` = sin límite de peticiones (RATE_LIMIT_REQUESTS=0).
+    rate_limiter: RateLimiter | None = None
     close: Callable[[], Awaitable[None]] = _noop

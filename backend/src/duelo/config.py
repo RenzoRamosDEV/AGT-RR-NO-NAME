@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_OPERATOR_TOKEN = 16
+
+
+def _split_csv(value: object) -> object:
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return value
 
 
 class WorkerSettings(BaseSettings):
@@ -23,9 +30,7 @@ class WorkerSettings(BaseSettings):
     @field_validator("agent_names", mode="before")
     @classmethod
     def _split_agent_names(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [name.strip() for name in value.split(",") if name.strip()]
-        return value
+        return _split_csv(value)
 
     @field_validator("agent_names")
     @classmethod
@@ -42,6 +47,38 @@ class Settings(WorkerSettings):
     # Opcional: sin él, `GET /reviews/{id}/raw-output` queda deshabilitado (404). Es un secreto
     # distinto del de ingesta: ese lo llevan los hooks de los repos y no debe abrir lecturas.
     operator_token: str | None = Field(default=None, min_length=MIN_OPERATOR_TOKEN)
+
+    # Orígenes que pueden llamar a la API desde un navegador: ALLOWED_ORIGINS=http://localhost:5173.
+    # Vacía (por defecto) = sin CORS.
+    allowed_origins: Annotated[list[str], NoDecode] = []
+    # Ventana deslizante por IP para POST /ingest/* y /changes/{id}/retry; 0 = sin límite.
+    rate_limit_requests: int = Field(default=300, ge=0)
+    rate_limit_window_seconds: int = Field(default=60, gt=0)
+    # Un change pending/running más antiguo que esto se marca `stale` (solo diagnóstico).
+    stale_after_seconds: int = Field(default=1800, gt=0)
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_allowed_origins(cls, value: object) -> object:
+        return _split_csv(value)
+
+    @field_validator("allowed_origins")
+    @classmethod
+    def _origins_are_explicit(cls, value: list[str]) -> list[str]:
+        for origin in value:
+            parts = urlsplit(origin)
+            valid = (
+                parts.scheme in {"http", "https"}
+                and bool(parts.netloc)
+                and parts.path == ""
+                and not (parts.query or parts.fragment)
+            )
+            if not valid:
+                raise ValueError(
+                    f"ALLOWED_ORIGINS solo admite orígenes esquema://host[:puerto] (sin '*' ni "
+                    f"ruta): {origin!r}"
+                )
+        return value
 
     @field_validator("operator_token", mode="before")
     @classmethod

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from duelo.application.ports import ReviewStartError
 from duelo.application.retry_review import ChangeNotFound, RetryNotAllowed
 from duelo.entrypoints.api.auth import require_ingest_token
+from duelo.entrypoints.api.rate_limit import rate_limit
 from duelo.entrypoints.api.schemas import (
     ChangeDetailResponse,
     ChangeEventResponse,
@@ -46,11 +47,12 @@ async def get_change_events(change_id: UUID, request: Request) -> list[ChangeEve
     "/changes/{change_id}/retry",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RetryReviewResponse,
-    dependencies=[Depends(require_ingest_token)],
+    dependencies=[Depends(rate_limit("retry")), Depends(require_ingest_token)],
     responses={
         401: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         409: {"model": ErrorResponse},
+        429: {"model": ErrorResponse},
         503: {"model": ErrorResponse},
     },
 )

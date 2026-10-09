@@ -35,7 +35,9 @@ class ChangeModel(Base):
     __tablename__ = "changes"
     __table_args__ = (
         UniqueConstraint("project_id", "kind", "head_sha", name="uq_changes_natural_key"),
-        Index("ix_changes_project_created_at", "project_id", "created_at"),
+        # Canal: orden (created_at, id) por proyecto, con y sin filtro por tipo.
+        Index("ix_changes_project_created_at_id", "project_id", "created_at", "id"),
+        Index("ix_changes_project_kind_created_at_id", "project_id", "kind", "created_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -82,7 +84,8 @@ class ReviewModel(Base):
     __tablename__ = "reviews"
     __table_args__ = (
         UniqueConstraint("change_id", "agent", "run", name="uq_reviews_natural_key"),
-        Index("ix_reviews_change_id", "change_id"),
+        # Contadores por change y run (index-only) y lecturas por change.
+        Index("ix_reviews_change_run_status", "change_id", "run", "status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)

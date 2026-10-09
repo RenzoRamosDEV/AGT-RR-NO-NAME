@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -15,6 +16,7 @@ from duelo.adapters.persistence.db import create_engine, create_session_factory
 from duelo.adapters.persistence.event_repository import SqlAlchemyChangeEventRepository
 from duelo.adapters.persistence.project_repository import SqlAlchemyProjectRepository
 from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.adapters.ratelimit.in_memory import InMemoryRateLimiter
 from duelo.application import queries
 from duelo.application.ingest_commit import ChangeSubmission, IngestResult, ingest_commit, ingest_pr
 from duelo.application.read_models import (
@@ -32,6 +34,7 @@ from duelo.domain.project import Project
 from duelo.domain.review_status import ChangeReviewStatus
 from duelo.entrypoints.api.app import create_app
 from duelo.entrypoints.api.dependencies import ApiDependencies
+from duelo.entrypoints.api.middleware import configure_access_logging
 
 
 def build_api_dependencies(settings: Settings) -> ApiDependencies:
@@ -67,6 +70,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         return await queries.list_projects(projects)
 
     expected_agents = len(settings.agent_names)
+    stale_after = timedelta(seconds=settings.stale_after_seconds)
 
     async def list_changes(
         slug: str,
@@ -87,6 +91,8 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 expected_agents=expected_agents,
                 limit=limit,
                 after=after,
+                now=datetime.now(UTC),
+                stale_after=stale_after,
             )
 
     async def get_change(change_id: UUID) -> ChangeDetail | None:
@@ -96,6 +102,8 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 SqlAlchemyReviewRepository(session),
                 change_id,
                 expected_agents=expected_agents,
+                now=datetime.now(UTC),
+                stale_after=stale_after,
             )
 
     async def retry(change_id: UUID) -> Change:
@@ -130,6 +138,14 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
 
+    rate_limiter = (
+        InMemoryRateLimiter(
+            limit=settings.rate_limit_requests, window_seconds=settings.rate_limit_window_seconds
+        )
+        if settings.rate_limit_requests > 0
+        else None
+    )
+
     return ApiDependencies(
         ingest_commit=ingest,
         ingest_pr=ingest_pull_request,
@@ -142,10 +158,12 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         get_review_raw_output=get_review_raw_output,
         readiness_checks={"postgres": check_postgres, "temporal": temporal.check_health},
         close=engine.dispose,
+        rate_limiter=rate_limiter,
     )
 
 
 def create_app_from_env() -> FastAPI:
     """Factory para uvicorn (`--factory`): lee la configuración del entorno."""
     settings = Settings()  # type: ignore[call-arg]  # ingest_token viene del entorno
+    configure_access_logging()
     return create_app(settings, build_api_dependencies(settings))

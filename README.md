@@ -50,6 +50,19 @@ curl localhost:8000/ready                 # 200 solo si Postgres y Temporal resp
 
 El token es un secreto compartido (`INGEST_TOKEN`); la API escucha solo en `127.0.0.1`.
 
+### Variables de entorno de la API
+
+| Variable | Por defecto | Qué hace |
+| --- | --- | --- |
+| `INGEST_TOKEN` | (obligatoria) | Token de ingesta y de reintento de reviews |
+| `OPERATOR_TOKEN` | sin configurar | Descarga de la salida cruda de una review (`X-Operator-Token`); distinto de `INGEST_TOKEN`, 16+ caracteres |
+| `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes del navegador permitidos, separados por comas (`http://localhost:5173`); no admite `*` |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `300` / `60` | Límite por IP de `POST /ingest/*` y `/changes/{id}/retry` (429 con `Retry-After`); `0` lo desactiva. Es en memoria de un proceso |
+| `STALE_AFTER_SECONDS` | `1800` | Un change `pending`/`running` más antiguo se marca `stale` (solo diagnóstico) |
+
+Cada respuesta lleva `X-Request-ID` (se propaga el entrante si es válido) y la API escribe un
+access log JSON por petición en stdout, sin query, cuerpo ni tokens.
+
 ## Comandos habituales
 
 | Comando          | Qué hace                                               |

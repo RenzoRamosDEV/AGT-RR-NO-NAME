@@ -113,6 +113,10 @@
             "title": "Run",
             "type": "integer"
           },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
           "status": {
             "$ref": "#/components/schemas/ChangeStatus"
           },
@@ -140,6 +144,7 @@
           "run",
           "created_at",
           "diff_summary",
+          "stale",
           "diff",
           "reviews",
           "findings_summary"
@@ -296,6 +301,10 @@
             "title": "Run",
             "type": "integer"
           },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
           "status": {
             "$ref": "#/components/schemas/ChangeStatus"
           },
@@ -322,7 +331,8 @@
           "review_status",
           "run",
           "created_at",
-          "diff_summary"
+          "diff_summary",
+          "stale"
         ],
         "title": "ChangeSummaryResponse",
         "type": "object"
@@ -1098,6 +1108,16 @@
             },
             "description": "Validation Error"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1245,6 +1265,16 @@
             },
             "description": "Validation Error"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1344,6 +1374,16 @@
             },
             "description": "Validation Error"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1442,6 +1482,7 @@
               "anyOf": [
                 {
                   "maxLength": 100,
+                  "pattern": "^[^\\x00]*$",
                   "type": "string"
                 },
                 {

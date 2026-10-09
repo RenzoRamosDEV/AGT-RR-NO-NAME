@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, func, insert, or_, select, tuple_, update
+from sqlalchemy import ColumnElement, and_, func, insert, or_, select, true, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,10 +87,11 @@ class SqlAlchemyChangeRepository:
         limit: int,
         after: ChangeCursor | None,
     ) -> list[ChangeSummary]:
-        # Contadores de reviews del `run` actual de cada change: de ellos sale el estado agregado.
+        # Contadores de reviews del `run` actual de CADA change, como LATERAL: Postgres recorre
+        # los changes en el orden del índice y cuenta solo los de la página (index-only sobre
+        # `reviews`) en vez de agregar todas las reviews del proyecto antes de ordenar.
         counts = (
             select(
-                ReviewModel.change_id.label("change_id"),
                 func.count()
                 .filter(ReviewModel.status == ReviewStatus.COMPLETED.value)
                 .label("completed"),
@@ -98,16 +99,12 @@ class SqlAlchemyChangeRepository:
                 .filter(ReviewModel.status == ReviewStatus.FAILED.value)
                 .label("failed"),
             )
-            .join(
-                ChangeModel,
-                and_(ChangeModel.id == ReviewModel.change_id, ChangeModel.run == ReviewModel.run),
-            )
-            .where(ChangeModel.project_id == project_id)
-            .group_by(ReviewModel.change_id)
-            .subquery()
+            .where(ReviewModel.change_id == ChangeModel.id, ReviewModel.run == ChangeModel.run)
+            .correlate(ChangeModel)
+            .lateral("review_counts")
         )
-        completed = func.coalesce(counts.c.completed, 0)
-        failed = func.coalesce(counts.c.failed, 0)
+        completed = counts.c.completed
+        failed = counts.c.failed
 
         # Se seleccionan columnas concretas (sin `diff`): un canal no debe mover diffs enteros.
         stmt = (
@@ -128,7 +125,7 @@ class SqlAlchemyChangeRepository:
                 completed.label("completed_reviews"),
                 failed.label("failed_reviews"),
             )
-            .outerjoin(counts, counts.c.change_id == ChangeModel.id)
+            .join(counts, true())
             .where(ChangeModel.project_id == project_id)
             .order_by(ChangeModel.created_at.desc(), ChangeModel.id.desc())
             .limit(limit)
