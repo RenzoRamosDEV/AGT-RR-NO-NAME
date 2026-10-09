@@ -248,6 +248,41 @@ describe("change detail", () => {
     expect(items[1]).toHaveTextContent("menor");
   });
 
+  // Regresión: con la API real (FakeAgent) salían `N/A` y `L0` y los agentes figuraban como «Claude».
+  it("shows unlocated findings under 'Sin archivo' without N/A or L0, and the real agent name", async () => {
+    renderWith(
+      {
+        change: async () => ({
+          ...detail,
+          reviews: [
+            makeReview({
+              agent: "agent_1",
+              findings: [makeFinding({ file: "N/A", line: 0, severity: "nit", message: "suelto" })],
+            }),
+            makeReview({
+              agent: "agent_2",
+              findings: [makeFinding({ file: "x.py", line: 3, message: "localizado" })],
+            }),
+          ],
+        }),
+      },
+      "/p/demo/changes/d1",
+    );
+    const panel = await screen.findByRole("region", { name: "Hallazgos" });
+    const headings = within(panel).getAllByRole("heading", { level: 3 });
+    expect(headings.map((h) => h.textContent)).toEqual(["x.py", "Sin archivo"]);
+    expect(panel).not.toHaveTextContent("N/A");
+    expect(panel).not.toHaveTextContent("L0");
+    expect(panel).toHaveTextContent("L3");
+    expect(panel).toHaveTextContent("Agent_1");
+    expect(panel).not.toHaveTextContent("Claude");
+    const cards = screen.getAllByRole("article");
+    expect(cards[0]).toHaveTextContent("Agent_1");
+    expect(cards[1]).toHaveTextContent("Agent_2");
+    for (const card of cards) expect(card).not.toHaveTextContent("Claude");
+    expect(cards[0]).not.toHaveTextContent("N/A");
+  });
+
   it("omits the findings panel when there are none", async () => {
     renderWith(
       { change: async () => ({ ...detail, reviews: [makeReview()] }) },

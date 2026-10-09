@@ -1,6 +1,7 @@
 // View model shared by the UI, plus sample data used when no API is configured (VITE_API_URL).
 
-export type AgentName = "claude" | "codex";
+/** Agent id as sent by the API (free text); only `claude` and `codex` have a proper display name. */
+export type AgentName = string;
 export type ReviewStatus = "running" | "completed" | "failed";
 export type ChangeKind = "commit" | "pr";
 /** Aggregate review state of a change, as reported by the API (`review_status`). */

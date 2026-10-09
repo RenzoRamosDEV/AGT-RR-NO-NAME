@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeFinding, makeReview } from "../test/fixtures";
-import { groupFindings, severityRank } from "./findings";
+import { findingFile, findingLine, findingLocation, groupFindings, severityRank } from "./findings";
 
 describe("severityRank", () => {
   it("orders known severities and sends unknown ones last", () => {
@@ -51,5 +51,51 @@ describe("groupFindings", () => {
     const groups = groupFindings([makeReview({ findings: same }), makeReview({ findings: same })]);
     const keys = groups[0].findings.map((f) => f.key);
     expect(new Set(keys).size).toBe(2);
+  });
+});
+
+// Regresión: el FakeAgent envía `file: "N/A"` y `line: 0`, y el panel mostraba `N/A` y `L0`.
+describe("findings without a location", () => {
+  it("treats an empty or N/A file and a non-positive line as unknown", () => {
+    expect(findingFile({ file: "N/A" })).toBeUndefined();
+    expect(findingFile({ file: " n/a " })).toBeUndefined();
+    expect(findingFile({ file: "" })).toBeUndefined();
+    expect(findingFile({ file: " src/a.py " })).toBe("src/a.py");
+    expect(findingLine({ line: 0 })).toBeUndefined();
+    expect(findingLine({ line: -3 })).toBeUndefined();
+    expect(findingLine({ line: 1.5 })).toBeUndefined();
+    expect(findingLine({ line: 12 })).toBe(12);
+  });
+
+  it("builds file:line, file or nothing", () => {
+    expect(findingLocation(makeFinding({ file: "a.py", line: 4 }))).toBe("a.py:4");
+    expect(findingLocation(makeFinding({ file: "a.py", line: 0 }))).toBe("a.py");
+    expect(findingLocation(makeFinding({ file: "N/A", line: 0 }))).toBeUndefined();
+  });
+
+  it("groups unlocated findings together and always last, keeping severity order", () => {
+    const groups = groupFindings([
+      makeReview({
+        findings: [
+          makeFinding({ file: "N/A", line: 0, severity: "low", message: "sin sitio bajo" }),
+          makeFinding({ file: "z.py", line: 5, message: "z" }),
+          makeFinding({ file: "", line: 0, severity: "high", message: "sin sitio alto" }),
+        ],
+      }),
+    ]);
+    expect(groups.map((g) => g.file)).toEqual(["z.py", undefined]);
+    expect(groups[1].findings.map((f) => f.message)).toEqual(["sin sitio alto", "sin sitio bajo"]);
+  });
+
+  it("puts findings without a line after those with one at the same severity", () => {
+    const [group] = groupFindings([
+      makeReview({
+        findings: [
+          makeFinding({ file: "a.py", line: 0, message: "sin línea" }),
+          makeFinding({ file: "a.py", line: 40, message: "con línea" }),
+        ],
+      }),
+    ]);
+    expect(group.findings.map((f) => f.message)).toEqual(["con línea", "sin línea"]);
   });
 });

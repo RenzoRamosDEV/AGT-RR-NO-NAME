@@ -82,11 +82,25 @@ describe("createHttpSource", () => {
     const change = await createHttpSource("http://api.test", fetchMock).change("abc");
     expect(change.diff).toBe("+a");
     expect(change.reviews?.map((r) => [r.id, r.agent, r.status])).toEqual([
-      ["r1", "codex", "completed"],
+      ["r1", "Codex", "completed"],
       ["r2", "claude", "failed"],
     ]);
     expect(change.reviews?.[0].summary).toBeUndefined();
     expect(change.reviews?.[0].findings?.[0].line).toBe(3);
+  });
+
+  // Regresión: con la API real, `agent_1` y `agent_2` (FakeAgent) salían como «Claude» porque el
+  // cliente convertía cualquier agente desconocido en `claude`.
+  it("keeps the real name of agents other than claude and codex", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        ...summary,
+        diff: "",
+        reviews: [{ id: "r1", agent: "agent_1", status: "completed", summary: null, findings: [] }],
+      }),
+    );
+    const change = await createHttpSource("http://api.test", fetchMock).change("abc");
+    expect(change.reviews?.[0].agent).toBe("agent_1");
   });
 
   it("raises a not-found ApiError on 404", async () => {

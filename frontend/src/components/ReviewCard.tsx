@@ -1,5 +1,6 @@
 import { BorderBeam } from "border-beam";
 import type { Review, ReviewStatus } from "../data/mock";
+import { findingLocation } from "../lib/findings";
 import { formatDuration, formatScore } from "../lib/format";
 import { sanitizeError } from "../lib/sanitize";
 import { useReducedMotion } from "../lib/useReducedMotion";
@@ -48,14 +49,15 @@ function Body({ review }: { review: Review }) {
         <>
           <p>{review.summary}</p>
           <ul>
-            {review.findings?.map((f) => (
-              <li key={`${f.file}:${f.line}:${f.message}`}>
-                {f.message}{" "}
-                <span className="mono muted">
-                  {f.file}:{f.line}
-                </span>
-              </li>
-            ))}
+            {review.findings?.map((f) => {
+              const location = findingLocation(f);
+              return (
+                <li key={`${f.file}:${f.line}:${f.message}`}>
+                  {f.message}
+                  {location && <span className="mono muted"> {location}</span>}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

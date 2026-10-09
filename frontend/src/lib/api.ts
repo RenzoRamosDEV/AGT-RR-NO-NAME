@@ -1,5 +1,4 @@
 import type {
-  AgentName,
   AgentStat,
   Change,
   ChangeKind,
@@ -122,13 +121,6 @@ export class ApiError extends Error {
   }
 }
 
-const AGENTS: readonly AgentName[] = ["claude", "codex"];
-
-function toAgent(agent: string): AgentName {
-  const name = agent.toLowerCase();
-  return (AGENTS as readonly string[]).includes(name) ? (name as AgentName) : "claude";
-}
-
 function toChange(dto: ChangeSummaryDto): Change {
   return {
     id: dto.id,
@@ -149,7 +141,7 @@ function toChange(dto: ChangeSummaryDto): Change {
 function toReview(dto: ReviewDto): Review {
   return {
     id: dto.id,
-    agent: toAgent(dto.agent),
+    agent: dto.agent,
     status: dto.status,
     summary: dto.summary ?? undefined,
     findings: dto.findings,
