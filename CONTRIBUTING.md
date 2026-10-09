@@ -10,6 +10,26 @@ Solo se añaden tests que aportan valor; la estrategia, las capas y el mapa del 
 Receta rápida: `just test-unit` (segundos, sin Docker) mientras desarrollas y `just ci`
 antes de cada push.
 
+## Revisión con Code Guardian
+
+El agente `code-guardian` (`.claude/agents/`) revisa commits, ramas y PRs en solo lectura y
+emite un veredicto (`APROBADO`, `APROBADO CON NOTAS`, `CAMBIOS REQUERIDOS`, `BLOQUEADO`).
+Usa doce skills (`.claude/skills/`): las de análisis (`bug-detection`, `security-audit`,
+`architecture-review`, `test-coverage`, `performance-review`, `safe-refactoring`,
+`dependency-and-config-audit`, `data-and-api-contracts`) y las transversales (`diff-review`,
+`change-hygiene`, `finding-verification`, `review-report`).
+
+```text
+/guardian                    # último commit de la rama
+/guardian HEAD~3..HEAD       # un rango
+/guardian 42                 # un Pull Request
+/guardian backend/src/review_arena/application
+```
+
+Úsalo antes de cada push y de abrir un PR. Propone, no edita: las correcciones las decides tú.
+Los hallazgos llevan confianza (`CONFIRMADO`/`PROBABLE`/`HIPÓTESIS`); solo un `BLOQUEANTE`
+confirmado bloquea.
+
 ## Antes de tocar código
 
 1. Lee `docs/spec/review-arena.md` (spec completo) y `openspec/specs/`
