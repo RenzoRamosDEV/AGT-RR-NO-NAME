@@ -36,8 +36,8 @@ variable obligatoria sin definir). Casos reales del repo: `references/history.md
 ## Atomicidad
 
 - Un commit que **por sí solo** deja CI o tests en rojo (necesita el commit siguiente para
-  pasar) es `BLOQUEANTE` si está `CONFIRMADO` (con `gh run list --commit <sha>` o el
-  mismo fallo reproducido); si solo es mezcla de propósitos sin romper nada, `MENOR`.
+  pasar) es bloqueante si está `CONFIRMADO` (con `gh run list --commit <sha>` o el
+  mismo fallo reproducido); si solo es mezcla de propósitos sin romper nada, menor.
 - Un commit = un propósito. Mezclar refactor + feature + formateo oculta regresiones.
 - ¿El commit deja el repo en verde por sí solo (lint, tests, tipos)? Un commit que solo
   pasa con el siguiente complica `git bisect`.

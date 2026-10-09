@@ -43,7 +43,7 @@ rendimiento; dilo en el resumen en vez de forzarlas.
 ## 2b. Matriz de comprobaciones (única fuente)
 
 *Obligatoria* = sin ella el cambio no es verificable; *recomendada* = aporta confianza pero
-su ausencia no impide juzgar. Cómo afecta al veredicto: `review-report`.
+su ausencia no impide juzgar. Cómo afecta al estado: `review-report`.
 
 | Tipo de diff | Obligatorias | Recomendadas |
 | --- | --- | --- |
@@ -75,5 +75,5 @@ su ausencia no impide juzgar. Cómo afecta al veredicto: `review-report`.
 ## 4. Salida
 
 Devuelve al orquestador: el objetivo revisado, la lista de skills a cargar con el motivo, y
-los hallazgos de regresión propios de esta skill ya en el formato de `review-report`
+los hallazgos de regresión propios de esta skill ya en el formato de `review-report` (con `skill: diff-review`)
 (verificados con `finding-verification`).

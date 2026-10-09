@@ -13,7 +13,9 @@ antes de cada push.
 ## Revisión con Code Guardian
 
 El agente `code-guardian` (`.claude/agents/`) revisa commits, ramas y PRs en solo lectura y
-emite un veredicto (`APROBADO`, `APROBADO CON NOTAS`, `CAMBIOS REQUERIDOS`, `BLOQUEADO`).
+emite un informe breve: estado (`APROBADO`, `REQUIERE CAMBIOS`, `BLOQUEADO`), hallazgos
+agrupados por dificultad del arreglo (`FÁCIL`, `MEDIO`, `DIFÍCIL`, `RECOMENDACIÓN`) con la
+skill que detectó cada uno, y un resumen con verificaciones y siguiente paso.
 Usa catorce skills (`.claude/skills/`): las de análisis (`bug-detection`, `security-audit`,
 `architecture-review`, `test-coverage`, `performance-review`, `safe-refactoring`,
 `dependency-and-config-audit`, `data-and-api-contracts`, `temporal-review`,

@@ -52,7 +52,7 @@ qué test lo fija? Empieza por el código de producción del diff y busca su tes
 | Negativos | Entrada inválida, dependencia caída, dato ausente, permiso denegado |
 
 No pidas una técnica que no aporta: "no metas test por meter" es regla del repo. Un test
-redundante o de relleno es un hallazgo `MENOR` (candidato a borrar o fusionar).
+redundante o de relleno es un hallazgo menor (candidato a borrar o fusionar).
 
 ## 5. Dónde va cada test (`docs/testing.md`)
 

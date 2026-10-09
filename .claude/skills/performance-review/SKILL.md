@@ -57,5 +57,5 @@ microajustes.
 
 `ubicación` + `por qué es lento` + `escala del problema` (p. ej. "una consulta extra por
 review: 2 por commit, irrelevante hoy; con 500 changes por página serían 500") + `arreglo`
-+ `cómo medirlo`. Si el impacto es despreciable a la escala del proyecto, es `NOTA` o no
-se reporta.
++ `cómo medirlo`. Si el impacto es despreciable a la escala del proyecto, es una `RECOMENDACIÓN` o
+no se reporta.

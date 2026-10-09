@@ -8,7 +8,7 @@ allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git show:*), Bash(git lo
 
 Un hallazgo sin evidencia es ruido. Antes de que un hallazgo llegue al informe, pásalo por
 este protocolo. Si no lo supera, **no se descarta en silencio: se degrada** a otra confianza
-o se mueve a "Preguntas".
+o se mueve a "Dudas".
 
 > `allowed-tools` en esta y otras skills es una guía de qué usar, no un límite duro: la
 > garantía de solo lectura la da el agente `code-guardian` (sin `Edit`/`Write`).
@@ -29,13 +29,13 @@ o se mueve a "Preguntas".
 
 ## Niveles de confianza
 
-| Nivel | Criterio | ¿Cuenta para el veredicto? |
+| Nivel | Criterio | ¿Cuenta para el estado? |
 | --- | --- | --- |
 | `CONFIRMADO` | Reproducido, o demostrado leyendo el código sin ningún camino que lo evite | Sí |
-| `PROBABLE` | Consistente con el código leído, con un camino plausible, pero no ejecutado ni demostrado | Sí, hasta `IMPORTANTE`; nunca `BLOQUEANTE` |
-| `HIPÓTESIS` | Depende de algo que no se ha podido ver (config de producción, otro repo, datos reales) | No: va a "Preguntas" |
+| `PROBABLE` | Consistente con el código leído, con un camino plausible, pero no ejecutado ni demostrado | Sí, hasta `IMPORTANTE`; nunca bloqueante |
+| `HIPÓTESIS` | Depende de algo que no se ha podido ver (config de producción, otro repo, datos reales) | No: va a "Dudas" |
 
-Regla dura: **solo un hallazgo `CONFIRMADO` puede ser `BLOQUEANTE`.**
+Regla dura: **solo un hallazgo `CONFIRMADO` puede ser bloqueante.**
 
 ## Señales de falso positivo (descártalas antes de reportar)
 

@@ -7,7 +7,7 @@ allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git show:*), Bash(git lo
 # Auditoría de seguridad
 
 Un hallazgo de seguridad `BLOQUEANTE` exige estar `CONFIRMADO` (ruta de explotación
-demostrada leyendo el código). Si solo es una sospecha, es `PROBABLE` o va a "Preguntas":
+demostrada leyendo el código). Si solo es una sospecha, es `PROBABLE` o va a "Dudas":
 no declares una vulnerabilidad que no puedes explicar paso a paso.
 
 ## Herramientas deterministas (ejecútalas antes de leer a mano)
