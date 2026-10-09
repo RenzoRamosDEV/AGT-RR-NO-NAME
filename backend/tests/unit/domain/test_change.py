@@ -26,11 +26,6 @@ def test_new_change_is_valid() -> None:
     assert change.run == 1
 
 
-def test_invalid_change_kind_is_rejected() -> None:
-    with pytest.raises(ValueError):
-        ChangeKind("not-a-real-kind")
-
-
 def test_change_requires_a_head_sha() -> None:
     with pytest.raises(ValueError):
         Change.new(

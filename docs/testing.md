@@ -24,8 +24,8 @@ backend/tests/
 ```
 
 Los fixtures que necesitan infraestructura viven solo en `tests/integration/conftest.py`;
-por eso `tests/unit` no importa nada de `adapters` ni necesita Docker (y `mutmut` puede aislar
-`domain/` y `application/`). Los marcadores `unit`, `integration` y `regression` se aplican
+por eso `tests/unit` no necesita Docker (los adapters se prueban ahí con mocks/fakes) y
+`mutmut` puede limitarse a `domain/` y `application/`. Los marcadores `unit`, `integration` y `regression` se aplican
 automáticamente por ruta (`tests/conftest.py`).
 
 ## Cómo ejecutar
@@ -64,7 +64,7 @@ Leyenda: **Cubierto** · **Parcial** (se prueba lo que existe; el resto está di
 | Tipo | Estado | Dónde / por qué |
 | --- | --- | --- |
 | Integration tests | Cubierto | `tests/integration/**` |
-| Regression tests | Cubierto | Marcador `regression`: agente desconocido = un solo intento, el diff no cruza Temporal (5 MB), `run` se propaga, estados guardados estables, deriva modelo/migración, NUL en eventos |
+| Regression tests | Cubierto | Marcador `regression`: agente desconocido = un solo intento, el diff no cruza Temporal (5 MB), `run` se propaga, estados guardados estables, deriva modelo/migración, NUL en el payload de eventos |
 | Branch coverage | Cubierto | `--cov-branch`; umbrales global 97 % y `domain`+`application` 100 % (`just test` y CI) |
 | Mutation testing | Cubierto | `mutmut` sobre `domain`+`application`, 243/243; `just mutation` y workflow semanal/manual `mutation.yml` |
 | Property-based testing | Cubierto donde aporta | Invariantes de `Change`/`Review`, round-trip JSON de payloads, ley de idempotencia del repositorio, saneado de NUL. El resto usa ejemplos explícitos, más legibles |

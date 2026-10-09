@@ -80,7 +80,8 @@ async def test_regression_a_five_megabyte_diff_never_crosses_temporal(
 ) -> None:
     """Ronda 9 de Codex: el diff viajaba dentro de un ChangeDTO por el historial de Temporal
     (límite de 2 MB por payload). Con un diff de 5 MB el diseño antiguo habría fallado."""
-    change = await persist_change(session_factory, "b" * 40, diff="x" * 5_000_000)
+    sentinel = "SENTINEL-DIFF-9f3c1a"
+    change = await persist_change(session_factory, "b" * 40, diff=sentinel + "x" * 5_000_000)
     agents = {"agent_1": FakeAgent("agent_1"), "agent_2": FakeAgent("agent_2")}
 
     handle, result = await _run(
@@ -89,7 +90,9 @@ async def test_regression_a_five_megabyte_diff_never_crosses_temporal(
 
     assert result is not None and {r.status for r in result} == {"completed"}
     history = await handle.fetch_history()
-    assert len(history.to_json()) < 50_000  # el historial no contiene el diff
+    serialized = history.to_json()
+    assert sentinel not in serialized  # el contenido del diff no viaja por Temporal
+    assert len(serialized) < 50_000  # señal secundaria: el historial sigue siendo pequeño
 
 
 async def test_regression_run_review_input_carries_only_ids_and_a_tiny_payload() -> None:

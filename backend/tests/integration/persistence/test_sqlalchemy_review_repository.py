@@ -66,7 +66,8 @@ async def test_two_agents_persist_two_reviews_for_the_same_change(
             .all()
         )
 
-    assert {r.agent for r in reviews} == {"agent_1", "agent_2"}
+    assert len(reviews) == 2
+    assert {(r.agent, r.run) for r in reviews} == {("agent_1", 1), ("agent_2", 1)}
 
 
 async def test_reregistering_same_review_natural_key_is_idempotent(
@@ -121,6 +122,17 @@ async def test_failed_review_persists_with_failed_event(
         )
 
     assert review.status == "failed"
+
+    async with session_factory() as session:
+        row = await session.get(ReviewModel, review.id)
+    assert row is not None
+    assert (row.status, row.error, row.agent, row.run) == (
+        "failed",
+        "timeout simulado",
+        "agent_2",
+        1,
+    )
+    assert row.summary is None and row.score is None
 
     async with session_factory() as session:
         events = (

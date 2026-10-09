@@ -108,12 +108,12 @@
 
 ## 11. Contraste con Codex y cierre
 
-- [ ] 11.1 Pedir a Codex una revisión de la estrategia y de los tests nuevos (huecos,
+- [x] 11.1 Pedir a Codex una revisión de la estrategia y de los tests nuevos (huecos,
       asserts débiles, tests de relleno, flakiness); verificar cada hallazgo contra el código
       antes de aceptarlo y corregir lo que sea cierto.
-- [ ] 11.2 Si algún test destapó un defecto real, corregir el código y dejar constancia (delta
+- [x] 11.2 Si algún test destapó un defecto real, corregir el código y dejar constancia (delta
       de specs si cambia comportamiento observable); repetir la medición de mutación.
-- [ ] 11.3 Verificación final: `just ci`, mutación sobre el umbral y CI real de GitHub en verde.
+- [x] 11.3 Verificación final: `just ci`, mutación sobre el umbral y CI real de GitHub en verde.
 
 ## Workflow follow-up
 

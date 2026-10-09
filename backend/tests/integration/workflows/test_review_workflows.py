@@ -67,6 +67,11 @@ async def test_two_agents_produce_two_reviews(
     assert len(results) == 2
     assert {r.status for r in results} == {"completed"}
     assert len({r.review_id for r in results}) == 2
+    stored = await reviews_for(session_factory, change)
+    assert {(r.agent, r.status) for r in stored} == {
+        ("agent_1", "completed"),
+        ("agent_2", "completed"),
+    }
 
 
 async def test_partial_failure_does_not_lose_the_successful_review(
@@ -90,6 +95,11 @@ async def test_partial_failure_does_not_lose_the_successful_review(
     results = await _run_with_workers(temporal_env, session_factory, agents, _run)
 
     assert {r.status for r in results} == {"completed", "failed"}
+    stored = await reviews_for(session_factory, change)
+    assert {(r.agent, r.status) for r in stored} == {
+        ("agent_1", "completed"),
+        ("agent_2", "failed"),
+    }
 
 
 async def test_review_commit_workflow_starts_the_child_and_returns_its_result(

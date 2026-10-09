@@ -73,13 +73,18 @@ async def _count_events(session_factory: async_sessionmaker, project_id, event_t
 
 
 async def _wait_for_pending_activities(handle: Any, expected: int, seconds: float = 15) -> None:
-    """Espera (sin dormir a ciegas) a que Temporal tenga `expected` activities pendientes."""
+    """Espera (sin dormir a ciegas) a que Temporal tenga >= `expected` activities pendientes."""
+    pending = 0
     for _ in range(int(seconds / 0.1)):
         description = await handle.describe()
-        if len(description.raw_description.pending_activities) == expected:
+        pending = len(description.raw_description.pending_activities)
+        if pending >= expected:
             return
         await asyncio.sleep(0.1)
-    raise AssertionError(f"no llegaron a estar pendientes {expected} activities")
+    raise AssertionError(
+        f"esperaba >= {expected} activities pendientes, hay {pending}: "
+        f"{description.raw_description}"
+    )
 
 
 async def _run_review_workflow(

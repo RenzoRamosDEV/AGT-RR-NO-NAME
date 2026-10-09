@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
-from review_arena.adapters.persistence.models import ReviewModel
+from review_arena.adapters.persistence.models import EventModel, ReviewModel
 from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
 from review_arena.application.ingest_change import ingest_change
 from review_arena.application.record_review import record_review_failure, record_review_success
@@ -168,6 +168,17 @@ async def test_nul_in_review_text_and_jsonb_findings_is_stored_as_replacement_ch
         {"severity": f"se{FFFD}v", "file": f"fi{FFFD}le.py", "line": 7, "message": f"me{FFFD}ssage"}
     ]
     assert failed.error == f"bo{FFFD}om"
+
+    async with session_factory() as session:
+        failed_event = (
+            await session.execute(
+                select(EventModel).where(
+                    EventModel.type == "review.failed",
+                    EventModel.payload["change_id"].astext == str(change.id),
+                )
+            )
+        ).scalar_one()
+    assert failed_event.payload["error"] == f"bo{FFFD}om"
 
 
 async def test_agent_name_at_the_limit_persists(session_factory: async_sessionmaker) -> None:

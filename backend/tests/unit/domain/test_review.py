@@ -49,18 +49,6 @@ def test_failed_review_has_no_result_fields() -> None:
     assert review.error == "timeout"
 
 
-def test_failed_review_requires_an_error_message() -> None:
-    with pytest.raises(ValueError):
-        Review.failed(
-            change_id=uuid4(),
-            agent="agent_2",
-            run=1,
-            error="",
-            duration_ms=None,
-            created_at=datetime.now(UTC),
-        )
-
-
 def test_failed_review_without_error_message_is_rejected_with_a_clear_reason() -> None:
     with pytest.raises(ValueError) as error:
         Review.failed(
