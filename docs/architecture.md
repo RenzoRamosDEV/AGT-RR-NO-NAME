@@ -64,6 +64,19 @@ que ya está en el spec o en `openspec/specs/`.
   `STALE_AFTER_SECONDS`. La migración `d4a8e1b5c602` reemplaza los índices del canal y la
   consulta del canal cuenta las reviews con un `LEFT JOIN LATERAL` (EXPLAIN con 60 000 changes:
   de ~58 ms a <1 ms).
+- `local-projects` (change `add-local-projects-backend`, apagado por defecto con
+  `LOCAL_PROJECTS_ENABLED`): `POST /projects` da de alta un repo desde su carpeta (el slug sale de
+  `origin`, `owner/repo`, o del nombre de la carpeta) e instala los hooks `post-commit` y
+  `pre-push`; `DELETE /projects/{slug}` los quita y borra el proyecto con sus changes, reviews y
+  eventos; `POST /projects/{slug}/sync-prs` ingesta las PRs abiertas con `gh` (y
+  `PR_SYNC_INTERVAL_SECONDS` lo repite). Los puertos `GitRepository`, `HookInstaller`,
+  `GithubPrSource` y `ProjectCatalog` viven en `application/ports.py`; los adaptadores usan un
+  único ejecutor de subprocesos sin shell y con plazo (`adapters/subprocess_runner.py`). El hook
+  es `duelo.entrypoints.hook` (solo biblioteca estándar): hace `fork`, envía en segundo plano y
+  sale siempre con 0. `GET /projects` añade `path`, `hooks_installed` y `github`, y CORS permite
+  `DELETE`. **Seguridad:** quien tenga `INGEST_TOKEN` hace que la API escriba hooks en repos del
+  usuario; solo debe activarse con la API en la máquina del usuario y nunca en un contenedor ni
+  expuesta (ver su `design.md`).
 
 ## Variables de entorno
 
@@ -76,6 +89,10 @@ que ya está en el spec o en `openspec/specs/`.
 | `RATE_LIMIT_REQUESTS` | `300` | Peticiones por IP y ventana en ingesta y reintento; `0` lo desactiva |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Ventana deslizante del límite |
 | `STALE_AFTER_SECONDS` | `1800` | A partir de cuándo un change sin terminar se marca `stale` |
+| `LOCAL_PROJECTS_ENABLED` | `false` | Activa `POST /projects`, `DELETE /projects/{slug}` y `POST /projects/{slug}/sync-prs` (instalan hooks de git); apagado responden 404. Solo con la API en la máquina del usuario |
+| `INGEST_URL` | `http://127.0.0.1:8000` | A dónde mandan los hooks los commits; cámbiala si arrancas la API en otro puerto |
+| `HOOK_ENV_PATH` | `~/.config/duelo/hook.env` | Fichero (modo 0600) con `INGEST_URL` e `INGEST_TOKEN` que leen los hooks |
+| `PR_SYNC_INTERVAL_SECONDS` | `0` | Cada cuántos segundos se sincronizan las PRs de los proyectos locales con `gh`; `0` = nunca |
 
 ## Calidad y tests
 

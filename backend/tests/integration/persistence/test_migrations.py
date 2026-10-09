@@ -132,3 +132,39 @@ async def test_migrations_leave_new_changes_with_an_empty_summary_by_default(
         ).scalar_one()
 
     assert "files_changed" in default and "[]" in default
+
+
+async def test_the_local_projects_migration_keeps_existing_projects_and_is_reversible(
+    database_url: str, engine: AsyncEngine
+) -> None:
+    """Los proyectos anteriores (sin carpeta) quedan con path nulo y sin hooks; bajar quita las
+    columnas sin perder los proyectos."""
+    os.environ["DATABASE_URL"] = database_url
+    await asyncio.to_thread(command.downgrade, _alembic(), "d4a8e1b5c602")
+    project_id = uuid4()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO projects (id, slug) VALUES (:id, :slug)"),
+            {"id": project_id, "slug": f"old-{project_id}"},
+        )
+        columns = await conn.run_sync(
+            lambda c: {col["name"] for col in inspect(c).get_columns("projects")}
+        )
+    assert columns == {"id", "slug"}
+
+    await asyncio.to_thread(command.upgrade, _alembic(), "head")
+
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text("SELECT path, hooks_installed, github FROM projects WHERE id = :id"),
+                {"id": project_id},
+            )
+        ).one()
+        uniques = await conn.run_sync(
+            lambda c: {
+                tuple(u["column_names"]) for u in inspect(c).get_unique_constraints("projects")
+            }
+        )
+    assert tuple(row) == (None, False, False)
+    assert ("path",) in uniques and ("slug",) in uniques

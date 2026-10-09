@@ -57,6 +57,18 @@ class Settings(WorkerSettings):
     # Un change pending/running más antiguo que esto se marca `stale` (solo diagnóstico).
     stale_after_seconds: int = Field(default=1800, gt=0)
 
+    # Altas de proyectos desde carpetas locales (instala hooks de git): apagado por defecto y solo
+    # con la API corriendo en la máquina del usuario. Sin activar, esos endpoints dan 404.
+    local_projects_enabled: bool = False
+    # Base de la API que usan los hooks de git para enviar commits (el backend no sabe en qué
+    # puerto lo lanzó uvicorn).
+    ingest_url: str = "http://127.0.0.1:8000"
+    # Fichero con INGEST_URL e INGEST_TOKEN que leen los hooks; por defecto
+    # ~/.config/duelo/hook.env (o $XDG_CONFIG_HOME/duelo/hook.env).
+    hook_env_path: str | None = None
+    # Cada cuántos segundos se sincronizan las PRs de los proyectos locales con `gh`; 0 = nunca.
+    pr_sync_interval_seconds: int = Field(default=0, ge=0)
+
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def _split_allowed_origins(cls, value: object) -> object:
@@ -79,6 +91,19 @@ class Settings(WorkerSettings):
                     f"ruta): {origin!r}"
                 )
         return value
+
+    @field_validator("ingest_url")
+    @classmethod
+    def _ingest_url_is_http(cls, value: str) -> str:
+        parts = urlsplit(value)
+        if parts.scheme not in {"http", "https"} or not parts.netloc:
+            raise ValueError(f"INGEST_URL debe ser una URL http(s) con host: {value!r}")
+        return value.rstrip("/")
+
+    @field_validator("hook_env_path", mode="before")
+    @classmethod
+    def _blank_hook_env_path_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @field_validator("operator_token", mode="before")
     @classmethod

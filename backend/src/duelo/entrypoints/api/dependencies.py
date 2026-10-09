@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import UUID
 
 from duelo.application.ingest_commit import ChangeSubmission, IngestResult
+from duelo.application.local_projects import SyncResult
 from duelo.application.ports import RateLimiter
 from duelo.application.read_models import (
     AgentStats,
@@ -54,6 +56,14 @@ class ApiDependencies:
     list_change_events: Callable[[UUID], Awaitable[list[ChangeEvent] | None]]
     # `None` si la review no existe o no tiene salida cruda.
     get_review_raw_output: Callable[[UUID], Awaitable[RawOutput | None]]
+    # Proyectos desde carpetas locales (LOCAL_PROJECTS_ENABLED): `None` = función no cableada y
+    # sus endpoints responden 404. Lanzan `InvalidRepository`, `ProjectAlreadyExists`,
+    # `HookInstallError`, `ProjectNotFound`, `ProjectHasNoFolder`, `GithubUnavailable`...
+    add_local_project: Callable[[str], Awaitable[Project]] | None = None
+    remove_project: Callable[[str], Awaitable[None]] | None = None
+    sync_pull_requests: Callable[[str], Awaitable[SyncResult]] | None = None
+    # Trabajos de larga duración que la app arranca al iniciar y cancela al cerrar.
+    background_jobs: Sequence[Callable[[], Coroutine[Any, Any, None]]] = ()
     readiness_checks: Mapping[str, Check] = field(default_factory=dict)
     # `None` = sin límite de peticiones (RATE_LIMIT_REQUESTS=0).
     rate_limiter: RateLimiter | None = None

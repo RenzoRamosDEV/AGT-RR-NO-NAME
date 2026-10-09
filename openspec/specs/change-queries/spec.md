@@ -7,7 +7,8 @@ TBD - created by archiving change round1-backend-api. Update Purpose after archi
 
 ### Requirement: Listado de proyectos
 El sistema SHALL exponer `GET /projects`, que devuelve todos los proyectos vigilados con su
-`id` y `slug`, ordenados por slug.
+`id`, `slug`, `path` (la carpeta local, o `null` si el proyecto no se dio de alta desde una),
+`hooks_installed` y `github`, ordenados por slug.
 
 #### Scenario: Varios proyectos
 - **WHEN** existen los proyectos `b/repo` y `a/repo`
@@ -16,6 +17,11 @@ El sistema SHALL exponer `GET /projects`, que devuelve todos los proyectos vigil
 #### Scenario: Sin proyectos
 - **WHEN** no existe ningún proyecto
 - **THEN** la respuesta es 200 con una lista vacía
+
+#### Scenario: Proyecto local y proyecto sin carpeta
+- **WHEN** existe un proyecto dado de alta desde `/home/u/repo` y otro creado sin carpeta
+- **THEN** el primero lleva `path` `/home/u/repo` con `hooks_installed` verdadero, y el segundo lleva
+  `path` `null`, `hooks_installed` falso y `github` falso
 
 ### Requirement: Canal paginado de un proyecto
 El sistema SHALL exponer `GET /projects/{slug}/changes`, que devuelve los changes del

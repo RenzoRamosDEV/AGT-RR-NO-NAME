@@ -3,12 +3,20 @@
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Awaitable, Callable, Coroutine
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from duelo.adapters.git.hook_installer import FileHookInstaller
+from duelo.adapters.git.local_repository import LocalGitRepository
+from duelo.adapters.github.gh_cli import GhPrSource
 from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
 from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter
 from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
@@ -19,6 +27,13 @@ from duelo.adapters.persistence.review_repository import SqlAlchemyReviewReposit
 from duelo.adapters.ratelimit.in_memory import InMemoryRateLimiter
 from duelo.application import queries
 from duelo.application.ingest_commit import ChangeSubmission, IngestResult, ingest_commit, ingest_pr
+from duelo.application.local_projects import (
+    SyncResult,
+    add_local_project,
+    remove_local_project,
+    sync_all_pull_requests,
+    sync_pull_requests,
+)
 from duelo.application.read_models import (
     AgentStats,
     ChangeCursor,
@@ -33,8 +48,10 @@ from duelo.domain.change import Change, ChangeKind
 from duelo.domain.project import Project
 from duelo.domain.review_status import ChangeReviewStatus
 from duelo.entrypoints.api.app import create_app
+from duelo.entrypoints.api.background import periodic
 from duelo.entrypoints.api.dependencies import ApiDependencies
 from duelo.entrypoints.api.middleware import configure_access_logging
+from duelo.entrypoints.hook import default_env_path
 
 
 def build_api_dependencies(settings: Settings) -> ApiDependencies:
@@ -146,7 +163,17 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         else None
     )
 
+    local = (
+        _local_projects_wiring(settings, projects, ingest_pull_request)
+        if settings.local_projects_enabled
+        else None
+    )
+
     return ApiDependencies(
+        add_local_project=local.add if local else None,
+        remove_project=local.remove if local else None,
+        sync_pull_requests=local.sync if local else None,
+        background_jobs=local.jobs if local else (),
         ingest_commit=ingest,
         ingest_pr=ingest_pull_request,
         list_projects=list_projects,
@@ -160,6 +187,48 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         close=engine.dispose,
         rate_limiter=rate_limiter,
     )
+
+
+@dataclass(frozen=True)
+class _LocalProjects:
+    add: Callable[[str], Awaitable[Project]]
+    remove: Callable[[str], Awaitable[None]]
+    sync: Callable[[str], Awaitable[SyncResult]]
+    jobs: list[Callable[[], Coroutine[Any, Any, None]]]
+
+
+def _local_projects_wiring(
+    settings: Settings,
+    projects: SqlAlchemyProjectRepository,
+    ingest_pull_request: Callable[[ChangeSubmission], Awaitable[IngestResult]],
+) -> _LocalProjects:
+    git = LocalGitRepository()
+    hooks = FileHookInstaller(
+        # El intérprete que corre la API es el que tiene `duelo` instalado: los hooks lo reusan.
+        python=sys.executable,
+        ingest_url=settings.ingest_url,
+        ingest_token=settings.ingest_token,
+        env_path=Path(settings.hook_env_path) if settings.hook_env_path else default_env_path(),
+    )
+    github = GhPrSource()
+
+    async def add(path: str) -> Project:
+        return await add_local_project(git, hooks, projects, path)
+
+    async def remove(slug: str) -> None:
+        await remove_local_project(hooks, projects, slug)
+
+    async def sync(slug: str) -> SyncResult:
+        return await sync_pull_requests(projects, github, ingest_pull_request, slug)
+
+    async def sync_all() -> None:
+        await sync_all_pull_requests(projects, sync)
+
+    jobs: list[Callable[[], Coroutine[Any, Any, None]]] = []
+    if settings.pr_sync_interval_seconds > 0:
+        interval = settings.pr_sync_interval_seconds
+        jobs.append(lambda: periodic(interval, sync_all))
+    return _LocalProjects(add=add, remove=remove, sync=sync, jobs=jobs)
 
 
 def create_app_from_env() -> FastAPI:

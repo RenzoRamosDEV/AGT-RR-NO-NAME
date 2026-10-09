@@ -39,7 +39,7 @@ async def test_a_preflight_from_an_allowed_origin_lists_methods_and_headers() ->
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == ALLOWED
-    assert response.headers["access-control-allow-methods"] == "GET, POST"
+    assert response.headers["access-control-allow-methods"] == "GET, POST, DELETE"
     assert "X-Ingest-Token" in response.headers["access-control-allow-headers"]
     assert "X-Request-ID" in response.headers  # el preflight también lo lleva
 

@@ -101,6 +101,87 @@ class ProjectRepository(Protocol):
         ...
 
 
+class ProjectAlreadyExists(Exception):
+    """Ya hay un proyecto con ese slug o con esa carpeta."""
+
+
+class InvalidRepository(Exception):
+    """La ruta no es la raíz de un repositorio git utilizable (el mensaje es para el usuario)."""
+
+
+class HookInstallError(Exception):
+    """No se pudieron instalar o quitar los hooks (el mensaje es para el usuario)."""
+
+
+class GithubUnavailable(Exception):
+    """`gh` no está instalado, no ha iniciado sesión o no devolvió una respuesta válida."""
+
+
+@dataclass(frozen=True, slots=True)
+class RepoInfo:
+    """Lo que hace falta saber de una carpeta para darla de alta como proyecto."""
+
+    root: str
+    # URL del remoto `origin`, o `None` si el repo no lo tiene.
+    remote_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PullRequestInfo:
+    number: int
+    title: str
+    author: str
+    ref: str
+    head_sha: str
+    url: str
+    diff: str
+
+
+class GitRepository(Protocol):
+    async def inspect(self, path: str) -> RepoInfo:
+        """Comprueba que `path` es la raíz de un repo git (ruta absoluta, sin `..`, sin NUL, que
+        no sea un enlace simbólico) y devuelve su raíz y su remoto `origin`. Lanza
+        `InvalidRepository` en cualquier otro caso."""
+        ...
+
+
+class HookInstaller(Protocol):
+    async def install(self, root: str, *, slug: str) -> None:
+        """Instala los hooks `post-commit` y `pre-push` en el repo de `root` para el proyecto
+        `slug`, sin tocar el contenido previo de esos hooks. Idempotente. Lanza `HookInstallError`
+        sin haber modificado nada si no es posible (hook que no es de shell, `core.hooksPath`
+        fuera del repo...)."""
+        ...
+
+    async def uninstall(self, root: str) -> None:
+        """Quita los bloques de Duelo de los hooks de `root`, dejando intacto el resto. Si la
+        carpeta ya no existe no hace nada."""
+        ...
+
+
+class GithubPrSource(Protocol):
+    async def open_prs(self, root: str) -> list[PullRequestInfo]:
+        """PRs abiertas del repo de `root` (con su diff). Lanza `GithubUnavailable` si no se
+        pueden consultar."""
+        ...
+
+
+class ProjectCatalog(Protocol):
+    async def add_local(self, project: Project) -> Project:
+        """Registra un proyecto local. Lanza `ProjectAlreadyExists` si el slug o la carpeta ya
+        están registrados."""
+        ...
+
+    async def remove(self, slug: str) -> Project | None:
+        """Elimina el proyecto y, en cascada, sus changes, reviews y eventos. Devuelve el proyecto
+        eliminado, o `None` si no existía."""
+        ...
+
+    async def list_local(self) -> list[Project]:
+        """Proyectos dados de alta desde una carpeta, ordenados por slug."""
+        ...
+
+
 class ReviewStartError(Exception):
     """El orquestador no pudo arrancar la review (p. ej. Temporal caído)."""
 

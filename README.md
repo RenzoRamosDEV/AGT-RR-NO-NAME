@@ -59,6 +59,31 @@ El token es un secreto compartido (`INGEST_TOKEN`); la API escucha solo en `127.
 | `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes del navegador permitidos, separados por comas (`http://localhost:5173`); no admite `*` |
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `300` / `60` | Límite por IP de `POST /ingest/*` y `/changes/{id}/retry` (429 con `Retry-After`); `0` lo desactiva. Es en memoria de un proceso |
 | `STALE_AFTER_SECONDS` | `1800` | Un change `pending`/`running` más antiguo se marca `stale` (solo diagnóstico) |
+| `LOCAL_PROJECTS_ENABLED` | `false` | Habilita añadir proyectos desde carpetas locales (instala hooks de git). Solo con la API en tu máquina, no en contenedor; apagado, esos endpoints dan 404 |
+| `INGEST_URL` | `http://127.0.0.1:8000` | Dónde envían los hooks los commits (ajústala si usas otro puerto) |
+| `HOOK_ENV_PATH` | `~/.config/duelo/hook.env` | Fichero 0600 con la URL y el token que leen los hooks |
+| `PR_SYNC_INTERVAL_SECONDS` | `0` | Sincronización periódica de PRs con `gh` (`0` = solo bajo demanda) |
+
+### Proyectos desde carpetas locales
+
+Con la API corriendo **en tu máquina** (no en el contenedor) y `LOCAL_PROJECTS_ENABLED=true`:
+
+```bash
+export INGEST_TOKEN=dev-ingest-token LOCAL_PROJECTS_ENABLED=true INGEST_URL=http://127.0.0.1:8001
+cd backend && uv run uvicorn --factory duelo.composition:create_app_from_env --port 8001
+# dar de alta un repo (raíz de un repo git): instala los hooks post-commit y pre-push
+curl -X POST localhost:8001/projects -H "X-Ingest-Token: $INGEST_TOKEN" \
+  -H 'content-type: application/json' -d '{"path": "/ruta/absoluta/a/tu/repo"}'
+# a partir de ahora cada commit y push de ese repo aparece solo en su canal
+curl -X POST localhost:8001/projects/owner/repo/sync-prs -H "X-Ingest-Token: $INGEST_TOKEN"  # PRs con `gh`
+curl -X DELETE localhost:8001/projects/owner/repo -H "X-Ingest-Token: $INGEST_TOKEN"        # baja y quita los hooks
+```
+
+Los hooks no bloquean ni retrasan `git commit` ni `git push` (envían en segundo plano y salen con
+código 0 aunque la API esté caída) y respetan tus propios hooks: Duelo solo añade un bloque entre
+`# >>> duelo >>>` y `# <<< duelo <<<`, que la baja retira. El token se guarda en
+`~/.config/duelo/hook.env` (0600), nunca en el repo. Quien tenga el token puede hacer que la API
+escriba hooks en tus repos: no actives esto en un servidor compartido ni expongas la API.
 
 Cada respuesta lleva `X-Request-ID` (se propaga el entrante si es válido) y la API escribe un
 access log JSON por petición en stdout, sin query, cuerpo ni tokens.

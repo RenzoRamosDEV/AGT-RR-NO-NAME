@@ -11,6 +11,12 @@ from fastapi import FastAPI
 
 from duelo.application import queries
 from duelo.application.ingest_commit import ChangeSubmission, IngestResult, ingest_commit, ingest_pr
+from duelo.application.local_projects import (
+    SyncResult,
+    add_local_project,
+    remove_local_project,
+    sync_pull_requests,
+)
 from duelo.application.ports import RateLimiter
 from duelo.application.read_models import (
     AgentStats,
@@ -29,6 +35,7 @@ from duelo.entrypoints.api.app import create_app
 from duelo.entrypoints.api.dependencies import ApiDependencies, Check
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.event_log import FakeChangeEventRepository, FakeEventLog
+from tests.fakes.local_projects import FakeGithubPrSource, FakeGitRepository, FakeHookInstaller
 from tests.fakes.project_repository import FakeProjectRepository
 from tests.fakes.review_repository import FakeReviewRepository
 from tests.fakes.review_starter import FakeReviewStarter
@@ -49,6 +56,10 @@ class FakeApi:
     settings: Settings
     project: Project
     checks: dict[str, Check] = field(default_factory=dict)
+    projects: FakeProjectRepository = field(default_factory=FakeProjectRepository)
+    git: FakeGitRepository = field(default_factory=FakeGitRepository)
+    hooks: FakeHookInstaller = field(default_factory=FakeHookInstaller)
+    github: FakeGithubPrSource = field(default_factory=FakeGithubPrSource)
 
 
 def build_fake_api(
@@ -60,6 +71,10 @@ def build_fake_api(
     stale_after_seconds: int = 1800,
     allowed_origins: list[str] | None = None,
     rate_limiter: RateLimiter | None = None,
+    local_projects: bool = False,
+    git: FakeGitRepository | None = None,
+    hooks: FakeHookInstaller | None = None,
+    github: FakeGithubPrSource | None = None,
 ) -> FakeApi:
     settings = Settings(
         ingest_token=TOKEN,
@@ -67,6 +82,7 @@ def build_fake_api(
         operator_token=operator_token,
         stale_after_seconds=stale_after_seconds,
         allowed_origins=allowed_origins or [],
+        local_projects_enabled=local_projects,
     )
     stale_after = timedelta(seconds=settings.stale_after_seconds)
     project = Project(id=uuid4(), slug=PROJECT_SLUG)
@@ -133,7 +149,23 @@ def build_fake_api(
     async def get_review_raw_output(review_id: UUID) -> RawOutput | None:
         return await queries.review_raw_output(reviews, review_id)
 
+    git = git or FakeGitRepository()
+    hooks = hooks or FakeHookInstaller()
+    github = github or FakeGithubPrSource()
+
+    async def add_project(path: str) -> Project:
+        return await add_local_project(git, hooks, projects, path)
+
+    async def remove_project(slug: str) -> None:
+        await remove_local_project(hooks, projects, slug)
+
+    async def sync_prs(slug: str) -> SyncResult:
+        return await sync_pull_requests(projects, github, ingest_pull_request, slug)
+
     deps = ApiDependencies(
+        add_local_project=add_project if local_projects else None,
+        remove_project=remove_project if local_projects else None,
+        sync_pull_requests=sync_prs if local_projects else None,
         ingest_commit=ingest,
         ingest_pr=ingest_pull_request,
         list_projects=lambda: queries.list_projects(projects),
@@ -147,7 +179,18 @@ def build_fake_api(
         rate_limiter=rate_limiter,
     )
     return FakeApi(
-        create_app(settings, deps), changes, reviews, event_log, starter, settings, project, checks
+        create_app(settings, deps),
+        changes,
+        reviews,
+        event_log,
+        starter,
+        settings,
+        project,
+        checks,
+        projects,
+        git,
+        hooks,
+        github,
     )
 
 
