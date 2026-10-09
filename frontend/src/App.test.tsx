@@ -82,7 +82,9 @@ describe("channel search and summary", () => {
     renderAt("/p/duelo");
     await screen.findAllByRole("button", { name: "Ver respuestas" });
     await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "9BE0");
-    expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1);
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1),
+    );
     expect(screen.getByText("feat: exponer ingesta de commits")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Commits" }));
     expect(await screen.findByText("Ningún cambio coincide con la búsqueda.")).toBeInTheDocument();
@@ -127,8 +129,8 @@ describe("review states", () => {
   it("shows thinking indicator and beam for a running review", async () => {
     setReducedMotion(false);
     const { container } = renderAt("/p/duelo/changes/c1");
-    expect(await screen.findByText("En curso")).toBeInTheDocument();
-    expect(screen.getByText("Codex está revisando…")).toBeInTheDocument();
+    expect(await screen.findByText("Codex está revisando…")).toBeInTheDocument();
+    expect(screen.getAllByText("En curso").length).toBeGreaterThan(0);
     expect(container.querySelector('[data-status="running"]')).not.toBeNull();
     expect(screen.getByText("Completada")).toBeInTheDocument();
   });
@@ -173,22 +175,24 @@ describe("other screens", () => {
     expect(await screen.findByRole("note")).toHaveTextContent("truncado");
   });
 
-  it("keeps stats values as text and hides the bars from assistive tech", () => {
+  it("keeps stats values as text and hides the bars from assistive tech", async () => {
     const { container } = renderAt("/stats");
-    expect(screen.getByRole("row", { name: /Claude/ })).toHaveTextContent("68%");
+    expect(await screen.findByRole("row", { name: /Claude/ })).toHaveTextContent("42 s");
+    expect(screen.getByRole("row", { name: /Claude/ })).toHaveTextContent("4,1");
     const meters = container.querySelectorAll(".meter");
-    expect(meters.length).toBe(6);
+    expect(meters.length).toBe(4);
     for (const m of meters) expect(m).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("renders stats rows per agent", () => {
+  it("renders stats rows per agent", async () => {
     renderAt("/stats");
-    expect(screen.getByRole("row", { name: /Claude/ })).toBeInTheDocument();
+    expect(await screen.findByRole("row", { name: /Claude/ })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Codex/ })).toBeInTheDocument();
   });
 
-  it("renders settings", () => {
+  it("renders settings", async () => {
     renderAt("/settings");
     expect(screen.getByText("Voto ciego")).toBeInTheDocument();
+    expect(await screen.findByText("Postgres")).toBeInTheDocument();
   });
 });

@@ -5,17 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { DataSourceProvider } from "../data/source";
 import { ApiError, type ChangePage, type DataSource } from "../lib/api";
-import { makeChange, makeFinding, makeReview } from "../test/fixtures";
+import { makeChange, makeFinding, makeReview, makeSource } from "../test/fixtures";
 
 function renderWith(source: Partial<DataSource>, path: string) {
-  const full: DataSource = {
-    projects: async () => [{ slug: "demo", name: "demo" }],
-    changes: async () => ({ items: [], nextCursor: null }),
-    change: async () => {
-      throw new ApiError("no", 404);
-    },
-    ...source,
-  };
+  const full = makeSource(source);
   return render(
     <DataSourceProvider source={full}>
       <MemoryRouter initialEntries={[path]}>
@@ -74,21 +67,31 @@ describe("load more", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cargar más" }));
     await screen.findByText("change c");
     expect(screen.getAllByText("change b")).toHaveLength(1);
-    expect(changes).toHaveBeenLastCalledWith("demo", { kind: undefined, cursor: "cur1" });
+    expect(changes).toHaveBeenLastCalledWith("demo", { cursor: "cur1" });
     expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
   });
 
-  it("keeps the search while loading more", async () => {
-    const changes = async (_s: string, q?: { cursor?: string | null }) =>
-      q?.cursor ? page(["c"], null) : page(["a", "b"], "cur1");
+  it("sends the search and the filters again when loading more", async () => {
+    const changes = vi.fn<DataSource["changes"]>(async (_s, q) =>
+      q?.cursor ? page(["c"], null) : page(["a", "b"], "cur1"),
+    );
     renderWith({ changes }, "/p/demo");
     await screen.findByText("change a");
-    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "sha");
-    await userEvent.click(screen.getByRole("button", { name: "Cargar más" }));
+    await userEvent.click(screen.getByRole("button", { name: "Con fallos" }));
+    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), " sha ");
+    await waitFor(() =>
+      expect(changes).toHaveBeenLastCalledWith("demo", {
+        status: ["failed", "partial_failed"],
+        q: "sha",
+      }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Cargar más" }));
     await screen.findByText("change c");
-    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "c");
-    expect(screen.queryByText("change a")).toBeNull();
-    expect(screen.getByText("change c")).toBeInTheDocument();
+    expect(changes).toHaveBeenLastCalledWith("demo", {
+      status: ["failed", "partial_failed"],
+      q: "sha",
+      cursor: "cur1",
+    });
   });
 
   it("keeps what is shown when loading more fails and allows retrying", async () => {
@@ -123,21 +126,95 @@ describe("load more", () => {
   });
 });
 
-describe("state filter", () => {
-  it("lists only changes with a failed review and ignores changes without review data", async () => {
-    const items = [
-      makeChange({ id: "ok", title: "sin fallos", reviews: [makeReview()] }),
-      makeChange({ id: "ko", title: "con fallo", reviews: [makeReview({ status: "failed" })] }),
-      makeChange({ id: "na", title: "sin datos", reviews: undefined }),
-    ];
-    renderWith({ changes: async () => ({ items, nextCursor: null }) }, "/p/demo");
-    await screen.findByText("con fallo");
-    await userEvent.click(screen.getByRole("button", { name: "Con fallos" }));
-    expect(screen.getByText("con fallo")).toBeInTheDocument();
-    expect(screen.queryByText("sin fallos")).toBeNull();
-    expect(screen.queryByText("sin datos")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Todos" }));
-    expect(screen.getByText("sin datos")).toBeInTheDocument();
+describe("server-side filters", () => {
+  const items = (...titles: string[]) =>
+    titles.map((title) => makeChange({ id: title, title, reviews: undefined }));
+
+  it("maps each state filter to the server statuses and shows only what the server returns", async () => {
+    const changes = vi.fn<DataSource["changes"]>(async (_s, q) => {
+      const status = q?.status?.join(",");
+      if (status === "pending,running") return { items: items("en curso"), nextCursor: null };
+      if (status === "failed,partial_failed")
+        return { items: items("con fallo"), nextCursor: null };
+      if (status === "completed") return { items: items("completado"), nextCursor: null };
+      return { items: items("todos"), nextCursor: null };
+    });
+    renderWith({ changes }, "/p/demo");
+    await screen.findByText("todos");
+    for (const [button, title] of [
+      ["En curso", "en curso"],
+      ["Con fallos", "con fallo"],
+      ["Completados", "completado"],
+      ["Todos", "todos"],
+    ]) {
+      await userEvent.click(screen.getByRole("button", { name: button }));
+      expect(await screen.findByText(title)).toBeInTheDocument();
+    }
+    expect(changes.mock.calls.map(([, q]) => q?.status)).toEqual([
+      undefined,
+      ["pending", "running"],
+      ["failed", "partial_failed"],
+      ["completed"],
+      undefined,
+    ]);
+  });
+
+  it("sends q, kind and status together and restarts the cursor on every change", async () => {
+    const changes = vi.fn<DataSource["changes"]>(async (_s, q) =>
+      q?.cursor
+        ? { items: items("pagina 2"), nextCursor: null }
+        : { items: items("pagina 1"), nextCursor: "cur1" },
+    );
+    renderWith({ changes }, "/p/demo");
+    await userEvent.click(await screen.findByRole("button", { name: "Cargar más" }));
+    await screen.findByText("pagina 2");
+    await userEvent.click(screen.getByRole("button", { name: "Completados" }));
+    await waitFor(() => expect(screen.queryByText("pagina 2")).toBeNull());
+    expect(await screen.findByText("pagina 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "PRs" }));
+    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "fix");
+    await waitFor(() =>
+      expect(changes).toHaveBeenLastCalledWith("demo", {
+        kind: "pr",
+        status: ["completed"],
+        q: "fix",
+      }),
+    );
+    expect(changes.mock.calls.at(-1)?.[1]?.cursor).toBeUndefined();
+  });
+
+  it("does not send q while the search is blank and debounces typing", async () => {
+    const changes = vi.fn<DataSource["changes"]>(async () => ({
+      items: items("x"),
+      nextCursor: null,
+    }));
+    renderWith({ changes }, "/p/demo");
+    await screen.findByText("x");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "   ");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(changes).toHaveBeenCalledTimes(1);
+    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "abc");
+    await waitFor(() => expect(changes).toHaveBeenCalledTimes(2));
+    expect(changes.mock.calls[1][1]?.q).toBe("abc");
+  });
+
+  it("ignores a late response for a filter that is no longer selected", async () => {
+    let releaseSlow: (page: ChangePage) => void = () => {};
+    const slow = new Promise<ChangePage>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const changes = vi.fn<DataSource["changes"]>(async (_s, q) =>
+      q?.kind === "commit" ? slow : { items: items("vigente"), nextCursor: null },
+    );
+    renderWith({ changes }, "/p/demo");
+    await screen.findByText("vigente");
+    await userEvent.click(screen.getByRole("button", { name: "Commits" }));
+    await userEvent.click(screen.getByRole("button", { name: "PRs" }));
+    await screen.findByText("vigente");
+    releaseSlow({ items: items("obsoleto"), nextCursor: null });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText("obsoleto")).toBeNull();
+    expect(screen.getByText("vigente")).toBeInTheDocument();
   });
 });
 

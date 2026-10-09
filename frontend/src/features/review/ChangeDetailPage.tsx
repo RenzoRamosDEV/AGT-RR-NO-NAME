@@ -1,13 +1,16 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { CopyButton } from "../../components/CopyButton";
 import { ReviewCard } from "../../components/ReviewCard";
+import { Badge } from "../../components/ui/Badge";
 import { useDataSource } from "../../data/source";
 import { UNNAMED_FILE, diffFiles, parseDiff } from "../../lib/diff";
+import { AGGREGATE_LABEL, AGGREGATE_TONE, isRetryable } from "../../lib/reviewStatus";
 import { safeHttpUrl, shortSha } from "../../lib/url";
 import { useAsync } from "../../lib/useAsync";
 import { FindingsPanel } from "./FindingsPanel";
+import { RetryReview } from "./RetryReview";
 
 const fileAnchor = (rowId: number) => `diff-file-${rowId}`;
 
@@ -15,6 +18,8 @@ export function ChangeDetailPage() {
   const { slug = "", id = "" } = useParams();
   const source = useDataSource();
   const state = useAsync(useCallback(() => source.change(id), [source, id]));
+  const [note, setNote] = useState<string | null>(null);
+  const reload = state.retry;
 
   return (
     <AsyncBoundary
@@ -41,6 +46,14 @@ export function ChangeDetailPage() {
                   <span className="mono">{shortSha(change.sha)}</span>
                 </p>
                 <h1>{change.title}</h1>
+                {change.reviewStatus && (
+                  <p className="row">
+                    <Badge tone={AGGREGATE_TONE[change.reviewStatus]}>
+                      {AGGREGATE_LABEL[change.reviewStatus]}
+                    </Badge>
+                    {change.run !== undefined && <span className="muted">Run {change.run}</span>}
+                  </p>
+                )}
               </div>
             </div>
             <div className="actions">
@@ -52,6 +65,20 @@ export function ChangeDetailPage() {
               <CopyButton label="Copiar SHA" value={change.sha} />
               {change.ref && <CopyButton label="Copiar rama" value={change.ref} />}
             </div>
+            {note && (
+              <output className="notice" aria-live="polite">
+                {note}
+              </output>
+            )}
+            {isRetryable(change.reviewStatus) && (
+              <RetryReview
+                changeId={change.id}
+                onSettled={(message) => {
+                  setNote(message);
+                  reload();
+                }}
+              />
+            )}
             <div className="stack">
               {change.truncated && (
                 <p className="notice" role="note">

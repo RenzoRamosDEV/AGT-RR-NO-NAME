@@ -3,6 +3,8 @@
 export type AgentName = "claude" | "codex";
 export type ReviewStatus = "running" | "completed" | "failed";
 export type ChangeKind = "commit" | "pr";
+/** Aggregate review state of a change, as reported by the API (`review_status`). */
+export type ReviewAggregate = "pending" | "running" | "partial_failed" | "failed" | "completed";
 
 export interface Finding {
   severity: string;
@@ -17,6 +19,11 @@ export interface Review {
   status: ReviewStatus;
   summary?: string;
   findings?: Finding[];
+  run?: number;
+  durationMs?: number | null;
+  score?: number | null;
+  /** Failure reason as sent by the server; sanitize it before showing it. */
+  error?: string | null;
 }
 
 export interface Change {
@@ -32,8 +39,32 @@ export interface Change {
   createdAt?: string;
   diff: string;
   truncated?: boolean;
+  run?: number;
+  reviewStatus?: ReviewAggregate;
   /** Absent when the source does not report reviews (the API channel listing). */
   reviews?: Review[];
+}
+
+export interface AgentStat {
+  agent: string;
+  total: number;
+  completed: number;
+  failed: number;
+  avgDurationMs: number | null;
+  avgScore: number | null;
+}
+
+export interface DependencyHealth {
+  /** Machine name sent by the server, e.g. `postgres`. */
+  name: string;
+  status: "ok" | "unavailable";
+  latencyMs: number;
+  reason?: "timeout" | "error";
+}
+
+export interface Health {
+  status: "ok" | "degraded";
+  dependencies: DependencyHealth[];
 }
 
 export interface Project {
@@ -72,6 +103,9 @@ export const projects: Project[] = [
             id: "r1",
             agent: "claude",
             status: "completed",
+            run: 1,
+            durationMs: 42_000,
+            score: 8,
             summary: "Cambio correcto; elimina la comparación vulnerable a timing.",
             findings: [
               {
@@ -107,6 +141,9 @@ export const projects: Project[] = [
             id: "r3",
             agent: "claude",
             status: "completed",
+            run: 1,
+            durationMs: 38_000,
+            score: 7,
             summary: "Buen aislamiento de puertos; revisar idempotencia.",
             findings: [
               {
@@ -117,7 +154,14 @@ export const projects: Project[] = [
               },
             ],
           },
-          { id: "r4", agent: "codex", status: "failed" },
+          {
+            id: "r4",
+            agent: "codex",
+            status: "failed",
+            run: 1,
+            durationMs: 120_000,
+            error: "Tiempo de espera agotado al llamar al modelo.",
+          },
         ],
       },
     ],
@@ -125,10 +169,32 @@ export const projects: Project[] = [
   { slug: "demo-api", name: "demo-api", changes: [] },
 ];
 
-export const stats = [
-  { agent: "claude" as const, prompt: "v1", useful: 68, score: 4.1, seconds: 42, failures: 1 },
-  { agent: "codex" as const, prompt: "v1", useful: 61, score: 3.8, seconds: 35, failures: 3 },
+export const agentStats: AgentStat[] = [
+  {
+    agent: "claude",
+    total: 12,
+    completed: 11,
+    failed: 1,
+    avgDurationMs: 42_000,
+    avgScore: 4.1,
+  },
+  {
+    agent: "codex",
+    total: 10,
+    completed: 7,
+    failed: 3,
+    avgDurationMs: 35_000,
+    avgScore: 3.8,
+  },
 ];
+
+export const health: Health = {
+  status: "ok",
+  dependencies: [
+    { name: "postgres", status: "ok", latencyMs: 4 },
+    { name: "temporal", status: "ok", latencyMs: 12 },
+  ],
+};
 
 export function findProject(slug: string | undefined): Project | undefined {
   return projects.find((p) => p.slug === slug);

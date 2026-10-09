@@ -2,7 +2,8 @@ export type SortDirection = "ascending" | "descending";
 
 /**
  * Returns a sorted copy of `rows` by `key`. Numbers compare as numbers, anything else with
- * `localeCompare`; the sort is stable so equal rows keep their original order in both directions.
+ * `localeCompare`; `null`/`undefined` always go last (in both directions). The sort is stable so
+ * equal rows keep their original order in both directions.
  */
 export function sortRows<T, K extends keyof T>(
   rows: readonly T[],
@@ -15,6 +16,10 @@ export function sortRows<T, K extends keyof T>(
     .sort((a, b) => {
       const x = a.row[key];
       const y = b.row[key];
+      const missingX = x === null || x === undefined;
+      const missingY = y === null || y === undefined;
+      if (missingX || missingY)
+        return missingX === missingY ? a.index - b.index : missingX ? 1 : -1;
       const order =
         typeof x === "number" && typeof y === "number"
           ? x - y

@@ -22,6 +22,17 @@ describe("sortRows", () => {
     expect(sortRows(rows, "n", "descending").map((r) => r.name)).toEqual(["a", "b", "c"]);
   });
 
+  it("puts missing values last in both directions, keeping their order", () => {
+    const data = [
+      { name: "x", n: null },
+      { name: "a", n: 3 },
+      { name: "y", n: undefined },
+      { name: "b", n: 1 },
+    ];
+    expect(sortRows(data, "n", "ascending").map((r) => r.name)).toEqual(["b", "a", "x", "y"]);
+    expect(sortRows(data, "n", "descending").map((r) => r.name)).toEqual(["a", "b", "x", "y"]);
+  });
+
   it("does not mutate the input", () => {
     const copy = [...rows];
     sortRows(rows, "n", "descending");

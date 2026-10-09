@@ -111,4 +111,137 @@ describe("createHttpSource", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBeNull();
   });
+
+  it("sends repeated status, a trimmed q and omits a blank q", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ items: [], next_cursor: null }));
+    const source = createHttpSource("http://api.test", fetchMock);
+    await source.changes("demo", { status: ["failed", "partial_failed"], q: "  50% fix " });
+    await source.changes("demo", { status: [], q: "   " });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://api.test/projects/demo/changes?status=failed&status=partial_failed&q=50%25+fix",
+      expect.anything(),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://api.test/projects/demo/changes",
+      expect.anything(),
+    );
+  });
+
+  it("maps the aggregate status, run and review metadata", async () => {
+    const detail = {
+      ...summary,
+      run: 2,
+      review_status: "partial_failed",
+      diff: "",
+      reviews: [
+        {
+          id: "r1",
+          agent: "claude",
+          status: "failed",
+          summary: null,
+          findings: [],
+          run: 2,
+          score: null,
+          duration_ms: 1500,
+          error: "boom",
+        },
+      ],
+    };
+    const source = createHttpSource("http://api.test", async () => jsonResponse(detail));
+    const change = await source.change("x");
+    expect(change).toMatchObject({ run: 2, reviewStatus: "partial_failed" });
+    expect(change.reviews?.[0]).toMatchObject({
+      run: 2,
+      score: null,
+      durationMs: 1500,
+      error: "boom",
+    });
+  });
+});
+
+describe("createHttpSource agent stats and health", () => {
+  it("maps /stats/agents to the view model, keeping null averages", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse([
+        {
+          agent: "claude",
+          total: 3,
+          completed: 2,
+          failed: 1,
+          avg_duration_ms: 1500,
+          avg_score: 7.5,
+        },
+        {
+          agent: "codex",
+          total: 0,
+          completed: 0,
+          failed: 0,
+          avg_duration_ms: null,
+          avg_score: null,
+        },
+      ]),
+    );
+    const stats = await createHttpSource("http://api.test", fetchMock).agentStats();
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/stats/agents", expect.anything());
+    expect(stats).toEqual([
+      { agent: "claude", total: 3, completed: 2, failed: 1, avgDurationMs: 1500, avgScore: 7.5 },
+      { agent: "codex", total: 0, completed: 0, failed: 0, avgDurationMs: null, avgScore: null },
+    ]);
+  });
+
+  it("maps /health/dependencies to a sorted list with the closed-vocabulary reason", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: "degraded",
+        dependencies: {
+          temporal: { status: "unavailable", latency_ms: 2000, reason: "timeout" },
+          postgres: { status: "ok", latency_ms: 4, reason: null },
+        },
+      }),
+    );
+    const health = await createHttpSource("http://api.test", fetchMock).health();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/health/dependencies",
+      expect.anything(),
+    );
+    expect(health).toEqual({
+      status: "degraded",
+      dependencies: [
+        { name: "postgres", status: "ok", latencyMs: 4, reason: undefined },
+        { name: "temporal", status: "unavailable", latencyMs: 2000, reason: "timeout" },
+      ],
+    });
+  });
+});
+
+describe("createHttpSource retry", () => {
+  it("POSTs with the ingest token header and returns the new run", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ change_id: "c1", run: 2 }, 202));
+    const result = await createHttpSource("http://api.test", fetchMock).retry("c 1", "tok");
+    expect(result).toEqual({ changeId: "c1", run: 2 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api.test/changes/c%201/retry",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-Ingest-Token": "tok" }),
+      }),
+    );
+  });
+
+  it.each([401, 404, 409, 503])("raises an ApiError with status %i", async (status) => {
+    const source = createHttpSource("http://api.test", async () => jsonResponse({}, status));
+    const error = (await source.retry("c1", "tok").catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(status);
+  });
+
+  it("turns a network failure into an ApiError without status", async () => {
+    const source = createHttpSource("http://api.test", async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const error = (await source.retry("c1", "tok").catch((e: unknown) => e)) as ApiError;
+    expect(error.status).toBeNull();
+  });
 });

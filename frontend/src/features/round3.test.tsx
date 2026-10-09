@@ -1,24 +1,18 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
+import { agentStats } from "../data/mock";
 import { DataSourceProvider } from "../data/source";
-import { ApiError, type DataSource } from "../lib/api";
+import type { DataSource } from "../lib/api";
 import { NowProvider } from "../lib/now";
-import { makeChange } from "../test/fixtures";
+import { makeChange, makeSource } from "../test/fixtures";
 
 const NOW = new Date("2026-10-09T12:00:00Z");
 
 function renderWith(source: Partial<DataSource>, path: string) {
-  const full: DataSource = {
-    projects: async () => [{ slug: "demo", name: "demo" }],
-    changes: async () => ({ items: [], nextCursor: null }),
-    change: async () => {
-      throw new ApiError("no", 404);
-    },
-    ...source,
-  };
+  const full = makeSource(source);
   return render(
     <DataSourceProvider source={full}>
       <NowProvider now={NOW}>
@@ -83,8 +77,8 @@ describe("sortable stats", () => {
   }
 
   it("sorts by a column, flips the direction and reports it with aria-sort", async () => {
-    renderWith({}, "/stats");
-    const header = screen.getByRole("columnheader", { name: "Fallos" });
+    renderWith({ agentStats: async () => agentStats }, "/stats");
+    const header = await screen.findByRole("columnheader", { name: "Fallos" });
     expect(header).not.toHaveAttribute("aria-sort");
     expect(bodyAgents()).toEqual(["Claude", "Codex"]);
 
@@ -98,9 +92,9 @@ describe("sortable stats", () => {
   });
 
   it("moves aria-sort to the newly chosen column", async () => {
-    renderWith({}, "/stats");
-    const failures = screen.getByRole("columnheader", { name: "Fallos" });
-    const duration = screen.getByRole("columnheader", { name: "Duración" });
+    renderWith({ agentStats: async () => agentStats }, "/stats");
+    const failures = await screen.findByRole("columnheader", { name: "Fallos" });
+    const duration = screen.getByRole("columnheader", { name: "Duración media" });
     await userEvent.click(within(failures).getByRole("button"));
     await userEvent.click(within(duration).getByRole("button"));
     expect(failures).not.toHaveAttribute("aria-sort");
@@ -139,12 +133,17 @@ describe("compact channel", () => {
   ];
 
   it("toggles density and keeps the search and the thread controls", async () => {
-    renderWith({ changes: async () => ({ items, nextCursor: null }) }, "/p/demo");
+    const changes: DataSource["changes"] = async (_slug, query) => ({
+      items: items.filter((c) => !query?.q || c.author === query.q),
+      nextCursor: null,
+    });
+    renderWith({ changes }, "/p/demo");
     await screen.findByText("alpha");
     expect(document.querySelectorAll(".change-row")).toHaveLength(0);
 
     await userEvent.type(screen.getByRole("searchbox"), "ana");
     await userEvent.click(screen.getByRole("button", { name: "Compacta" }));
+    await waitFor(() => expect(screen.queryByText("beta")).toBeNull());
 
     expect(screen.getByRole("button", { name: "Compacta" })).toHaveAttribute(
       "aria-pressed",
@@ -171,13 +170,14 @@ describe("actionable empty state", () => {
   });
 
   it("does not show it when a filter simply matches nothing", async () => {
-    renderWith(
-      { changes: async () => ({ items: [makeChange({ title: "x" })], nextCursor: null }) },
-      "/p/demo",
-    );
+    const changes: DataSource["changes"] = async (_slug, query) => ({
+      items: query?.q ? [] : [makeChange({ title: "x" })],
+      nextCursor: null,
+    });
+    renderWith({ changes }, "/p/demo");
     await screen.findByText("x");
     await userEvent.type(screen.getByRole("searchbox"), "zzz");
-    expect(screen.getByText("Ningún cambio coincide con la búsqueda.")).toBeInTheDocument();
+    expect(await screen.findByText("Ningún cambio coincide con la búsqueda.")).toBeInTheDocument();
     expect(screen.queryByText("Aún no hay cambios en este canal.")).toBeNull();
   });
 });

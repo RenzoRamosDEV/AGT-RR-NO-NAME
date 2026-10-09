@@ -1,15 +1,14 @@
-import type { AgentName } from "../../data/mock";
+const LABEL: Record<string, string> = { claude: "Claude", codex: "Codex" };
 
-const LABEL: Record<AgentName, string> = { claude: "Claude", codex: "Codex" };
-
-export function agentLabel(agent: AgentName): string {
-  return LABEL[agent];
+/** Display name of an agent; unknown agents (the API sends a free string) are capitalized. */
+export function agentLabel(agent: string): string {
+  return LABEL[agent.toLowerCase()] ?? (agent.charAt(0).toUpperCase() + agent.slice(1) || "?");
 }
 
-export function AgentAvatar({ agent }: { agent: AgentName }) {
+export function AgentAvatar({ agent }: { agent: string }) {
   return (
     <span className="avatar" aria-hidden="true">
-      {LABEL[agent][0]}
+      {agentLabel(agent)[0]}
     </span>
   );
 }

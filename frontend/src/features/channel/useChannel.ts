@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Change, ChangeKind } from "../../data/mock";
 import { useDataSource } from "../../data/source";
 import type { ChangePage } from "../../lib/api";
+import { type StateFilter, statusesFor } from "../../lib/channelQuery";
 import { mergeUnique } from "../../lib/pagination";
 import { useAsync } from "../../lib/useAsync";
 
@@ -12,16 +13,31 @@ interface More {
   state: "idle" | "loading" | "error";
 }
 
+export interface ChannelFilters {
+  kind: ChangeKind | undefined;
+  state: StateFilter;
+  /** Search text; blank means no search. Debounce it before passing it in. */
+  q: string;
+}
+
 /**
- * First page of a project's channel plus cursor pagination. Extra pages are tied to the first
- * page they were loaded for, so changing project/filter (or retrying) discards them.
+ * First page of a project's channel plus cursor pagination. Every filter is resolved by the
+ * server. Extra pages are tied to the first page they were loaded for, so changing project or any
+ * filter (or retrying) discards them, and a late response for an old filter is ignored.
  */
-export function useChannel(slug: string, kind: ChangeKind | undefined) {
+export function useChannel(slug: string, { kind, state, q }: ChannelFilters) {
   const source = useDataSource();
-  const first = useAsync(useCallback(() => source.changes(slug, { kind }), [source, slug, kind]));
+  const first = useAsync(
+    useCallback(
+      () => source.changes(slug, { kind, status: statusesFor(state), q: q || undefined }),
+      [source, slug, kind, state, q],
+    ),
+  );
   const [more, setMore] = useState<More | null>(null);
 
   const base = first.status === "ready" ? first.data : null;
+  const currentBase = useRef(base);
+  currentBase.current = base;
   const active = base && more?.base === base ? more : null;
   const items = base ? mergeUnique(base.items, active?.items ?? []) : [];
   const cursor = base ? (active ? active.cursor : base.nextCursor) : null;
@@ -31,7 +47,13 @@ export function useChannel(slug: string, kind: ChangeKind | undefined) {
     const previous = active?.items ?? [];
     setMore({ base, items: previous, cursor, state: "loading" });
     try {
-      const page = await source.changes(slug, { kind, cursor });
+      const page = await source.changes(slug, {
+        kind,
+        status: statusesFor(state),
+        q: q || undefined,
+        cursor,
+      });
+      if (currentBase.current !== base) return;
       setMore({
         base,
         items: mergeUnique(previous, page.items),
@@ -39,6 +61,7 @@ export function useChannel(slug: string, kind: ChangeKind | undefined) {
         state: "idle",
       });
     } catch {
+      if (currentBase.current !== base) return;
       setMore({ base, items: previous, cursor, state: "error" });
     }
   }

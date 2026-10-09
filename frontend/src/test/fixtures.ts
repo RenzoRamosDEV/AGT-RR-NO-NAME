@@ -1,4 +1,5 @@
 import type { Change, Finding, Review } from "../data/mock";
+import { ApiError, type DataSource } from "../lib/api";
 
 let counter = 0;
 
@@ -23,6 +24,23 @@ export function makeChange(overrides: Partial<Change> = {}): Change {
     url: "",
     diff: "",
     reviews: [],
+    ...overrides,
+  };
+}
+
+/** A `DataSource` whose methods can be overridden one by one; the defaults are empty/not found. */
+export function makeSource(overrides: Partial<DataSource> = {}): DataSource {
+  return {
+    projects: async () => [{ slug: "demo", name: "demo" }],
+    changes: async () => ({ items: [], nextCursor: null }),
+    change: async () => {
+      throw new ApiError("no", 404);
+    },
+    agentStats: async () => [],
+    health: async () => ({ status: "ok", dependencies: [] }),
+    retry: async () => {
+      throw new ApiError("no", 404);
+    },
     ...overrides,
   };
 }

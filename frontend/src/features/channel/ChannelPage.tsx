@@ -8,13 +8,14 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import type { Change, ChangeKind } from "../../data/mock";
 import { ApiError } from "../../lib/api";
-import { type StateFilter, matchesState } from "../../lib/changeFilters";
+import type { StateFilter } from "../../lib/channelQuery";
 import { ingestCommand } from "../../lib/ingestHint";
 import { useNow } from "../../lib/now";
 import { relativeTime } from "../../lib/relativeTime";
+import { AGGREGATE_LABEL, AGGREGATE_TONE } from "../../lib/reviewStatus";
 import { summarizeReviews } from "../../lib/reviewSummary";
-import { matchesQuery } from "../../lib/search";
 import { shortSha } from "../../lib/url";
+import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import { useChannel } from "./useChannel";
 
 type Filter = "all" | ChangeKind;
@@ -32,6 +33,8 @@ const STATE_FILTERS: { value: StateFilter; label: string }[] = [
   { value: "completed", label: "Completados" },
 ];
 
+const SEARCH_DELAY_MS = 300;
+
 type Density = "cards" | "compact";
 
 const DENSITIES: { value: Density; label: string }[] = [
@@ -48,6 +51,24 @@ function Age({ iso }: { iso: string | undefined }) {
       {text}
     </time>
   );
+}
+
+type Tone = "neutral" | "success" | "danger" | "warning";
+
+/** Per-review counts when the source brings the reviews, else the aggregate status. */
+function summaryItems(change: Change): { key: string; tone: Tone; text: string }[] {
+  if (change.reviews) {
+    return summarizeReviews(change.reviews).map((item) => ({
+      key: item.status,
+      tone:
+        item.status === "completed" ? "success" : item.status === "failed" ? "danger" : "neutral",
+      text: item.text,
+    }));
+  }
+  const status = change.reviewStatus;
+  return status
+    ? [{ key: status, tone: AGGREGATE_TONE[status], text: AGGREGATE_LABEL[status] }]
+    : [];
 }
 
 function ChangeThread({
@@ -79,19 +100,9 @@ function ChangeThread({
         )}
       </p>
       <ul className="review-summary" aria-label="Resumen de reviews">
-        {summarizeReviews(change.reviews ?? []).map((item) => (
-          <li key={item.status}>
-            <Badge
-              tone={
-                item.status === "completed"
-                  ? "success"
-                  : item.status === "failed"
-                    ? "danger"
-                    : "neutral"
-              }
-            >
-              {item.text}
-            </Badge>
+        {summaryItems(change).map((item) => (
+          <li key={item.key}>
+            <Badge tone={item.tone}>{item.text}</Badge>
           </li>
         ))}
       </ul>
@@ -135,10 +146,12 @@ export function ChannelPage() {
   const [query, setQuery] = useState("");
   const [density, setDensity] = useState<Density>("cards");
   const searchId = useId();
-  const { first, items, hasMore, moreState, loadMore } = useChannel(
-    slug,
-    filter === "all" ? undefined : filter,
-  );
+  const search = useDebouncedValue(query.trim(), SEARCH_DELAY_MS);
+  const { first, items, hasMore, moreState, loadMore } = useChannel(slug, {
+    kind: filter === "all" ? undefined : filter,
+    state: stateFilter,
+    q: search,
+  });
 
   if (first.status === "error" && first.error instanceof ApiError && first.error.notFound) {
     return (
@@ -148,8 +161,8 @@ export function ChannelPage() {
     );
   }
 
-  const changes = items.filter((c) => matchesState(c, stateFilter) && matchesQuery(c, query));
-  const emptyChannel = items.length === 0 && filter === "all" && !hasMore;
+  const unfiltered = filter === "all" && stateFilter === "all" && search === "";
+  const emptyChannel = items.length === 0 && unfiltered && !hasMore;
   return (
     <div className="page">
       <div className="page-header">
@@ -166,7 +179,7 @@ export function ChannelPage() {
           id={searchId}
           className="search"
           type="search"
-          placeholder="Buscar por título, autor o SHA"
+          placeholder="Buscar por título, autor, SHA o rama"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -208,11 +221,11 @@ export function ChannelPage() {
         <AsyncBoundary state={first} loadingLabel="Cargando cambios…">
           {() => (
             <>
-              {changes.length === 0 && !emptyChannel && (
+              {items.length === 0 && !emptyChannel && (
                 <output className="muted">Ningún cambio coincide con la búsqueda.</output>
               )}
               {emptyChannel && <EmptyChannel slug={slug} />}
-              {changes.map((c) => (
+              {items.map((c) => (
                 <ChangeThread key={c.id} change={c} slug={slug} compact={density === "compact"} />
               ))}
               {moreState === "error" && (

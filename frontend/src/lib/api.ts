@@ -1,6 +1,15 @@
-import type { AgentName, Change, ChangeKind, Finding, Review } from "../data/mock";
+import type {
+  AgentName,
+  AgentStat,
+  Change,
+  ChangeKind,
+  Finding,
+  Health,
+  Review,
+  ReviewAggregate,
+} from "../data/mock";
 
-/** Wire format of `round1-backend-api` (read endpoints). */
+/** Wire format of `round1-backend-api` and `round2-backend-api` (read and retry endpoints). */
 interface ProjectDto {
   id: string;
   slug: string;
@@ -16,6 +25,8 @@ interface ChangeSummaryDto {
   url: string;
   created_at: string;
   diff_truncated: boolean;
+  run?: number;
+  review_status?: ReviewAggregate;
 }
 
 interface ReviewDto {
@@ -24,6 +35,32 @@ interface ReviewDto {
   status: "completed" | "failed";
   summary: string | null;
   findings: Finding[];
+  run?: number;
+  score?: number | null;
+  duration_ms?: number | null;
+  error?: string | null;
+}
+
+interface AgentStatDto {
+  agent: string;
+  total: number;
+  completed: number;
+  failed: number;
+  avg_duration_ms: number | null;
+  avg_score: number | null;
+}
+
+interface HealthDto {
+  status: "ok" | "degraded";
+  dependencies: Record<
+    string,
+    { status: "ok" | "unavailable"; latency_ms: number; reason?: "timeout" | "error" | null }
+  >;
+}
+
+interface RetryDto {
+  change_id: string;
+  run: number;
 }
 
 interface ChangeDetailDto extends ChangeSummaryDto {
@@ -48,14 +85,27 @@ export interface ChangePage {
 
 export interface ChangeQuery {
   kind?: ChangeKind;
+  /** Review states to keep; sent as a repeated `status` parameter. */
+  status?: readonly ReviewAggregate[];
+  /** Free-text search (title, author, SHA or ref); blank is ignored. */
+  q?: string;
   cursor?: string | null;
   limit?: number;
+}
+
+export interface RetryResult {
+  changeId: string;
+  run: number;
 }
 
 export interface DataSource {
   projects(): Promise<ProjectRef[]>;
   changes(slug: string, query?: ChangeQuery): Promise<ChangePage>;
   change(id: string): Promise<Change>;
+  agentStats(): Promise<AgentStat[]>;
+  health(): Promise<Health>;
+  /** Starts a new review run for a failed change. Rejects with `ApiError` (401/404/409/503…). */
+  retry(id: string, token: string): Promise<RetryResult>;
 }
 
 export class ApiError extends Error {
@@ -91,6 +141,8 @@ function toChange(dto: ChangeSummaryDto): Change {
     createdAt: dto.created_at,
     diff: "",
     truncated: dto.diff_truncated,
+    run: dto.run,
+    reviewStatus: dto.review_status,
   };
 }
 
@@ -101,6 +153,10 @@ function toReview(dto: ReviewDto): Review {
     status: dto.status,
     summary: dto.summary ?? undefined,
     findings: dto.findings,
+    run: dto.run,
+    score: dto.score,
+    durationMs: dto.duration_ms,
+    error: dto.error,
   };
 }
 
@@ -110,10 +166,13 @@ export function createHttpSource(
 ): DataSource {
   const root = baseUrl.replace(/\/+$/, "");
 
-  async function get<T>(path: string): Promise<T> {
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let response: Response;
     try {
-      response = await fetchImpl(`${root}${path}`, { headers: { Accept: "application/json" } });
+      response = await fetchImpl(`${root}${path}`, {
+        ...init,
+        headers: { Accept: "application/json", ...init.headers },
+      });
     } catch {
       throw new ApiError("No se pudo conectar con el servidor.", null);
     }
@@ -122,15 +181,18 @@ export function createHttpSource(
     }
     return (await response.json()) as T;
   }
+  const get = <T>(path: string) => request<T>(path);
 
   return {
     async projects() {
       const projects = await get<ProjectDto[]>("/projects");
       return projects.map((p) => ({ slug: p.slug, name: p.slug }));
     },
-    async changes(slug, { kind, cursor, limit } = {}) {
+    async changes(slug, { kind, status, q, cursor, limit } = {}) {
       const params = new URLSearchParams();
       if (kind) params.set("kind", kind);
+      for (const value of status ?? []) params.append("status", value);
+      if (q?.trim()) params.set("q", q.trim());
       if (cursor) params.set("cursor", cursor);
       if (limit) params.set("limit", String(limit));
       const qs = params.size > 0 ? `?${params}` : "";
@@ -143,6 +205,38 @@ export function createHttpSource(
     async change(id) {
       const dto = await get<ChangeDetailDto>(`/changes/${encodeURIComponent(id)}`);
       return { ...toChange(dto), diff: dto.diff, reviews: dto.reviews.map(toReview) };
+    },
+    async agentStats() {
+      const rows = await get<AgentStatDto[]>("/stats/agents");
+      return rows.map((r) => ({
+        agent: r.agent,
+        total: r.total,
+        completed: r.completed,
+        failed: r.failed,
+        avgDurationMs: r.avg_duration_ms,
+        avgScore: r.avg_score,
+      }));
+    },
+    async health() {
+      const dto = await get<HealthDto>("/health/dependencies");
+      return {
+        status: dto.status,
+        dependencies: Object.entries(dto.dependencies)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, d]) => ({
+            name,
+            status: d.status,
+            latencyMs: d.latency_ms,
+            reason: d.reason ?? undefined,
+          })),
+      };
+    },
+    async retry(id, token) {
+      const dto = await request<RetryDto>(`/changes/${encodeURIComponent(id)}/retry`, {
+        method: "POST",
+        headers: { "X-Ingest-Token": token },
+      });
+      return { changeId: dto.change_id, run: dto.run };
     },
   };
 }

@@ -16,6 +16,7 @@ describe("matchesQuery", () => {
     ["token", true],
     ["RENZO", true],
     ["41F9", true],
+    ["MAIN", true],
     ["zzz", false],
   ])("query %j -> %s", (query, expected) => {
     expect(matchesQuery(change, query)).toBe(expected);
