@@ -18,6 +18,7 @@ export interface Change {
   author: string;
   sha: string;
   diff: string;
+  truncated?: boolean;
   reviews: Review[];
 }
 
@@ -64,6 +65,7 @@ export const projects: Project[] = [
         author: "renzo",
         sha: "9be03d1",
         diff: DIFF,
+        truncated: true,
         reviews: [
           {
             agent: "claude",

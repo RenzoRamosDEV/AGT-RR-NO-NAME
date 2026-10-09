@@ -46,9 +46,55 @@ describe("navigation", () => {
   it("reaches interactive controls in order with Tab", async () => {
     renderAt("/p/duelo");
     await userEvent.tab();
+    expect(screen.getByRole("button", { name: "Menú" })).toHaveFocus();
+    await userEvent.tab();
     expect(screen.getByRole("link", { name: /duelo/ })).toHaveFocus();
     await userEvent.tab();
     expect(screen.getByRole("link", { name: /demo-api/ })).toHaveFocus();
+  });
+});
+
+describe("mobile menu", () => {
+  it("toggles with the button and closes with Escape", async () => {
+    renderAt("/p/duelo");
+    const toggle = screen.getByRole("button", { name: "Menú" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.keyboard("{Escape}");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("closes after following a link", async () => {
+    renderAt("/p/duelo");
+    const toggle = screen.getByRole("button", { name: "Menú" });
+    await userEvent.click(toggle);
+    const nav = screen.getByRole("navigation", { name: "Principal" });
+    await userEvent.click(within(nav).getByRole("link", { name: "Estadísticas" }));
+    expect(screen.getByRole("button", { name: "Menú" })).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("channel search and summary", () => {
+  it("filters by SHA and combines with the kind filter", async () => {
+    renderAt("/p/duelo");
+    await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "9BE0");
+    expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1);
+    expect(screen.getByText("feat: exponer ingesta de commits")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Commits" }));
+    expect(screen.getByText("Ningún cambio coincide con la búsqueda.")).toBeInTheDocument();
+  });
+
+  it("tells an empty channel apart from no matches", () => {
+    renderAt("/p/demo-api");
+    expect(screen.getByText("Aún no hay cambios en este canal.")).toBeInTheDocument();
+  });
+
+  it("shows the review summary without expanding the thread", () => {
+    renderAt("/p/duelo");
+    const [first] = screen.getAllByRole("list", { name: "Resumen de reviews" });
+    expect(within(first).getByText("1 completada")).toBeInTheDocument();
+    expect(within(first).getByText("1 en curso")).toBeInTheDocument();
   });
 });
 
@@ -102,6 +148,31 @@ describe("other screens", () => {
     renderAt("/p/duelo/changes/c1");
     expect(screen.getByLabelText("Diff")).toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(2);
+  });
+
+  it("numbers diff lines and marks additions and deletions", () => {
+    renderAt("/p/duelo/changes/c1");
+    const diff = screen.getByRole("table", { name: "Diff" });
+    expect(within(diff).getByText("src/ingest.py")).toBeInTheDocument();
+    expect(within(diff).getAllByText(/^\+ /).length).toBeGreaterThan(0);
+    expect(diff.querySelectorAll("tr.del").length).toBeGreaterThan(0);
+    expect(diff.querySelector("tr.add td.ln:nth-child(2)")?.textContent).toBe("1");
+  });
+
+  it("warns only when the diff is truncated", () => {
+    const { unmount } = renderAt("/p/duelo/changes/c1");
+    expect(screen.queryByRole("note")).toBeNull();
+    unmount();
+    renderAt("/p/duelo/changes/c2");
+    expect(screen.getByRole("note")).toHaveTextContent("truncado");
+  });
+
+  it("keeps stats values as text and hides the bars from assistive tech", () => {
+    const { container } = renderAt("/stats");
+    expect(screen.getByRole("row", { name: /Claude/ })).toHaveTextContent("68%");
+    const meters = container.querySelectorAll(".meter");
+    expect(meters.length).toBe(6);
+    for (const m of meters) expect(m).toHaveAttribute("aria-hidden", "true");
   });
 
   it("renders stats rows per agent", () => {
