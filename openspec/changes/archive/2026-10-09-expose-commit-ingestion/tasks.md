@@ -69,7 +69,7 @@
       `INSERT` de un proyecto, `curl` al endpoint, y comprobar en la Temporal Web UI y con
       SQL directo que hay dos `Review`; documentar los pasos en `README.md` y enlazar las
       capacidades nuevas en `docs/architecture.md`.
-- [ ] 7.3 Verificación final: `just ci` en verde y CI real de GitHub en verde.
+- [x] 7.3 Verificación final: `just ci` en verde y CI real de GitHub en verde.
 
 ## 8. Tests que dependen de la API (heredados de `strengthen-test-suite`)
 

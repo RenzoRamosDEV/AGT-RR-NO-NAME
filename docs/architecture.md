@@ -29,7 +29,7 @@ que ya está en el spec o en `openspec/specs/`.
 - [`change-review`](../openspec/specs/change-review/spec.md): reviews en paralelo con
   `FakeAgent` mediante workflows de Temporal, tolerantes a fallos parciales, atómicas e
   idempotentes por `(change, agent, run)` (Fase 2, primer slice).
-- [`commit-ingestion`](../openspec/changes/expose-commit-ingestion/specs/commit-ingestion/spec.md):
+- [`commit-ingestion`](../openspec/specs/commit-ingestion/spec.md):
   `POST /ingest/commit` autenticado con token de ingesta; persiste el commit y arranca su
   review sin duplicar trabajo; `GET /ready` comprueba Postgres y Temporal (Fase 2, cierre).
   Contrato OpenAPI en [`openapi.json`](openapi.json).
