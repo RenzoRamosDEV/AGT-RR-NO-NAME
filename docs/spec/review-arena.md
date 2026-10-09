@@ -279,7 +279,7 @@ REST + un stream SSE. Todos los modelos son Pydantic y el OpenAPI resultante gen
 
 ## Frontend
 
-Layout tipo Slack con estética GitHub: barra lateral con un canal por proyecto y una sección General. La demo interactiva está en el canvas "Review Arena · Demo del front".
+Layout tipo Slack con tema negro único (ver ADR 0002): barra lateral con un canal por proyecto y una sección General. La demo interactiva está en el canvas "Review Arena · Demo del front".
 
 | Pantalla | Ruta | Contenido |
 | --- | --- | --- |
@@ -292,7 +292,7 @@ Layout tipo Slack con estética GitHub: barra lateral con un canal por proyecto 
 
 **Tiempo real:** `useEventStream(slug)` abre `EventSource('/events?project=slug')` y, con cada evento, actualiza la caché de TanStack Query con `setQueryData`, sin refetch. Si la conexión se corta, el navegador reconecta solo y el servidor reenvía lo perdido gracias a `Last-Event-ID`.
 
-**Tema:** tokens tipo GitHub como variables CSS (`--bg`, `--border`, `--fg-muted`…) y un `--accent` que elige el usuario. Se guarda en `/settings` y se aplica antes del primer render para evitar parpadeos. Modo oscuro con `prefers-color-scheme`.
+**Tema:** negro único con tokens CSS (`--bg`, `--surface`, `--border`, `--fg-muted`, `--accent`…) y acento monocromo; sin modo claro. El color secundario configurable queda diferido (ADR 0002). Estados de carga de IA con `border-beam` y `thinking-orbs`, con fallback bajo `prefers-reduced-motion`.
 
 **Accesibilidad:** navegación completa con teclado, `aria-expanded` en los hilos desplegables y contraste AA comprobado con el color elegido; si no llega, el tono se oscurece automáticamente.
 
