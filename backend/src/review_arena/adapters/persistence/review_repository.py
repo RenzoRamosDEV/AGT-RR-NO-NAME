@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from review_arena.adapters.persistence.models import EventModel, ReviewModel
+from review_arena.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from review_arena.domain.events import ReviewCompleted, ReviewFailed
 from review_arena.domain.review import Finding, Review, ReviewStatus
 
@@ -25,20 +26,22 @@ class SqlAlchemyReviewRepository:
                     agent=review.agent,
                     run=review.run,
                     status=review.status.value,
-                    summary=review.summary,
+                    summary=sanitize_text(review.summary),
                     score=review.score,
-                    findings=[
-                        {
-                            "severity": f.severity,
-                            "file": f.file,
-                            "line": f.line,
-                            "message": f.message,
-                        }
-                        for f in review.findings
-                    ],
-                    raw_output=review.raw_output,
+                    findings=sanitize_json(
+                        [
+                            {
+                                "severity": f.severity,
+                                "file": f.file,
+                                "line": f.line,
+                                "message": f.message,
+                            }
+                            for f in review.findings
+                        ]
+                    ),
+                    raw_output=sanitize_text(review.raw_output),
                     duration_ms=review.duration_ms,
-                    error=review.error,
+                    error=sanitize_text(review.error),
                     created_at=review.created_at,
                 )
                 # Mismo patrón que SqlAlchemyChangeRepository: la constraint UNIQUE
@@ -61,7 +64,7 @@ class SqlAlchemyReviewRepository:
                 insert(EventModel).values(
                     project_id=event.project_id,
                     type=event.type,
-                    payload=event.to_payload(),
+                    payload=sanitize_json(event.to_payload()),
                 )
             )
             return review

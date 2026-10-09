@@ -23,6 +23,7 @@ dev = [
     "mypy>=1.13",
     "import-linter>=2.1",
     "testcontainers[postgres]>=4.9",
+    "hypothesis>=6.100",
 ]
 
 [build-system]

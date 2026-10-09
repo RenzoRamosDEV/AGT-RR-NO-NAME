@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from review_arena.adapters.persistence.models import ChangeModel, EventModel
+from review_arena.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from review_arena.domain.change import Change, ChangeKind, ChangeStatus
 from review_arena.domain.events import ChangeCreated
 
@@ -27,10 +28,10 @@ class SqlAlchemyChangeRepository:
                     kind=change.kind.value,
                     ref=change.ref,
                     head_sha=change.head_sha,
-                    title=change.title,
-                    author=change.author,
+                    title=sanitize_text(change.title),
+                    author=sanitize_text(change.author),
                     url=change.url,
-                    diff=change.diff,
+                    diff=sanitize_text(change.diff),
                     diff_truncated=change.diff_truncated,
                     status=change.status.value,
                     run=change.run,
@@ -58,7 +59,7 @@ class SqlAlchemyChangeRepository:
                 insert(EventModel).values(
                     project_id=event.project_id,
                     type=event.type,
-                    payload=event.to_payload(),
+                    payload=sanitize_json(event.to_payload()),
                 )
             )
             return change

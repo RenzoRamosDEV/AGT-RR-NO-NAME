@@ -5,6 +5,16 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
+# Límite de negocio; coincide con la columna `reviews.agent` (un test lo garantiza).
+MAX_AGENT = 50
+
+
+def _validate_agent(agent: str) -> None:
+    if not agent:
+        raise ValueError("agent no puede estar vacío")
+    if len(agent) > MAX_AGENT:
+        raise ValueError(f"agent no puede superar {MAX_AGENT} caracteres (recibidos {len(agent)})")
+
 
 class ReviewStatus(StrEnum):
     COMPLETED = "completed"
@@ -53,6 +63,7 @@ class Review:
         duration_ms: int,
         created_at: datetime,
     ) -> Review:
+        _validate_agent(agent)
         return cls(
             id=uuid4(),
             change_id=change_id,
@@ -79,6 +90,7 @@ class Review:
         duration_ms: int | None,
         created_at: datetime,
     ) -> Review:
+        _validate_agent(agent)
         if not error:
             raise ValueError("error no puede estar vacío en una review fallida")
         return cls(
