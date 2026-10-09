@@ -46,8 +46,13 @@ services:
     build:
       context: ./backend
     profiles: ["app"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://review_arena:review_arena@postgres:5432/review_arena
+      TEMPORAL_ADDRESS: temporal:7233
+      # Solo desarrollo local; en cualquier otro entorno se define INGEST_TOKEN de verdad.
+      INGEST_TOKEN: ${INGEST_TOKEN:-dev-ingest-token}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
 volumes:
   postgres_data:

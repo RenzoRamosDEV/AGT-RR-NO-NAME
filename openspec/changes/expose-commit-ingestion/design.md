@@ -68,6 +68,18 @@ workflow (`platform`, `agents`).
 negocio (qué se guarda de un commit enorme), así que vive en `ingest_commit` y se prueba
 sin HTTP ni base de datos.
 
+**Raíz de composición fuera de `entrypoints/` (desviación respecto a `tasks.md`).**
+`entrypoints`, `adapters` y `workflows` son capas hermanas y ninguna puede importar a otra,
+así que ni la API ni el worker pueden vivir dentro de `entrypoints/` y ensamblar adaptadores.
+`review_arena/composition.py` (API) y `review_arena/worker.py` (worker de desarrollo) quedan
+fuera de las capas; `create_app(settings, dependencies)` recibe un `ApiDependencies` de
+puertos, de modo que los tests de API pasan fakes y no tocan adaptadores. El worker usa
+`WorkerSettings` (sin `INGEST_TOKEN`). Uvicorn arranca con `--factory`.
+
+**Auth antes de validar el cuerpo, con una salvedad.** FastAPI parsea el cuerpo antes de
+resolver dependencias: un JSON malformado responde 422 aunque falte el token. No hay efectos
+ni fuga de información; se acepta y se prueba que no deja rastro.
+
 ## Risks / Trade-offs
 
 - [Riesgo] Token estático compartido → Mitigación: API solo en `127.0.0.1` por defecto,

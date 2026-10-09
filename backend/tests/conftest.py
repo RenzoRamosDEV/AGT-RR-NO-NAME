@@ -29,6 +29,7 @@ TESTS_DIR = Path(__file__).parent
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "unit: sin I/O ni Docker (milisegundos)")
     config.addinivalue_line("markers", "integration: Postgres real y/o Temporal de test")
+    config.addinivalue_line("markers", "e2e: flujo completo por HTTP con Postgres y Temporal")
     config.addinivalue_line("markers", "regression: fija un defecto ya corregido")
 
 
@@ -36,5 +37,5 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         relative = Path(str(item.path)).resolve().relative_to(TESTS_DIR)
         layer = relative.parts[0]
-        if layer in {"unit", "integration"}:
+        if layer in {"unit", "integration", "e2e"}:
             item.add_marker(getattr(pytest.mark, layer))

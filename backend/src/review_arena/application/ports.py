@@ -5,6 +5,7 @@ from uuid import UUID
 
 from review_arena.domain.change import Change
 from review_arena.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from review_arena.domain.project import Project
 from review_arena.domain.review import Review, ReviewResult
 
 
@@ -38,4 +39,21 @@ class ReviewRepository(Protocol):
         Si ya existía una `Review` con la misma identidad natural
         (change_id, agent, run), la devuelve sin crear un segundo evento.
         """
+        ...
+
+
+class ProjectRepository(Protocol):
+    async def get_by_slug(self, slug: str) -> Project | None:
+        """Devuelve el proyecto con ese slug, o `None` si no existe."""
+        ...
+
+
+class ReviewStartError(Exception):
+    """El orquestador no pudo arrancar la review (p. ej. Temporal caído)."""
+
+
+class ReviewStarter(Protocol):
+    async def start(self, change: Change) -> None:
+        """Arranca la review de `change`. Idempotente: si ya estaba arrancada (o terminó)
+        para ese change, no hace nada. Lanza `ReviewStartError` si no se pudo arrancar."""
         ...

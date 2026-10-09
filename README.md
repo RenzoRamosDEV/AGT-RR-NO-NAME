@@ -30,12 +30,36 @@ curl localhost:8000/health
 just down             # para todo
 ```
 
+### Probar la ingesta de un commit
+
+```bash
+export INGEST_TOKEN=dev-ingest-token       # solo desarrollo local
+just dev                                  # infra + API (usa INGEST_TOKEN)
+just migrate                              # esquema de la base de datos
+just worker                               # worker con FakeAgent (otra terminal)
+# un proyecto de prueba (la creación por API llega con el slice de Project):
+podman exec -i <contenedor-postgres> psql -U review_arena -c \
+  "insert into projects(id, slug) values (gen_random_uuid(), 'demo/repo')"
+curl -i -X POST localhost:8000/ingest/commit \
+  -H "X-Ingest-Token: $INGEST_TOKEN" -H 'content-type: application/json' \
+  -d '{"project":"demo/repo","ref":"refs/heads/main","head_sha":"abc123","title":"t","author":"yo","diff":"d"}'
+# -> 202 con el change_id; en la Temporal UI (localhost:8080) aparece commit-<proyecto>-abc123
+#    y la tabla reviews acaba con una fila completed por agente
+curl localhost:8000/ready                 # 200 solo si Postgres y Temporal responden
+```
+
+El token es un secreto compartido (`INGEST_TOKEN`); la API escucha solo en `127.0.0.1`.
+
 ## Comandos habituales
 
 | Comando          | Qué hace                                               |
 | ---------------- | ------------------------------------------------------- |
 | `just dev`        | Levanta infra (perfil `infra`) + API (perfil `app`)      |
 | `just down`       | Para y limpia los contenedores                           |
+| `just migrate`    | Aplica las migraciones de Alembic                        |
+| `just worker`     | Worker de desarrollo (`platform` + `agents`, FakeAgent)  |
+| `just load`       | Carga ligera de `POST /ingest/commit` (bajo demanda)     |
+| `just openapi`    | Regenera el snapshot `docs/openapi.json`                 |
 | `just test`       | Tests de backend (`pytest`) y build de frontend          |
 | `just lint`       | Ruff, mypy strict, import-linter y Biome                 |
 | `just gen-client` | Genera el cliente TS desde el OpenAPI (desde la Fase 4)  |

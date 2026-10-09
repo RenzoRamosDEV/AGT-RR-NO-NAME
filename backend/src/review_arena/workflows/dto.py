@@ -10,6 +10,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from review_arena.application.review_requests import ReviewCommitInput
+
+__all__ = [
+    "ReviewChangeInput",
+    "ReviewCommitInput",
+    "RunReviewInput",
+    "RunReviewResult",
+]
+
 
 @dataclass
 class RunReviewInput:
@@ -26,13 +35,6 @@ class RunReviewResult:
 
 @dataclass
 class ReviewChangeInput:
-    change_id: str
-    agent_names: list[str]
-    run: int = 1
-
-
-@dataclass
-class ReviewCommitInput:
     change_id: str
     agent_names: list[str]
     run: int = 1

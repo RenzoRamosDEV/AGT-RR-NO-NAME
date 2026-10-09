@@ -14,6 +14,22 @@ dev:
 down:
     {{compose}} --profile infra --profile app down
 
+# Aplica las migraciones de Alembic a la base de datos local (DATABASE_URL o la de compose)
+migrate:
+    cd backend && uv run alembic upgrade head
+
+# Worker de desarrollo (task queues platform y agents, con FakeAgent) contra la infra local
+worker:
+    cd backend && uv run python -m review_arena.worker
+
+# Regenera el snapshot del contrato (docs/openapi.json) tras un cambio deliberado de la API
+openapi:
+    cd backend && PYTHONPATH=. uv run python ../scripts/dump_openapi.py
+
+# Carga ligera de POST /ingest/commit (bajo demanda; requiere API + worker + infra arriba)
+load *args:
+    cd backend && uv run python ../scripts/load_ingest.py {{args}}
+
 # Tests unitarios: sin Docker, sin red, milisegundos
 test-unit:
     cd backend && uv run pytest tests/unit -m unit --no-cov
