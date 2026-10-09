@@ -39,7 +39,7 @@
 - [x] 4.2 Tests de regresión de lo que ya funcionaba y no debe romperse: diff de 5 MB,
       comillas e intento de inyección SQL guardados como texto literal y Unicode/emoji
       ida y vuelta intactos.
-- [ ] 4.3 Verificación final: `just ci` en verde y CI real de GitHub en verde.
+- [x] 4.3 Verificación final: `just ci` en verde y CI real de GitHub en verde.
 
 ## Workflow follow-up
 
