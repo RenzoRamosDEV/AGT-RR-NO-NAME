@@ -2,14 +2,14 @@
 
 ## 1. Reorganización en capas unit / integration
 
-- [ ] 1.1 Mover con `git mv` los tests a `tests/unit/{domain,application,adapters,
+- [x] 1.1 Mover con `git mv` los tests a `tests/unit/{domain,application,adapters,
       entrypoints,fakes}` y `tests/integration/{persistence,workflows}`; los fixtures de
       testcontainers (`database_url`, `engine`, `session_factory`, `create_project`) pasan a
       `tests/integration/conftest.py`; `tests/conftest.py` solo registra el perfil de
       hypothesis y aplica los marcadores `unit`/`integration` por ruta (y declara
       `regression`); verificar que los 96 tests siguen pasando y que `pytest tests/unit` corre
       sin Docker en pocos segundos.
-- [ ] 1.2 Recetas `just test-unit`, `just test-integration` y `just test` (todo); verificar
+- [x] 1.2 Recetas `just test-unit`, `just test-integration` y `just test` (todo); verificar
       que cada una funciona y que `test-unit` no necesita `DOCKER_HOST`.
 
 ## 2. Lógica y requisitos (unit)

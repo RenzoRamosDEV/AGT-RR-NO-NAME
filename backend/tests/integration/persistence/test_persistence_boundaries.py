@@ -23,7 +23,7 @@ from review_arena.domain.change import (
     ChangeKind,
 )
 from review_arena.domain.review import MAX_AGENT, Finding, ReviewResult
-from tests.conftest import create_project
+from tests.integration.conftest import create_project
 
 NUL = "\x00"
 FFFD = "�"

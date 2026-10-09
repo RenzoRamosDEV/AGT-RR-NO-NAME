@@ -1,56 +1,40 @@
-"""Fixtures compartidos para los tests de integración con testcontainers (Postgres real).
+"""Configuración común de la suite: perfiles de hypothesis y marcadores por capa.
 
-Requiere Docker o Podman localmente. En Podman rootless hace falta además:
-    export DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock"
-    export TESTCONTAINERS_RYUK_DISABLED=true
-(Ryuk, el sidecar de limpieza de testcontainers, no funciona bien bajo Podman
-rootless; en CI con Docker real no hace falta desactivarlo.)
+Los fixtures que necesitan infraestructura (Postgres/testcontainers) viven solo en
+`tests/integration/conftest.py`, de modo que `tests/unit` no importa nada de `adapters`
+ni requiere Docker (y mutmut puede aislar `domain/` y `application/`).
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
 from pathlib import Path
-from uuid import UUID, uuid4
 
 import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import insert
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
-from testcontainers.community.postgres import PostgresContainer
+from hypothesis import HealthCheck, settings
 
-from review_arena.adapters.persistence.db import create_engine, create_session_factory
-from review_arena.adapters.persistence.models import ProjectModel
+settings.register_profile("dev", max_examples=100, deadline=None)
+settings.register_profile(
+    "ci",
+    max_examples=200,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-
-
-@pytest.fixture(scope="module")
-def database_url() -> AsyncIterator[str]:
-    with PostgresContainer("postgres:16-alpine", driver="asyncpg") as postgres:
-        url = postgres.get_connection_url()
-        os.environ["DATABASE_URL"] = url
-        alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-        command.upgrade(alembic_cfg, "head")
-        yield url
+TESTS_DIR = Path(__file__).parent
 
 
-@pytest.fixture
-async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
-    eng = create_engine(database_url)
-    yield eng
-    await eng.dispose()
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "unit: sin I/O ni Docker (milisegundos)")
+    config.addinivalue_line("markers", "integration: Postgres real y/o Temporal de test")
+    config.addinivalue_line("markers", "regression: fija un defecto ya corregido")
 
 
-@pytest.fixture
-def session_factory(engine: AsyncEngine) -> async_sessionmaker:
-    return create_session_factory(engine)
-
-
-async def create_project(session_factory: async_sessionmaker) -> UUID:
-    project_id = uuid4()
-    async with session_factory() as session, session.begin():
-        await session.execute(insert(ProjectModel).values(id=project_id, slug=f"test-{project_id}"))
-    return project_id
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        relative = Path(str(item.path)).resolve().relative_to(TESTS_DIR)
+        layer = relative.parts[0]
+        if layer in {"unit", "integration"}:
+            item.add_marker(getattr(pytest.mark, layer))

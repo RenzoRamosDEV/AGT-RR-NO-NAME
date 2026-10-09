@@ -12,7 +12,7 @@ from review_arena.application.ingest_change import ingest_change
 from review_arena.application.record_review import record_review_failure, record_review_success
 from review_arena.domain.change import Change, ChangeKind
 from review_arena.domain.review import ReviewResult
-from tests.conftest import create_project
+from tests.integration.conftest import create_project
 
 
 async def _create_change(session_factory: async_sessionmaker, head_sha: str) -> Change:

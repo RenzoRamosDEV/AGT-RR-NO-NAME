@@ -27,7 +27,7 @@ from review_arena.workflows.activities import ReviewActivities
 from review_arena.workflows.dto import ReviewChangeInput, ReviewCommitInput
 from review_arena.workflows.review_change import ReviewChangeWorkflow
 from review_arena.workflows.review_commit import ReviewCommitWorkflow
-from tests.conftest import create_project
+from tests.integration.conftest import create_project
 
 BOTH_AGENTS = ["agent_1", "agent_2"]
 

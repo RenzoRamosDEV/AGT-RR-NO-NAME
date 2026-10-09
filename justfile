@@ -14,7 +14,26 @@ dev:
 down:
     {{compose}} --profile infra --profile app down
 
-# Corre los tests de backend y frontend (los de testcontainers necesitan Docker o Podman)
+# Tests unitarios: sin Docker, sin red, milisegundos
+test-unit:
+    cd backend && uv run pytest tests/unit -m unit --no-cov
+
+# Tests de integración: Postgres real (testcontainers) y Temporal de test; necesitan Docker o Podman
+test-integration:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd backend
+    if command -v docker >/dev/null 2>&1; then
+        uv run pytest tests/integration -m integration --no-cov
+    else
+        # Sin `docker` (p. ej. Podman-only): apuntar testcontainers al socket de Podman
+        # y desactivar Ryuk, su sidecar de limpieza, que no funciona bien en rootless.
+        DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock" \
+        TESTCONTAINERS_RYUK_DISABLED=true \
+        uv run pytest tests/integration -m integration --no-cov
+    fi
+
+# Toda la suite con cobertura (unit + integration) y build del frontend
 test:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -22,8 +41,6 @@ test:
     if command -v docker >/dev/null 2>&1; then
         uv run pytest
     else
-        # Sin `docker` (p. ej. Podman-only): apuntar testcontainers al socket de Podman
-        # y desactivar Ryuk, su sidecar de limpieza, que no funciona bien en rootless.
         DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock" \
         TESTCONTAINERS_RYUK_DISABLED=true \
         uv run pytest
