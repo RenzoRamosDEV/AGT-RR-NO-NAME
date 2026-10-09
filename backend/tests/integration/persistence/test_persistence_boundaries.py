@@ -123,6 +123,7 @@ async def test_nul_in_title_author_and_diff_is_stored_as_replacement_character(
     assert stored.diff == f"line1{FFFD}line2"
 
 
+@pytest.mark.regression
 async def test_nul_in_review_text_and_jsonb_findings_is_stored_as_replacement_character(
     session_factory: async_sessionmaker,
 ) -> None:
@@ -184,6 +185,7 @@ async def test_agent_name_at_the_limit_persists(session_factory: async_sessionma
 # --- Regresiones: ya funcionaban en el sondeo y no deben romperse ---------------------
 
 
+@pytest.mark.regression
 async def test_regression_five_megabyte_diff_is_persisted_and_read_back(
     session_factory: async_sessionmaker,
 ) -> None:
@@ -194,6 +196,7 @@ async def test_regression_five_megabyte_diff_is_persisted_and_read_back(
     assert (await _reload(session_factory, change)).diff == diff
 
 
+@pytest.mark.regression
 async def test_regression_sql_metacharacters_are_stored_as_literal_text(
     session_factory: async_sessionmaker,
 ) -> None:
@@ -208,6 +211,7 @@ async def test_regression_sql_metacharacters_are_stored_as_literal_text(
     assert await _reload(session_factory, change) == stored
 
 
+@pytest.mark.regression
 async def test_regression_unicode_and_emoji_roundtrip_intact(
     session_factory: async_sessionmaker,
 ) -> None:

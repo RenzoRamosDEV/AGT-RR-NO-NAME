@@ -37,10 +37,11 @@ packages = ["src/review_arena"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=review_arena --cov-report=term-missing"
+addopts = "--cov=review_arena --cov-branch --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["src/review_arena"]
+branch = true
 
 [tool.ruff]
 line-length = 100

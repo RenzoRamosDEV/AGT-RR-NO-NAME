@@ -48,39 +48,39 @@
 
 ## 5. Persistencia, transacciones y esquema (integration)
 
-- [ ] 5.1 Consultas: `ChangeRepository.get()` contra Postgres (existente, inexistente,
+- [x] 5.1 Consultas: `ChangeRepository.get()` contra Postgres (existente, inexistente,
       tras reingesta) y lectura de una `Review` con `findings` no vacíos (round-trip por JSONB,
       incluido el camino de conflicto); verificar con testcontainers.
-- [ ] 5.2 Orden del outbox: los eventos de un proyecto salen con ids crecientes en el orden
+- [x] 5.2 Orden del outbox: los eventos de un proyecto salen con ids crecientes en el orden
       causal (`change.created` antes que `review.*`); verificar con un test.
-- [ ] 5.3 Rollback de la review: si falla la escritura del evento no queda la `Review`
+- [x] 5.3 Rollback de la review: si falla la escritura del evento no queda la `Review`
       (misma garantía que ya tiene el change); verificar con un evento de proyecto inexistente.
-- [ ] 5.4 Esquema: `upgrade head` + `compare_metadata` contra los modelos no produce
+- [x] 5.4 Esquema: `upgrade head` + `compare_metadata` contra los modelos no produce
       diferencias, y `upgrade → downgrade base → upgrade` es reversible; corregir modelos o
       migración si el test destapa deriva.
 
 ## 6. Concurrencia (integration)
 
-- [ ] 6.1 Ingestas simultáneas de la misma clave natural (N sesiones independientes): una fila,
+- [x] 6.1 Ingestas simultáneas de la misma clave natural (N sesiones independientes): una fila,
       un evento `change.created`, todas devuelven el mismo id; mismo test para
       `record_review` sobre la misma `(change, agent, run)`; verificar que es estable al
       repetirlo varias veces.
-- [ ] 6.2 Ráfaga de claves distintas en paralelo: ningún error (sin interbloqueos) y un
+- [x] 6.2 Ráfaga de claves distintas en paralelo: ningún error (sin interbloqueos) y un
       change y un evento por clave.
 
 ## 7. Recuperación (integration, Temporal)
 
-- [ ] 7.1 Con el worker `agents` ausente el workflow permanece en curso y termina con las
+- [x] 7.1 Con el worker `agents` ausente el workflow permanece en curso y termina con las
       dos reviews cuando el worker aparece; verificar el estado intermedio (sin reviews) y el
       final.
-- [ ] 7.2 Fallo transitorio de persistencia dentro de `run_review`: la activity se reintenta y
+- [x] 7.2 Fallo transitorio de persistencia dentro de `run_review`: la activity se reintenta y
       queda una única review `completed`.
-- [ ] 7.3 Acuse perdido tras confirmar: el repositorio de prueba inserta de verdad y luego
+- [x] 7.3 Acuse perdido tras confirmar: el repositorio de prueba inserta de verdad y luego
       lanza una vez; tras el reintento sigue habiendo una review y un evento.
 
 ## 8. Regresión
 
-- [ ] 8.1 Un test marcado `regression` por cada defecto ya corregido, con el origen en el
+- [x] 8.1 Un test marcado `regression` por cada defecto ya corregido, con el origen en el
       docstring: agente desconocido sin reintentos, el diff no viaja por Temporal (un diff de
       5 MB atraviesa el workflow y el payload de `RunReviewInput` no lo contiene), `run` se
       propaga, y los valores guardados de `status` son estables (`pending`/`completed`/
@@ -88,7 +88,7 @@
 
 ## 9. Cobertura de ramas y CI
 
-- [ ] 9.1 Activar `--cov-branch`, medir y fijar `fail_under` global y el umbral estricto de
+- [x] 9.1 Activar `--cov-branch`, medir y fijar `fail_under` global y el umbral estricto de
       `domain/`+`application/` (`coverage report --include=... --fail-under`); verificar que
       un test borrado hace fallar el umbral.
 - [ ] 9.2 `ci.yml`: pasos separados (unit, integration, umbrales) con

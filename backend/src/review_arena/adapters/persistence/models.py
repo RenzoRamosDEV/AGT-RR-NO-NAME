@@ -3,7 +3,18 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -21,6 +32,10 @@ class ProjectModel(Base):
 
 class ChangeModel(Base):
     __tablename__ = "changes"
+    __table_args__ = (
+        UniqueConstraint("project_id", "kind", "head_sha", name="uq_changes_natural_key"),
+        Index("ix_changes_project_created_at", "project_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -53,6 +68,10 @@ class EventModel(Base):
 
 class ReviewModel(Base):
     __tablename__ = "reviews"
+    __table_args__ = (
+        UniqueConstraint("change_id", "agent", "run", name="uq_reviews_natural_key"),
+        Index("ix_reviews_change_id", "change_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     change_id: Mapped[uuid.UUID] = mapped_column(

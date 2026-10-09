@@ -92,6 +92,7 @@ def test_enums_are_closed(enum) -> None:
         enum("valor-que-no-existe")
 
 
+@pytest.mark.regression
 def test_status_values_are_the_stable_strings_stored_in_the_database() -> None:
     assert {s.value for s in ReviewStatus} == {"completed", "failed"}
     assert {s.value for s in ChangeStatus} == {"pending"}

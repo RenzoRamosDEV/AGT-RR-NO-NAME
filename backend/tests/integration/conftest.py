@@ -19,6 +19,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from temporalio.testing import WorkflowEnvironment
 from testcontainers.community.postgres import PostgresContainer
 
 from review_arena.adapters.persistence.db import create_engine, create_session_factory
@@ -54,3 +55,10 @@ async def create_project(session_factory: async_sessionmaker) -> UUID:
     async with session_factory() as session, session.begin():
         await session.execute(insert(ProjectModel).values(id=project_id, slug=f"test-{project_id}"))
     return project_id
+
+
+@pytest.fixture
+async def temporal_env() -> AsyncIterator[WorkflowEnvironment]:
+    """Servidor de test efímero de Temporal con salto de tiempo (sin Docker)."""
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        yield env

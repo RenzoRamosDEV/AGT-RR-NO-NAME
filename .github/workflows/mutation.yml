@@ -1,0 +1,38 @@
+name: Mutation testing
+
+# Señal cara y de cambio lento: no corre en cada push. Semanal y bajo demanda.
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
+      - run: uv sync
+      - name: Ejecutar mutmut sobre domain/ y application/
+        run: uv run mutmut run > mutmut.log 2>&1 || { tail -n 40 mutmut.log; exit 1; }
+      - run: uv run mutmut export-cicd-stats
+      - name: Umbral de puntuación de mutación (mantener sincronizado con el justfile)
+        run: uv run python ../scripts/mutation_gate.py mutants/mutmut-cicd-stats.json --min 95
+      - name: Subir estadísticas de mutación
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-stats
+          path: backend/mutants/mutmut-cicd-stats.json
+          if-no-files-found: ignore

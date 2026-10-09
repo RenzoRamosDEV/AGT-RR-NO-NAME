@@ -35,7 +35,9 @@ jobs:
 
   backend-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      HYPOTHESIS_PROFILE: ci
     defaults:
       run:
         working-directory: backend
@@ -47,7 +49,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "backend/uv.lock"
       - run: uv sync
-      - run: uv run pytest
+      - name: Tests unitarios (rápidos, sin Docker)
+        run: uv run pytest tests/unit -m unit --no-cov
+      - name: Suite completa con cobertura de líneas y ramas
+        run: uv run pytest
+      - name: Umbrales de cobertura (mantener sincronizados con el justfile)
+        run: |
+          uv run coverage report --fail-under=97
+          uv run coverage report --include="src/review_arena/domain/*,src/review_arena/application/*" --fail-under=100
 
   frontend-build:
     runs-on: ubuntu-latest

@@ -18,33 +18,40 @@ down:
 test-unit:
     cd backend && uv run pytest tests/unit -m unit --no-cov
 
+# Umbrales de cobertura de líneas+ramas (%): global y para domain+application (lógica pura)
+cov_min := "97"
+cov_core_min := "100"
+
 # Tests de integración: Postgres real (testcontainers) y Temporal de test; necesitan Docker o Podman
 test-integration:
     #!/usr/bin/env bash
     set -euo pipefail
     cd backend
-    if command -v docker >/dev/null 2>&1; then
-        uv run pytest tests/integration -m integration --no-cov
-    else
+    if ! command -v docker >/dev/null 2>&1; then
         # Sin `docker` (p. ej. Podman-only): apuntar testcontainers al socket de Podman
         # y desactivar Ryuk, su sidecar de limpieza, que no funciona bien en rootless.
-        DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock" \
-        TESTCONTAINERS_RYUK_DISABLED=true \
-        uv run pytest tests/integration -m integration --no-cov
+        export DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock"
+        export TESTCONTAINERS_RYUK_DISABLED=true
     fi
+    uv run pytest tests/integration -m integration --no-cov
 
-# Toda la suite con cobertura (unit + integration) y build del frontend
+# Toda la suite con cobertura de ramas y umbrales, más el build del frontend
 test:
     #!/usr/bin/env bash
     set -euo pipefail
     cd backend
-    if command -v docker >/dev/null 2>&1; then
-        uv run pytest
-    else
-        DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock" \
-        TESTCONTAINERS_RYUK_DISABLED=true \
-        uv run pytest
+    if ! command -v docker >/dev/null 2>&1; then
+        export DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock"
+        export TESTCONTAINERS_RYUK_DISABLED=true
     fi
+    uv run pytest
+    core="src/review_arena/domain/*,src/review_arena/application/*"
+    echo "cobertura (líneas+ramas): global $(uv run coverage report --format=total)% (mín {{cov_min}}%)," \
+         "domain+application $(uv run coverage report --include="$core" --format=total)% (mín {{cov_core_min}}%)"
+    uv run coverage report --fail-under={{cov_min}} >/dev/null \
+        || { echo "FALLA: cobertura global por debajo de {{cov_min}}%" >&2; exit 1; }
+    uv run coverage report --include="$core" --fail-under={{cov_core_min}} >/dev/null \
+        || { echo "FALLA: cobertura de domain+application por debajo de {{cov_core_min}}%" >&2; exit 1; }
     cd ../frontend && pnpm build
 
 # Lint + tipos en todo el repo (mismos checks que corre el CI)
