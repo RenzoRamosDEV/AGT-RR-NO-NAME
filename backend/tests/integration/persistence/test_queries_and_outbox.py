@@ -9,14 +9,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
-from review_arena.adapters.persistence.models import EventModel, ReviewModel
-from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-from review_arena.application.ingest_change import ingest_change
-from review_arena.application.record_review import record_review_failure, record_review_success
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.events import ReviewCompleted
-from review_arena.domain.review import Finding, Review, ReviewResult
+from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from duelo.adapters.persistence.models import EventModel, ReviewModel
+from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.application.ingest_change import ingest_change
+from duelo.application.record_review import record_review_failure, record_review_success
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.events import ReviewCompleted
+from duelo.domain.review import Finding, Review, ReviewResult
 from tests.integration.conftest import create_project
 
 FINDINGS = (

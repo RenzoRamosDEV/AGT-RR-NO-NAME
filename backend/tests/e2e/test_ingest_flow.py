@@ -13,11 +13,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from temporalio.testing import WorkflowEnvironment
 
-from review_arena.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
-from review_arena.composition import build_api_dependencies
-from review_arena.config import Settings
-from review_arena.entrypoints.api.app import create_app
-from review_arena.worker import build_workers
+from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
+from duelo.composition import build_api_dependencies
+from duelo.config import Settings
+from duelo.entrypoints.api.app import create_app
+from duelo.worker import build_workers
 from tests.integration.conftest import create_project
 
 TOKEN = "e2e-token"

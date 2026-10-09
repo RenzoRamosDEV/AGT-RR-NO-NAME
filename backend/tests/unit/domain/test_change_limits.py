@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.change import (
+from duelo.domain.change import (
     MAX_AUTHOR,
     MAX_HEAD_SHA,
     MAX_REF,

@@ -25,7 +25,7 @@ límite de uso del plan de suscripción. El sistema necesita:
 Usar [Temporal](https://temporal.io/) (SDK `temporalio` para Python) como motor de
 workflows durables, con `ReviewChangeWorkflow` como hijo compartido por
 `ReviewCommitWorkflow`, `PullRequestWorkflow` (con señales y debounce) y
-`AnswerQuestionWorkflow`. Detalle en `docs/spec/review-arena.md` (sección "Workflows de
+`AnswerQuestionWorkflow`. Detalle en `docs/spec/duelo.md` (sección "Workflows de
 Temporal").
 
 ## Alternativas consideradas

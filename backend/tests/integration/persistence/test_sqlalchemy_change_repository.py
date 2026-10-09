@@ -9,11 +9,11 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
-from review_arena.adapters.persistence.models import ChangeModel, EventModel
-from review_arena.application.ingest_change import ingest_change
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.events import ChangeCreated
+from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from duelo.adapters.persistence.models import ChangeModel, EventModel
+from duelo.application.ingest_change import ingest_change
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.events import ChangeCreated
 from tests.integration.conftest import create_project
 
 

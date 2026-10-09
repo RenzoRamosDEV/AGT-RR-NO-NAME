@@ -1,7 +1,7 @@
 # frontend-shell Specification
 
 ## Purpose
-Define la apariencia y navegación base de la interfaz web de Review Arena: un tema negro único,
+Define la apariencia y navegación base de la interfaz web de Duelo: un tema negro único,
 una estructura de canales por proyecto y una representación clara de los estados de review.
 
 ## Requirements

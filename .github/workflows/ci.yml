@@ -56,7 +56,7 @@ jobs:
       - name: Umbrales de cobertura (mantener sincronizados con el justfile)
         run: |
           uv run coverage report --fail-under=97
-          uv run coverage report --include="src/review_arena/domain/*,src/review_arena/application/*" --fail-under=100
+          uv run coverage report --include="src/duelo/domain/*,src/duelo/application/*" --fail-under=100
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -122,10 +122,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - run: docker build -t review-arena-api-smoke ./backend
+      - run: docker build -t duelo-api-smoke ./backend
       - name: Levantar el contenedor y probar /health (sin Postgres ni Temporal)
         run: |
-          docker run -d --name smoke -p 8000:8000 -e INGEST_TOKEN=ci-smoke-only review-arena-api-smoke
+          docker run -d --name smoke -p 8000:8000 -e INGEST_TOKEN=ci-smoke-only duelo-api-smoke
           for _ in $(seq 1 15); do
             curl -sf http://localhost:8000/health && exit 0
             sleep 1

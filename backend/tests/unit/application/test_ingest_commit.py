@@ -2,9 +2,9 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.application.ingest_commit import CommitSubmission, ProjectNotFound, ingest_commit
-from review_arena.application.ports import ReviewStartError
-from review_arena.domain.project import Project
+from duelo.application.ingest_commit import CommitSubmission, ProjectNotFound, ingest_commit
+from duelo.application.ports import ReviewStartError
+from duelo.domain.project import Project
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.project_repository import FakeProjectRepository
 from tests.fakes.review_starter import FakeReviewStarter

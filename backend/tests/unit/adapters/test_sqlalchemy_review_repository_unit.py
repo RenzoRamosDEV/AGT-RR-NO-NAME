@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-from review_arena.domain.events import ReviewCompleted
-from review_arena.domain.review import Review, ReviewResult
+from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.domain.events import ReviewCompleted
+from duelo.domain.review import Review, ReviewResult
 
 
 def _make_review(change_id, agent: str = "agent_1") -> Review:

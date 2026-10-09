@@ -3,15 +3,15 @@ services:
     image: docker.io/library/postgres:16-alpine
     profiles: ["infra"]
     environment:
-      POSTGRES_USER: review_arena
-      POSTGRES_PASSWORD: review_arena
-      POSTGRES_DB: review_arena
+      POSTGRES_USER: duelo
+      POSTGRES_PASSWORD: duelo
+      POSTGRES_DB: duelo
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U review_arena"]
+      test: ["CMD-SHELL", "pg_isready -U duelo"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,8 +25,8 @@ services:
     environment:
       DB: postgres12
       DB_PORT: 5432
-      POSTGRES_USER: review_arena
-      POSTGRES_PWD: review_arena
+      POSTGRES_USER: duelo
+      POSTGRES_PWD: duelo
       POSTGRES_SEEDS: postgres
     ports:
       - "7233:7233"
@@ -47,7 +47,7 @@ services:
       context: ./backend
     profiles: ["app"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://review_arena:review_arena@postgres:5432/review_arena
+      DATABASE_URL: postgresql+asyncpg://duelo:duelo@postgres:5432/duelo
       TEMPORAL_ADDRESS: temporal:7233
       # Solo desarrollo local; en cualquier otro entorno se define INGEST_TOKEN de verdad.
       INGEST_TOKEN: ${INGEST_TOKEN:-dev-ingest-token}

@@ -8,12 +8,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
-from review_arena.adapters.persistence.models import ReviewModel
-from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-from review_arena.application.ingest_change import ingest_change
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.workflows.activities import ReviewActivities
+from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from duelo.adapters.persistence.models import ReviewModel
+from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.application.ingest_change import ingest_change
+from duelo.domain.change import Change, ChangeKind
+from duelo.workflows.activities import ReviewActivities
 from tests.integration.conftest import create_project
 
 

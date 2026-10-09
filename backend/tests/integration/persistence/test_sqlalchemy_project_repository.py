@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from review_arena.adapters.persistence.project_repository import SqlAlchemyProjectRepository
+from duelo.adapters.persistence.project_repository import SqlAlchemyProjectRepository
 from tests.integration.conftest import create_project
 
 

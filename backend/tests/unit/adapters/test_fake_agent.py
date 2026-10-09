@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.adapters.agents.fake import FakeAgent
-from review_arena.domain.change import Change, ChangeKind
+from duelo.adapters.agents.fake import FakeAgent
+from duelo.domain.change import Change, ChangeKind
 
 
 def _make_change() -> Change:

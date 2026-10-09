@@ -14,7 +14,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from review_arena.domain.change import (
+from duelo.domain.change import (
     MAX_AUTHOR,
     MAX_HEAD_SHA,
     MAX_REF,
@@ -23,8 +23,8 @@ from review_arena.domain.change import (
     Change,
     ChangeKind,
 )
-from review_arena.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
-from review_arena.domain.review import MAX_AGENT, Review, ReviewResult, ReviewStatus
+from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from duelo.domain.review import MAX_AGENT, Review, ReviewResult, ReviewStatus
 
 NO_NUL = st.characters(blacklist_characters="\x00")
 CREATED_AT = datetime(2026, 1, 1, tzinfo=UTC)

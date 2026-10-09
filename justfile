@@ -20,7 +20,7 @@ migrate:
 
 # Worker de desarrollo (task queues platform y agents, con FakeAgent) contra la infra local
 worker:
-    cd backend && uv run python -m review_arena.worker
+    cd backend && uv run python -m duelo.worker
 
 # Regenera el snapshot del contrato (docs/openapi.json) tras un cambio deliberado de la API
 openapi:
@@ -61,7 +61,7 @@ test:
         export TESTCONTAINERS_RYUK_DISABLED=true
     fi
     uv run pytest
-    core="src/review_arena/domain/*,src/review_arena/application/*"
+    core="src/duelo/domain/*,src/duelo/application/*"
     echo "cobertura (líneas+ramas): global $(uv run coverage report --format=total)% (mín {{cov_min}}%)," \
          "domain+application $(uv run coverage report --include="$core" --format=total)% (mín {{cov_core_min}}%)"
     uv run coverage report --fail-under={{cov_min}} >/dev/null \

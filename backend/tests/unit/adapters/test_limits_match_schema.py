@@ -2,8 +2,8 @@
 
 import pytest
 
-from review_arena.adapters.persistence.models import ChangeModel, ReviewModel
-from review_arena.domain import change, review
+from duelo.adapters.persistence.models import ChangeModel, ReviewModel
+from duelo.domain import change, review
 
 
 @pytest.mark.parametrize(

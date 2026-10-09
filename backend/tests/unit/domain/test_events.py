@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from review_arena.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
 
 
 def test_change_created_payload_keeps_all_fields() -> None:

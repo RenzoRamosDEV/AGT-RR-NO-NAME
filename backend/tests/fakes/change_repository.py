@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from review_arena.domain.change import Change
-from review_arena.domain.events import ChangeCreated
+from duelo.domain.change import Change
+from duelo.domain.events import ChangeCreated
 
 
 class FakeChangeRepository:

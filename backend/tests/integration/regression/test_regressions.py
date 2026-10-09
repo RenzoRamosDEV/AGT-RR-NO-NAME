@@ -18,9 +18,9 @@ from temporalio.converter import DataConverter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from review_arena.adapters.agents.fake import FakeAgent
-from review_arena.workflows.dto import ReviewChangeInput, RunReviewInput
-from review_arena.workflows.review_change import ReviewChangeWorkflow
+from duelo.adapters.agents.fake import FakeAgent
+from duelo.workflows.dto import ReviewChangeInput, RunReviewInput
+from duelo.workflows.review_change import ReviewChangeWorkflow
 from tests.integration.helpers import make_activities, persist_change, reviews_for
 
 pytestmark = pytest.mark.regression
@@ -111,12 +111,12 @@ async def test_regression_stored_status_values_are_the_stable_strings(
 ) -> None:
     """Pasar `status` a enums de dominio no debe cambiar lo guardado: los valores en la tabla
     siguen siendo 'pending', 'completed' y 'failed' (sin migración)."""
-    from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-    from review_arena.application.record_review import (
+    from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+    from duelo.application.record_review import (
         record_review_failure,
         record_review_success,
     )
-    from review_arena.domain.review import ReviewResult
+    from duelo.domain.review import ReviewResult
 
     change = await persist_change(session_factory, "c" * 40)
     async with session_factory() as session:

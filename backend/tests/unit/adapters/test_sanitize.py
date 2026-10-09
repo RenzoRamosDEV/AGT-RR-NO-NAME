@@ -3,7 +3,7 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-from review_arena.adapters.persistence.sanitize import sanitize_json, sanitize_text
+from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
 
 NUL = "\x00"
 REPLACEMENT = "�"

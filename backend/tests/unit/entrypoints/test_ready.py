@@ -62,7 +62,7 @@ async def test_ready_names_every_failing_dependency() -> None:
 async def test_a_dependency_that_hangs_counts_as_down(monkeypatch) -> None:
     import asyncio
 
-    from review_arena.entrypoints.api.routers import health
+    from duelo.entrypoints.api.routers import health
 
     monkeypatch.setattr(health, "READY_TIMEOUT_SECONDS", 0.05)
 

@@ -29,9 +29,9 @@ afterEach(() => vi.restoreAllMocks());
 describe("navigation", () => {
   it("redirects / to the first project channel and marks it active", () => {
     renderAt("/");
-    expect(screen.getByRole("heading", { name: "#review-arena" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "#duelo" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).getByRole("link", { name: /review-arena/ })).toHaveClass("active");
+    expect(within(nav).getByRole("link", { name: /duelo/ })).toHaveClass("active");
   });
 
   it("navigates to stats and settings from the sidebar", async () => {
@@ -44,9 +44,9 @@ describe("navigation", () => {
   });
 
   it("reaches interactive controls in order with Tab", async () => {
-    renderAt("/p/review-arena");
+    renderAt("/p/duelo");
     await userEvent.tab();
-    expect(screen.getByRole("link", { name: /review-arena/ })).toHaveFocus();
+    expect(screen.getByRole("link", { name: /duelo/ })).toHaveFocus();
     await userEvent.tab();
     expect(screen.getByRole("link", { name: /demo-api/ })).toHaveFocus();
   });
@@ -54,7 +54,7 @@ describe("navigation", () => {
 
 describe("channel threads", () => {
   it("expands replies with the keyboard and toggles aria-expanded", async () => {
-    renderAt("/p/review-arena");
+    renderAt("/p/duelo");
     const [toggle] = screen.getAllByRole("button", { name: "Ver respuestas" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     toggle.focus();
@@ -65,7 +65,7 @@ describe("channel threads", () => {
   });
 
   it("filters by kind", async () => {
-    renderAt("/p/review-arena");
+    renderAt("/p/duelo");
     expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "PRs" }));
     expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1);
@@ -75,7 +75,7 @@ describe("channel threads", () => {
 describe("review states", () => {
   it("shows thinking indicator and beam for a running review", () => {
     setReducedMotion(false);
-    const { container } = renderAt("/p/review-arena/changes/c1");
+    const { container } = renderAt("/p/duelo/changes/c1");
     expect(screen.getByText("En curso")).toBeInTheDocument();
     expect(screen.getByText("Codex está revisando…")).toBeInTheDocument();
     expect(container.querySelector('[data-status="running"]')).not.toBeNull();
@@ -83,14 +83,14 @@ describe("review states", () => {
   });
 
   it("shows failed state as text without thinking indicator", () => {
-    renderAt("/p/review-arena/changes/c2");
+    renderAt("/p/duelo/changes/c2");
     expect(screen.getByText("Fallida")).toBeInTheDocument();
     expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("falls back to a static indicator with reduced motion", () => {
     setReducedMotion(true);
-    const { container } = renderAt("/p/review-arena/changes/c1");
+    const { container } = renderAt("/p/duelo/changes/c1");
     expect(screen.getByText("Codex está revisando…")).toBeInTheDocument();
     expect(container.querySelector("canvas")).toBeNull();
     expect(container.querySelector("[data-beam-bloom]")).toBeNull();
@@ -99,7 +99,7 @@ describe("review states", () => {
 
 describe("other screens", () => {
   it("renders the change detail with diff and both reviews", () => {
-    renderAt("/p/review-arena/changes/c1");
+    renderAt("/p/duelo/changes/c1");
     expect(screen.getByLabelText("Diff")).toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(2);
   });

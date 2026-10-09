@@ -37,8 +37,8 @@ const DIFF = `@@ src/ingest.py
 
 export const projects: Project[] = [
   {
-    slug: "review-arena",
-    name: "review-arena",
+    slug: "duelo",
+    name: "duelo",
     changes: [
       {
         id: "c1",

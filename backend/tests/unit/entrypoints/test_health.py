@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from review_arena.entrypoints.api.app import create_app
+from duelo.entrypoints.api.app import create_app
 
 
 @pytest.fixture

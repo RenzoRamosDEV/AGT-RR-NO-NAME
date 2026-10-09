@@ -6,11 +6,11 @@ from uuid import uuid4
 
 from sqlalchemy.dialects import postgresql
 
-from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
-from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.events import ChangeCreated, ReviewCompleted
-from review_arena.domain.review import Finding, Review, ReviewResult
+from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.events import ChangeCreated, ReviewCompleted
+from duelo.domain.review import Finding, Review, ReviewResult
 
 NUL = "\x00"
 
@@ -99,7 +99,7 @@ async def test_review_repository_sanitizes_the_error_of_a_failed_review() -> Non
         duration_ms=None,
         created_at=datetime.now(UTC),
     )
-    from review_arena.domain.events import ReviewFailed
+    from duelo.domain.events import ReviewFailed
 
     event = ReviewFailed(review.id, review.change_id, uuid4(), "agent_2", "boom")
     session = _session(first_result_scalar=review.id)

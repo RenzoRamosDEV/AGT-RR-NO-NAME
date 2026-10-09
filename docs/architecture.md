@@ -7,7 +7,7 @@ adaptador detrás de un puerto. Hoy existe un solo puerto implementado,
 `ChangeRepository` (ver `change-ingestion` más abajo); `ReviewAgent`, `CodeHost` y
 `EventPublisher` llegarán cuando los changes que los necesiten los introduzcan - no se
 diseñan por adelantado. El detalle completo del producto final está en
-[`docs/spec/review-arena.md`](spec/review-arena.md).
+[`docs/spec/duelo.md`](spec/duelo.md).
 
 Este documento indexa las decisiones arquitectónicas registradas como ADR y las
 capacidades activas (specs) a medida que se toman/implementan, en vez de repetir aquí lo
@@ -46,7 +46,7 @@ domain  <-  application  <-  adapters / entrypoints / workflows
 ```
 
 La única pieza que conoce a la vez `entrypoints`, `adapters` y `workflows` es la raíz de
-composición (`review_arena/composition.py` para la API y `review_arena/worker.py` para el
+composición (`duelo/composition.py` para la API y `duelo/worker.py` para el
 worker de desarrollo); queda fuera de las capas a propósito.
 
 Enforzada por `import-linter` (`backend/pyproject.toml`, sección

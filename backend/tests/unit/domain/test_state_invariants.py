@@ -11,8 +11,8 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.change import Change, ChangeKind, ChangeStatus
-from review_arena.domain.review import Finding, Review, ReviewResult, ReviewStatus
+from duelo.domain.change import Change, ChangeKind, ChangeStatus
+from duelo.domain.review import Finding, Review, ReviewResult, ReviewStatus
 
 
 def _succeeded() -> Review:

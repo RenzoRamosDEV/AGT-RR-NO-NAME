@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from review_arena.application.ports import ReviewStartError
-from review_arena.domain.change import Change
+from duelo.application.ports import ReviewStartError
+from duelo.domain.change import Change
 
 
 class FakeReviewStarter:

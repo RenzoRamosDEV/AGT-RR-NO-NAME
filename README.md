@@ -1,9 +1,9 @@
-# Review Arena
+# Duelo
 
 Web donde cada repo vigilado es un canal al estilo Slack: cada commit o PR dispara una
 review en paralelo de Claude Code y Codex, votas a ciegas cuál fue más útil, y un
 dashboard compara agentes con datos propios. Ver el spec completo en
-[`docs/spec/review-arena.md`](docs/spec/review-arena.md) y las decisiones de arquitectura
+[`docs/spec/duelo.md`](docs/spec/duelo.md) y las decisiones de arquitectura
 en [`docs/adr/`](docs/adr/).
 
 El proyecto se construye de forma incremental con [OpenSpec](https://openspec.dev/):
@@ -38,7 +38,7 @@ just dev                                  # infra + API (usa INGEST_TOKEN)
 just migrate                              # esquema de la base de datos
 just worker                               # worker con FakeAgent (otra terminal)
 # un proyecto de prueba (la creación por API llega con el slice de Project):
-podman exec -i <contenedor-postgres> psql -U review_arena -c \
+podman exec -i <contenedor-postgres> psql -U duelo -c \
   "insert into projects(id, slug) values (gen_random_uuid(), 'demo/repo')"
 curl -i -X POST localhost:8000/ingest/commit \
   -H "X-Ingest-Token: $INGEST_TOKEN" -H 'content-type: application/json' \

@@ -1,6 +1,6 @@
 ---
 name: temporal-review
-description: Revisa código de Temporal (workflows, activities, workers, DTOs, task queues, timeouts y reintentos) - determinismo y replay, versionado de workflows en vuelo, heartbeats, política de reintentos, idempotencia y compatibilidad de DTOs. Úsalo al tocar backend/src/review_arena/workflows/, worker.py, adaptadores de orquestación o tests de workflows, o cuando pregunten "¿es seguro este cambio en el workflow?".
+description: Revisa código de Temporal (workflows, activities, workers, DTOs, task queues, timeouts y reintentos) - determinismo y replay, versionado de workflows en vuelo, heartbeats, política de reintentos, idempotencia y compatibilidad de DTOs. Úsalo al tocar backend/src/duelo/workflows/, worker.py, adaptadores de orquestación o tests de workflows, o cuando pregunten "¿es seguro este cambio en el workflow?".
 allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git show:*), Bash(uv run pytest:*), Bash(just test-integration:*)
 ---
 

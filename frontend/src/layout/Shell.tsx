@@ -7,7 +7,7 @@ export function Shell() {
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Principal">
-        <div className="brand">Review Arena</div>
+        <div className="brand">Duelo</div>
         <div className="nav-group">
           <div className="nav-title">Proyectos</div>
           {projects.map((p) => (

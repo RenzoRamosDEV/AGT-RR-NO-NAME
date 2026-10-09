@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from review_arena.domain.events import ReviewCompleted, ReviewFailed
-from review_arena.domain.review import Review
+from duelo.domain.events import ReviewCompleted, ReviewFailed
+from duelo.domain.review import Review
 
 
 class FakeReviewRepository:

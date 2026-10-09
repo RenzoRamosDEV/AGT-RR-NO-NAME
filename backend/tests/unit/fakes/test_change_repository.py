@@ -1,7 +1,7 @@
 from uuid import uuid4
 
-from review_arena.application.ingest_change import ingest_change
-from review_arena.domain.change import ChangeKind
+from duelo.application.ingest_change import ingest_change
+from duelo.domain.change import ChangeKind
 from tests.fakes.change_repository import FakeChangeRepository
 
 

@@ -18,7 +18,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from review_arena.adapters.persistence.models import Base
+from duelo.adapters.persistence.models import Base
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 EXPECTED_TABLES = {"projects", "changes", "events", "reviews"}

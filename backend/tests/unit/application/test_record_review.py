@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from review_arena.application.record_review import record_review_failure, record_review_success
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.review import Finding, ReviewResult
+from duelo.application.record_review import record_review_failure, record_review_success
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.review import Finding, ReviewResult
 from tests.fakes.review_repository import FakeReviewRepository
 
 

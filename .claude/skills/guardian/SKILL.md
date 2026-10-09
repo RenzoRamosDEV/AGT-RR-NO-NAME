@@ -1,6 +1,6 @@
 ---
 name: guardian
-description: Lanza una revisión completa con el agente code-guardian sobre un commit, rango, rama, Pull Request o ruta, en un contexto aislado, y devuelve solo el informe (estado, hallazgos por dificultad y resumen). Úsalo con /guardian para revisar el último commit, "/guardian HEAD~3..HEAD", "/guardian 42" (PR) o "/guardian backend/src/review_arena/application".
+description: Lanza una revisión completa con el agente code-guardian sobre un commit, rango, rama, Pull Request o ruta, en un contexto aislado, y devuelve solo el informe (estado, hallazgos por dificultad y resumen). Úsalo con /guardian para revisar el último commit, "/guardian HEAD~3..HEAD", "/guardian 42" (PR) o "/guardian backend/src/duelo/application".
 argument-hint: "[commit | rango | nº de PR | ruta]"
 disable-model-invocation: true
 context: fork

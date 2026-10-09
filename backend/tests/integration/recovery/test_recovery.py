@@ -21,13 +21,13 @@ from temporalio.exceptions import ActivityError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from review_arena.adapters.agents.fake import FakeAgent
-from review_arena.adapters.persistence.models import EventModel
-from review_arena.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-from review_arena.domain.events import ReviewCompleted, ReviewFailed
-from review_arena.domain.review import Review
-from review_arena.workflows.dto import ReviewChangeInput
-from review_arena.workflows.review_change import ReviewChangeWorkflow
+from duelo.adapters.agents.fake import FakeAgent
+from duelo.adapters.persistence.models import EventModel
+from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.domain.events import ReviewCompleted, ReviewFailed
+from duelo.domain.review import Review
+from duelo.workflows.dto import ReviewChangeInput
+from duelo.workflows.review_change import ReviewChangeWorkflow
 from tests.integration.helpers import make_activities, persist_change, reviews_for
 
 

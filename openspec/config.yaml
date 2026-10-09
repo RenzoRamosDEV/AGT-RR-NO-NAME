@@ -1,10 +1,10 @@
 schema: spec-driven
 
 context: |
-  Project: "Review Arena" (provisional name) - a portfolio project. A web app where every
+  Project: "Duelo" - a portfolio project. A web app where every
   tracked repo is a Slack-style channel; each commit/PR triggers Claude Code and Codex to
   review it in parallel, the user votes blind on which review was more useful, and a
-  dashboard compares agents. Full spec lives at docs/spec/review-arena.md - read it for
+  dashboard compares agents. Full spec lives at docs/spec/duelo.md - read it for
   details beyond this summary; this context only lists what an agent cannot infer by
   reading code.
 
@@ -12,7 +12,7 @@ context: |
   project's documentation language. Code identifiers, comments, and commit messages stay
   in English as usual.
 
-  Delivery is phased per docs/spec/review-arena.md's "Plan de implementacion" (7 phases,
+  Delivery is phased per docs/spec/duelo.md's "Plan de implementacion" (7 phases,
   Fase 0 to Fase 6). Each OpenSpec change should scope to one phase (or a coherent slice
   of one) rather than the whole system at once, and should follow that phase's
   "Hecho cuando" (done-when) criterion as its acceptance bar. Do not jump ahead to a later
@@ -55,7 +55,7 @@ context: |
     scores, promptfoo for the offline benchmark (run manually or via a weekly Temporal
     Schedule, never in CI, to avoid burning the agents' subscription usage).
 
-  Repo layout is a monorepo: backend/ (hexagonal src/review_arena/{domain,application,
+  Repo layout is a monorepo: backend/ (hexagonal src/duelo/{domain,application,
   adapters,workflows,entrypoints}), frontend/ (feature-organized src/features/*), e2e/
   (Playwright with FakeAgent), benchmark/ (promptfoo), prompts/review/v{n}.md (versioned
   agent prompts), docs/adr/ (one ADR per significant decision), scripts/install-hook.sh.
@@ -87,4 +87,4 @@ operations:
   archive:
     guidance:
       - Summarize the archive outcome before finishing, and note which phase of
-        docs/spec/review-arena.md it closes out.
+        docs/spec/duelo.md it closes out.

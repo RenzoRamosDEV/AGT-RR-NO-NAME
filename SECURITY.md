@@ -1,6 +1,6 @@
 # Seguridad
 
-Review Arena es un proyecto personal de portafolio que corre en local; no hay
+Duelo es un proyecto personal de portafolio que corre en local; no hay
 multi-usuario ni datos de terceros en juego. Aun así:
 
 - **Secretos**: nunca van en el repo. `gitleaks` corre en pre-commit y en CI

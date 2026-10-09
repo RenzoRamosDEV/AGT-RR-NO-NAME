@@ -1,8 +1,8 @@
 """Resolución de la URL de base de datos (12-factor: DATABASE_URL manda)."""
 
-from review_arena.adapters.persistence.db import create_engine, get_database_url
+from duelo.adapters.persistence.db import create_engine, get_database_url
 
-DEFAULT_URL = "postgresql+asyncpg://review_arena:review_arena@localhost:5432/review_arena"
+DEFAULT_URL = "postgresql+asyncpg://duelo:duelo@localhost:5432/duelo"
 
 
 def test_database_url_defaults_to_the_local_docker_compose_postgres(monkeypatch) -> None:

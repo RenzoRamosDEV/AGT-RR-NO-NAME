@@ -10,10 +10,10 @@ from uuid import UUID, uuid4
 from hypothesis import given
 from hypothesis import strategies as st
 
-from review_arena.application.ingest_change import ingest_change
-from review_arena.application.record_review import record_review_success
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.review import ReviewResult
+from duelo.application.ingest_change import ingest_change
+from duelo.application.record_review import record_review_success
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.review import ReviewResult
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.review_repository import FakeReviewRepository
 

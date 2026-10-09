@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.change import Change, ChangeKind, ChangeStatus
+from duelo.domain.change import Change, ChangeKind, ChangeStatus
 
 
 def test_new_change_is_valid() -> None:

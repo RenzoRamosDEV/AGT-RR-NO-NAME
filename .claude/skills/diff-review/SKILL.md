@@ -33,7 +33,7 @@ juzga el cambio.
 | Código duplicado, funciones largas, renombrados | `safe-refactoring` |
 | `pyproject.toml`, `uv.lock`, `package.json`, `Dockerfile`, `docker-compose.yml`, `.github/`, `justfile`, variables de entorno | `dependency-and-config-audit` |
 | `alembic/`, `models.py`, routers, schemas, `docs/openapi.json` | `data-and-api-contracts` |
-| `backend/src/review_arena/workflows/`, `worker.py`, adaptadores de orquestación, DTOs de workflow | `temporal-review` |
+| `backend/src/duelo/workflows/`, `worker.py`, adaptadores de orquestación, DTOs de workflow | `temporal-review` |
 | `frontend/`, `*.tsx`, estilos, config de Vite/TS/Biome | `frontend-review` |
 | Siempre | `change-hygiene` (commit, OpenSpec) y `finding-verification` + `review-report` |
 

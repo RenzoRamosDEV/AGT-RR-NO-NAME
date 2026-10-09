@@ -9,7 +9,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from review_arena.adapters.persistence.models import Base
+from duelo.adapters.persistence.models import Base
 
 config = context.config
 
@@ -24,7 +24,7 @@ target_metadata = Base.metadata
 def get_url() -> str:
     return os.environ.get(
         "DATABASE_URL",
-        "postgresql+asyncpg://review_arena:review_arena@localhost:5432/review_arena",
+        "postgresql+asyncpg://duelo:duelo@localhost:5432/duelo",
     )
 
 

@@ -3,8 +3,8 @@ import logging
 import httpx
 import pytest
 
-from review_arena.domain.change import MAX_HEAD_SHA, MAX_REF, MAX_URL
-from review_arena.entrypoints.api import auth
+from duelo.domain.change import MAX_HEAD_SHA, MAX_REF, MAX_URL
+from duelo.entrypoints.api import auth
 from tests.fakes.api import TOKEN, FakeApi, build_fake_api, valid_body
 from tests.fakes.review_starter import FakeReviewStarter
 

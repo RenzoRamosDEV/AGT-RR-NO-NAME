@@ -1,7 +1,7 @@
 [project]
-name = "review-arena"
+name = "duelo"
 version = "0.1.0"
-description = "Review Arena backend - hexagonal monolith (API, platform worker, agents worker)"
+description = "Duelo backend - hexagonal monolith (API, platform worker, agents worker)"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -34,15 +34,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/review_arena"]
+packages = ["src/duelo"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=review_arena --cov-branch --cov-report=term-missing"
+addopts = "--cov=duelo --cov-branch --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["src/review_arena"]
+source = ["src/duelo"]
 branch = true
 
 [tool.ruff]
@@ -62,22 +62,22 @@ known-third-party = ["alembic"]
 python_version = "3.12"
 strict = true
 mypy_path = "src"
-packages = ["review_arena"]
+packages = ["duelo"]
 
 [tool.importlinter]
-root_package = "review_arena"
+root_package = "duelo"
 
 [[tool.importlinter.contracts]]
 name = "Hexagonal layering: domain <- application <- adapters/entrypoints/workflows"
 type = "layers"
 layers = [
-    "review_arena.entrypoints | review_arena.adapters | review_arena.workflows",
-    "review_arena.application",
-    "review_arena.domain",
+    "duelo.entrypoints | duelo.adapters | duelo.workflows",
+    "duelo.application",
+    "duelo.domain",
 ]
 
 [tool.mutmut]
 # Solo domain/ y application/: son puros y sus tests no necesitan contenedores.
-source_paths = ["src/review_arena/domain/", "src/review_arena/application/"]
+source_paths = ["src/duelo/domain/", "src/duelo/application/"]
 pytest_add_cli_args_test_selection = ["tests/unit/domain", "tests/unit/application"]
 pytest_add_cli_args = ["-p", "no:cacheprovider", "--no-cov"]

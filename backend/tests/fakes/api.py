@@ -7,12 +7,12 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 
-from review_arena.application.ingest_commit import CommitSubmission, ingest_commit
-from review_arena.config import Settings
-from review_arena.domain.change import Change
-from review_arena.domain.project import Project
-from review_arena.entrypoints.api.app import create_app
-from review_arena.entrypoints.api.dependencies import ApiDependencies, Check
+from duelo.application.ingest_commit import CommitSubmission, ingest_commit
+from duelo.config import Settings
+from duelo.domain.change import Change
+from duelo.domain.project import Project
+from duelo.entrypoints.api.app import create_app
+from duelo.entrypoints.api.dependencies import ApiDependencies, Check
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.project_repository import FakeProjectRepository
 from tests.fakes.review_starter import FakeReviewStarter

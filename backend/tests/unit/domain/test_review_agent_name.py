@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.review import MAX_AGENT, Review, ReviewResult
+from duelo.domain.review import MAX_AGENT, Review, ReviewResult
 
 
 def _succeeded(agent: str) -> Review:

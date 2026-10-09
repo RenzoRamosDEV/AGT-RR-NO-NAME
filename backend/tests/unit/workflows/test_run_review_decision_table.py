@@ -18,12 +18,12 @@ from uuid import uuid4
 import pytest
 from temporalio.exceptions import ApplicationError
 
-from review_arena.adapters.agents.fake import FakeAgent
-from review_arena.application.ingest_change import ingest_change
-from review_arena.domain.change import ChangeKind
-from review_arena.domain.events import ReviewCompleted, ReviewFailed
-from review_arena.workflows.activities import ReviewActivities
-from review_arena.workflows.dto import RunReviewInput
+from duelo.adapters.agents.fake import FakeAgent
+from duelo.application.ingest_change import ingest_change
+from duelo.domain.change import ChangeKind
+from duelo.domain.events import ReviewCompleted, ReviewFailed
+from duelo.workflows.activities import ReviewActivities
+from duelo.workflows.dto import RunReviewInput
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.review_repository import FakeReviewRepository
 from tests.fakes.session import FakeSessionFactory

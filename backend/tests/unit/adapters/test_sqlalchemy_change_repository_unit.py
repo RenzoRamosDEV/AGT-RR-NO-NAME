@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from review_arena.adapters.persistence.change_repository import SqlAlchemyChangeRepository
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.events import ChangeCreated
+from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.events import ChangeCreated
 
 
 def _make_change(project_id, head_sha: str = "a" * 40) -> Change:

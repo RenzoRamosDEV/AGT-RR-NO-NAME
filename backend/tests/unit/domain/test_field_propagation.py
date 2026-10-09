@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.review import Finding, Review, ReviewResult
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.review import Finding, Review, ReviewResult
 
 CREATED_AT = datetime(2026, 10, 9, 12, 30, 45, tzinfo=UTC)
 

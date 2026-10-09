@@ -22,8 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from temporalio.testing import WorkflowEnvironment
 from testcontainers.community.postgres import PostgresContainer
 
-from review_arena.adapters.persistence.db import create_engine, create_session_factory
-from review_arena.adapters.persistence.models import ProjectModel
+from duelo.adapters.persistence.db import create_engine, create_session_factory
+from duelo.adapters.persistence.models import ProjectModel
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 

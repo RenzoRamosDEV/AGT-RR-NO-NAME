@@ -8,13 +8,13 @@ from temporalio.client import WorkflowFailureError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from review_arena.adapters.agents.fake import FakeAgent
-from review_arena.adapters.orchestration.temporal_client import LazyTemporalClient
-from review_arena.adapters.orchestration.temporal_review_starter import TemporalReviewStarter
-from review_arena.application.ports import ReviewStartError
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.workflows.review_change import ReviewChangeWorkflow
-from review_arena.workflows.review_commit import ReviewCommitWorkflow
+from duelo.adapters.agents.fake import FakeAgent
+from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
+from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter
+from duelo.application.ports import ReviewStartError
+from duelo.domain.change import Change, ChangeKind
+from duelo.workflows.review_change import ReviewChangeWorkflow
+from duelo.workflows.review_commit import ReviewCommitWorkflow
 from tests.integration.helpers import make_activities, persist_change
 
 

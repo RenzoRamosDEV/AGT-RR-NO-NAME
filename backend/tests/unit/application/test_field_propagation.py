@@ -3,11 +3,11 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from review_arena.application.ingest_change import ingest_change
-from review_arena.application.record_review import record_review_failure, record_review_success
-from review_arena.domain.change import Change, ChangeKind
-from review_arena.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
-from review_arena.domain.review import Finding, ReviewResult
+from duelo.application.ingest_change import ingest_change
+from duelo.application.record_review import record_review_failure, record_review_success
+from duelo.domain.change import Change, ChangeKind
+from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from duelo.domain.review import Finding, ReviewResult
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.review_repository import FakeReviewRepository
 

@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from review_arena.domain.review import Finding, Review, ReviewResult, ReviewStatus
+from duelo.domain.review import Finding, Review, ReviewResult, ReviewStatus
 
 
 def test_succeeded_review_keeps_result_fields() -> None:

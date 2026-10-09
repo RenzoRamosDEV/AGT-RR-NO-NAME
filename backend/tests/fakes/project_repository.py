@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from review_arena.domain.project import Project
+from duelo.domain.project import Project
 
 
 class FakeProjectRepository:

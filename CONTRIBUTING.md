@@ -26,7 +26,7 @@ Usa catorce skills (`.claude/skills/`): las de análisis (`bug-detection`, `secu
 /guardian                    # último commit de la rama
 /guardian HEAD~3..HEAD       # un rango
 /guardian 42                 # un Pull Request
-/guardian backend/src/review_arena/application
+/guardian backend/src/duelo/application
 ```
 
 Úsalo antes de cada push y de abrir un PR. Propone, no edita: no tiene `Edit`/`Write` y un
@@ -38,7 +38,7 @@ confirmado bloquea.
 
 ## Antes de tocar código
 
-1. Lee `docs/spec/review-arena.md` (spec completo) y `openspec/specs/`
+1. Lee `docs/spec/duelo.md` (spec completo) y `openspec/specs/`
    (comportamiento ya activo del sistema).
 2. El trabajo se planifica con [OpenSpec](https://openspec.dev/): cada change
    vive en `openspec/changes/<nombre>/` con `proposal.md`, `design.md`,

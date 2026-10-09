@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from review_arena.config import Settings, WorkerSettings
+from duelo.config import Settings, WorkerSettings
 
 
 def test_defaults_for_everything_but_the_token(monkeypatch: pytest.MonkeyPatch) -> None:
