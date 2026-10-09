@@ -82,8 +82,11 @@ curl -X DELETE localhost:8001/projects/owner/repo -H "X-Ingest-Token: $INGEST_TO
 Los hooks no bloquean ni retrasan `git commit` ni `git push` (envían en segundo plano y salen con
 código 0 aunque la API esté caída) y respetan tus propios hooks: Duelo solo añade un bloque entre
 `# >>> duelo >>>` y `# <<< duelo <<<`, que la baja retira. El token se guarda en
-`~/.config/duelo/hook.env` (0600), nunca en el repo. Quien tenga el token puede hacer que la API
-escriba hooks en tus repos: no actives esto en un servidor compartido ni expongas la API.
+`~/.config/duelo/hook.env` (0600, o en `HOOK_ENV_PATH`), nunca en el repo. Los hooks leen la URL y
+el token **solo de ese fichero**: un `INGEST_URL=... git commit` del entorno se ignora. Si la baja no
+puede quitar los hooks (p. ej. `.git/hooks` sin permiso de escritura) responde 409 y conserva el
+proyecto para repetirla. Quien tenga el token puede hacer que la API escriba hooks en tus repos: no
+actives esto en un servidor compartido ni expongas la API.
 
 Cada respuesta lleva `X-Request-ID` (se propaga el entrante si es válido) y la API escribe un
 access log JSON por petición en stdout, sin query, cuerpo ni tokens.
@@ -107,3 +110,7 @@ access log JSON por petición en stdout, sin query, cuerpo ni tokens.
 Monorepo con arquitectura hexagonal en el backend (`domain` <- `application` <-
 `adapters`/`entrypoints`/`workflows`, validado por `import-linter`) y organización por
 funcionalidad en el frontend. Ver `docs/architecture.md` para el detalle.
+
+**Guía interactiva del flujo:** [`docs/flujo-duelo.html`](docs/flujo-duelo.html) explica de punta
+a punta cómo funciona Duelo (hook de git, API, Postgres, Temporal, workers y frontend) con un
+simulador animado y las limitaciones reales. Es un solo archivo: ábrelo en el navegador.
