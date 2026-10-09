@@ -10,8 +10,9 @@ from duelo.domain.change import Change
 
 
 class TemporalReviewStarter:
-    """Arranca `ReviewCommitWorkflow` con un workflow id determinista: arrancar dos veces el
-    mismo commit deja una sola ejecución (la segunda barrera de idempotencia)."""
+    """Arranca `ReviewCommitWorkflow` con un workflow id determinista (`{kind}-{proyecto}-{sha}`):
+    arrancar dos veces el mismo change deja una sola ejecución (la segunda barrera de
+    idempotencia) y un PR no se pisa con un commit del mismo sha."""
 
     def __init__(self, client: LazyTemporalClient, agent_names: list[str]) -> None:
         self._client = client
@@ -23,7 +24,7 @@ class TemporalReviewStarter:
             await client.start_workflow(
                 "ReviewCommitWorkflow",
                 ReviewCommitInput(change_id=str(change.id), agent_names=self._agent_names),
-                id=f"commit-{change.project_id}-{change.head_sha}",
+                id=f"{change.kind.value}-{change.project_id}-{change.head_sha}",
                 task_queue="platform",
                 # Una review completada no se relanza al reenviar el commit (gastaría a los
                 # agentes otra vez); una que falló o se canceló sí puede reintentarse.

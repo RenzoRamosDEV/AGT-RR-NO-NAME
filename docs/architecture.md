@@ -33,6 +33,10 @@ que ya está en el spec o en `openspec/specs/`.
   `POST /ingest/commit` autenticado con token de ingesta; persiste el commit y arranca su
   review sin duplicar trabajo; `GET /ready` comprueba Postgres y Temporal (Fase 2, cierre).
   Contrato OpenAPI en [`openapi.json`](openapi.json).
+- `change-queries` y `pr-ingestion` (change `round1-backend-api`): lecturas sin token
+  (`GET /projects`, `GET /projects/{slug}/changes` con cursor, `GET /changes/{id}`,
+  `GET /stats/agents`; ver la decisión sobre autenticación de lecturas en su `design.md`) y
+  `POST /ingest/pr` con la misma identidad idempotente que los commits.
 
 ## Calidad y tests
 

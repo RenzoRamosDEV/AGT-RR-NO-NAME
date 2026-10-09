@@ -9,3 +9,6 @@ class FakeProjectRepository:
 
     async def get_by_slug(self, slug: str) -> Project | None:
         return self._by_slug.get(slug)
+
+    async def list_all(self) -> list[Project]:
+        return sorted(self._by_slug.values(), key=lambda p: p.slug)

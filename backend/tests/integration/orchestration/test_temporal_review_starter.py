@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -18,10 +18,12 @@ from duelo.workflows.review_commit import ReviewCommitWorkflow
 from tests.integration.helpers import make_activities, persist_change
 
 
-def _change(head_sha: str = "a" * 40) -> Change:
+def _change(
+    head_sha: str = "a" * 40, kind: ChangeKind = ChangeKind.COMMIT, project_id: UUID | None = None
+) -> Change:
     return Change.new(
-        project_id=uuid4(),
-        kind=ChangeKind.COMMIT,
+        project_id=project_id or uuid4(),
+        kind=kind,
         ref="refs/heads/main",
         head_sha=head_sha,
         title="t",
@@ -71,6 +73,29 @@ async def test_different_commits_start_different_workflows(
         for c in (one, two)
     }
     assert len(ids) == 2
+
+
+async def test_a_pr_and_a_commit_with_the_same_sha_do_not_clash(
+    temporal_env: WorkflowEnvironment,
+) -> None:
+    starter = _starter(temporal_env)
+    project_id = uuid4()
+    commit = _change(project_id=project_id)
+    pr = _change(kind=ChangeKind.PR, project_id=project_id)
+
+    await starter.start(commit)
+    await starter.start(pr)
+
+    # El id del commit conserva su forma histórica; el del PR lleva su propio prefijo.
+    runs = {
+        kind: (
+            await temporal_env.client.get_workflow_handle(
+                f"{kind}-{project_id}-{commit.head_sha}"
+            ).describe()
+        ).run_id
+        for kind in ("commit", "pr")
+    }
+    assert runs["commit"] != runs["pr"]
 
 
 async def test_an_unreachable_temporal_becomes_review_start_error() -> None:

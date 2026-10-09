@@ -22,3 +22,10 @@ class SqlAlchemyProjectRepository:
                 await session.execute(select(ProjectModel).where(ProjectModel.slug == slug))
             ).scalar_one_or_none()
         return Project(id=row.id, slug=row.slug) if row is not None else None
+
+    async def list_all(self) -> list[Project]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.execute(select(ProjectModel).order_by(ProjectModel.slug))
+            ).scalars()
+            return [Project(id=row.id, slug=row.slug) for row in rows]

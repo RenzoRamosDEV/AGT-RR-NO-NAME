@@ -248,3 +248,104 @@ async def test_neither_the_token_nor_internals_leak_into_errors_or_logs(
         assert TOKEN not in response.text
         assert "Traceback" not in response.text and "FakeReviewStarter" not in response.text
     assert TOKEN not in caplog.text
+
+
+# --- POST /ingest/pr -------------------------------------------------------------------
+
+
+async def test_valid_pr_returns_202_and_is_stored_as_a_pr() -> None:
+    api = build_fake_api()
+
+    async with _client(api) as client:
+        response = await client.post(
+            "/ingest/pr", json=valid_body(ref="refs/pull/7/head"), headers=HEADERS
+        )
+
+    assert response.status_code == 202
+    (change,) = api.changes._by_id.values()
+    assert response.json() == {"change_id": str(change.id), "diff_truncated": False}
+    assert change.kind.value == "pr" and change.ref == "refs/pull/7/head"
+    assert api.starter.calls == 1
+
+
+async def test_resending_the_same_pr_returns_the_same_change() -> None:
+    api = build_fake_api()
+
+    async with _client(api) as client:
+        first = await client.post("/ingest/pr", json=valid_body(), headers=HEADERS)
+        second = await client.post("/ingest/pr", json=valid_body(), headers=HEADERS)
+
+    assert first.json()["change_id"] == second.json()["change_id"]
+    assert len(api.changes.persisted_events) == 1 and len(api.starter.started) == 1
+
+
+async def test_a_pr_and_a_commit_with_the_same_sha_are_two_changes() -> None:
+    api = build_fake_api()
+
+    async with _client(api) as client:
+        commit = await client.post("/ingest/commit", json=valid_body(), headers=HEADERS)
+        pr = await client.post("/ingest/pr", json=valid_body(), headers=HEADERS)
+
+    assert commit.json()["change_id"] != pr.json()["change_id"]
+    assert len(api.starter.started) == 2
+
+
+async def test_pr_without_a_valid_token_is_401_without_effects() -> None:
+    api = build_fake_api()
+
+    async with _client(api) as client:
+        missing = await client.post("/ingest/pr", json=valid_body())
+        wrong = await client.post(
+            "/ingest/pr", json=valid_body(), headers={"X-Ingest-Token": "otro"}
+        )
+
+    assert missing.status_code == wrong.status_code == 401
+    _no_effects(api)
+
+
+async def test_pr_for_an_unknown_project_is_404_without_effects() -> None:
+    api = build_fake_api()
+
+    async with _client(api) as client:
+        response = await client.post(
+            "/ingest/pr", json=valid_body(project="otro/repo"), headers=HEADERS
+        )
+
+    assert response.status_code == 404
+    _no_effects(api)
+
+
+async def test_pr_with_invalid_fields_is_422_without_effects() -> None:
+    api = build_fake_api()
+
+    async with _client(api) as client:
+        too_long = await client.post(
+            "/ingest/pr", json=valid_body(head_sha="a" * (MAX_HEAD_SHA + 1)), headers=HEADERS
+        )
+        nul = await client.post("/ingest/pr", json=valid_body(project="a\x00b"), headers=HEADERS)
+        extra = await client.post("/ingest/pr", json=valid_body(kind="commit"), headers=HEADERS)
+
+    assert too_long.status_code == nul.status_code == extra.status_code == 422
+    _no_effects(api)
+
+
+async def test_pr_with_temporal_down_is_503_and_a_retry_starts_the_review() -> None:
+    api = build_fake_api(starter=FakeReviewStarter(fail=True))
+
+    async with _client(api) as client:
+        down = await client.post("/ingest/pr", json=valid_body(), headers=HEADERS)
+        api.starter.fail = False
+        retry = await client.post("/ingest/pr", json=valid_body(), headers=HEADERS)
+
+    assert down.status_code == 503 and retry.status_code == 202
+    assert len(api.changes.persisted_events) == 1 and len(api.starter.started) == 1
+
+
+async def test_pr_diff_is_truncated_like_a_commit_diff() -> None:
+    api = build_fake_api(max_diff_chars=10)
+
+    async with _client(api) as client:
+        response = await client.post("/ingest/pr", json=valid_body(diff="x" * 50), headers=HEADERS)
+
+    assert response.json()["diff_truncated"] is True
+    assert next(iter(api.changes._by_id.values())).diff == "x" * 10

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from duelo.domain.change import Change
+from duelo.application.read_models import ChangeCursor, ChangeSummary
+from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated
 
 
@@ -27,3 +28,37 @@ class FakeChangeRepository:
 
     async def get(self, change_id: UUID) -> Change | None:
         return self._by_id.get(change_id)
+
+    async def list_for_project(
+        self,
+        project_id: UUID,
+        *,
+        kind: ChangeKind | None,
+        limit: int,
+        after: ChangeCursor | None,
+    ) -> list[ChangeSummary]:
+        rows = [
+            c
+            for c in self._by_id.values()
+            if c.project_id == project_id and (kind is None or c.kind == kind)
+        ]
+        rows.sort(key=lambda c: (c.created_at, c.id), reverse=True)
+        if after is not None:
+            rows = [c for c in rows if (c.created_at, c.id) < (after.created_at, after.id)]
+        return [
+            ChangeSummary(
+                id=c.id,
+                project_id=c.project_id,
+                kind=c.kind,
+                ref=c.ref,
+                head_sha=c.head_sha,
+                title=c.title,
+                author=c.author,
+                url=c.url,
+                diff_truncated=c.diff_truncated,
+                status=c.status,
+                run=c.run,
+                created_at=c.created_at,
+            )
+            for c in rows[:limit]
+        ]

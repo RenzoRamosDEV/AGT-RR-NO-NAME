@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy import insert, select
+from uuid import UUID
+
+from sqlalchemy import func, insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from duelo.adapters.persistence.models import EventModel, ReviewModel
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
+from duelo.application.read_models import AgentStats
 from duelo.domain.events import ReviewCompleted, ReviewFailed
 from duelo.domain.review import Finding, Review, ReviewStatus
 
@@ -68,6 +71,41 @@ class SqlAlchemyReviewRepository:
                 )
             )
             return review
+
+    async def list_for_change(self, change_id: UUID) -> list[Review]:
+        rows = await self._session.execute(
+            select(ReviewModel)
+            .where(ReviewModel.change_id == change_id)
+            .order_by(ReviewModel.created_at, ReviewModel.agent, ReviewModel.run)
+        )
+        return [_to_domain(row) for row in rows.scalars()]
+
+    async def agent_stats(self) -> list[AgentStats]:
+        completed = ReviewStatus.COMPLETED.value
+        failed = ReviewStatus.FAILED.value
+        rows = await self._session.execute(
+            select(
+                ReviewModel.agent,
+                func.count().label("total"),
+                func.count().filter(ReviewModel.status == completed).label("completed"),
+                func.count().filter(ReviewModel.status == failed).label("failed"),
+                func.avg(ReviewModel.duration_ms).label("avg_duration_ms"),
+                func.avg(ReviewModel.score).label("avg_score"),
+            )
+            .group_by(ReviewModel.agent)
+            .order_by(ReviewModel.agent)
+        )
+        return [
+            AgentStats(
+                agent=r.agent,
+                total=r.total,
+                completed=r.completed,
+                failed=r.failed,
+                avg_duration_ms=None if r.avg_duration_ms is None else float(r.avg_duration_ms),
+                avg_score=None if r.avg_score is None else float(r.avg_score),
+            )
+            for r in rows
+        ]
 
 
 def _to_domain(row: ReviewModel) -> Review:

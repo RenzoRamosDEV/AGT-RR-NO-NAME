@@ -42,7 +42,7 @@ async def test_valid_commit_is_persisted_and_its_review_started() -> None:
     assert change.project_id == PROJECT.id
     assert change.diff_truncated is False
     assert changes.persisted_events and starter.calls == 1
-    assert starter.started[(str(PROJECT.id), "a" * 40)] == change
+    assert starter.started[("commit", str(PROJECT.id), "a" * 40)] == change
 
 
 async def test_unknown_project_has_no_effects() -> None:
@@ -103,7 +103,7 @@ async def test_starter_failure_leaves_the_change_persisted_and_retry_recovers() 
     change = await ingest_commit(projects, changes, working, _submission(), max_diff_chars=100)
 
     assert len(changes.persisted_events) == 1  # no se duplicó el Change
-    assert working.started[(str(PROJECT.id), "a" * 40)] == change
+    assert working.started[("commit", str(PROJECT.id), "a" * 40)] == change
 
 
 async def test_invalid_input_is_rejected_before_starting_a_review() -> None:

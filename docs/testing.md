@@ -84,7 +84,7 @@ Leyenda: **Cubierto** · **Parcial** (se prueba lo que existe; el resto está di
 
 | Tipo | Estado | Dónde / por qué |
 | --- | --- | --- |
-| E2E de flujos críticos | Cubierto | `tests/e2e/`: ASGI + Postgres + Temporal de test + workers reales. Camino feliz (dos reviews), reingesta sin duplicados, proyecto inexistente, Temporal caído → 503 y reenvío que arranca la review, diff recortado. Verificado además a mano contra Temporal real |
+| E2E de flujos críticos | Cubierto | `tests/e2e/`: ASGI + Postgres + Temporal de test + workers reales. Camino feliz (dos reviews), reingesta sin duplicados, proyecto inexistente, Temporal caído → 503 y reenvío que arranca la review, diff recortado; lecturas (canal paginado, detalle, métricas) tras ingerir un PR y un commit con el mismo sha (`test_read_flow.py`). Verificado además a mano contra Temporal real |
 | Security tests | Cubierto | Inyección SQL y HTML como texto literal, NUL, límites, cuerpos malformados → 422 sin traza, token y detalles internos fuera de respuestas y logs; gitleaks y osv-scanner en CI. Pendiente a futuro: rate limiting y cabeceras si la API sale de `127.0.0.1` |
 | Performance y load | Cubierto | `just load` (`scripts/load_ingest.py`, bajo demanda): presupuesto 0 errores y p95 ≤ 300 ms con 5 clientes. Primera medición contra Temporal y Postgres reales: 200 peticiones, 109 req/s, p50 41 ms, p95 70 ms, 0 errores. Más la regresión del diff de 5 MB |
 | Concurrencia | Cubierto | `integration/concurrency/` con Postgres real (`ON CONFLICT` bajo carrera) |

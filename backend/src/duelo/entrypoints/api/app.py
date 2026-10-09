@@ -7,9 +7,12 @@ from fastapi import FastAPI
 
 from duelo.config import Settings
 from duelo.entrypoints.api.dependencies import ApiDependencies
+from duelo.entrypoints.api.routers.changes import router as changes_router
 from duelo.entrypoints.api.routers.health import ready_router
 from duelo.entrypoints.api.routers.health import router as health_router
 from duelo.entrypoints.api.routers.ingest import router as ingest_router
+from duelo.entrypoints.api.routers.projects import router as projects_router
+from duelo.entrypoints.api.routers.stats import router as stats_router
 
 
 def create_app(
@@ -31,4 +34,7 @@ def create_app(
     if settings is not None and dependencies is not None:
         app.include_router(ready_router)
         app.include_router(ingest_router)
+        app.include_router(projects_router)
+        app.include_router(changes_router)
+        app.include_router(stats_router)
     return app

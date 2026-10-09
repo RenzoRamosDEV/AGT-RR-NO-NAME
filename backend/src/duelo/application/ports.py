@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from duelo.domain.change import Change
+from duelo.application.read_models import AgentStats, ChangeCursor, ChangeSummary
+from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
 from duelo.domain.project import Project
 from duelo.domain.review import Review, ReviewResult
@@ -20,6 +21,19 @@ class ChangeRepository(Protocol):
 
     async def get(self, change_id: UUID) -> Change | None:
         """Devuelve el `Change` con ese id, o `None` si no existe."""
+        ...
+
+    async def list_for_project(
+        self,
+        project_id: UUID,
+        *,
+        kind: ChangeKind | None,
+        limit: int,
+        after: ChangeCursor | None,
+    ) -> list[ChangeSummary]:
+        """Devuelve a lo sumo `limit` changes del proyecto, del más reciente al más antiguo
+        (orden por (created_at, id) descendente), posteriores a `after` si se indica y
+        filtrados por `kind` si se indica. No incluye el diff."""
         ...
 
 
@@ -41,10 +55,23 @@ class ReviewRepository(Protocol):
         """
         ...
 
+    async def list_for_change(self, change_id: UUID) -> list[Review]:
+        """Devuelve las reviews del change (completadas y fallidas) por fecha de creación."""
+        ...
+
+    async def agent_stats(self) -> list[AgentStats]:
+        """Métricas agregadas por agente, ordenadas por nombre. Las medias ignoran los
+        valores nulos y son `None` si no hay ninguno."""
+        ...
+
 
 class ProjectRepository(Protocol):
     async def get_by_slug(self, slug: str) -> Project | None:
         """Devuelve el proyecto con ese slug, o `None` si no existe."""
+        ...
+
+    async def list_all(self) -> list[Project]:
+        """Devuelve todos los proyectos ordenados por slug."""
         ...
 
 

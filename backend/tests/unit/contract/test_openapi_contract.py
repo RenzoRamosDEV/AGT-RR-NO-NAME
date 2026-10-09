@@ -8,6 +8,7 @@ from pathlib import Path
 
 import schemathesis
 from hypothesis import HealthCheck, settings
+from schemathesis.specs.openapi.checks import positive_data_acceptance
 
 from tests.fakes.api import TOKEN, build_fake_api
 
@@ -33,4 +34,7 @@ schema = schemathesis.openapi.from_asgi("/openapi.json", _app())
 def test_api_honours_its_own_contract(case: schemathesis.Case) -> None:
     case.headers = {**(case.headers or {}), "X-Ingest-Token": TOKEN}
 
-    case.call_and_validate()
+    # El cursor del canal es opaco: para el esquema es un string cualquiera, pero solo vale el
+    # que devolvió el propio servidor; rechazar otro con 422 es el contrato (se prueba aparte).
+    opaque_cursor = (case.query or {}).get("cursor") is not None
+    case.call_and_validate(excluded_checks=[positive_data_acceptance] if opaque_cursor else None)
