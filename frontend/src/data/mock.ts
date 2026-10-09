@@ -1,14 +1,22 @@
-// Sample data until the read API exists (Fase 4); types mirror the expected contract.
+// View model shared by the UI, plus sample data used when no API is configured (VITE_API_URL).
 
 export type AgentName = "claude" | "codex";
 export type ReviewStatus = "running" | "completed" | "failed";
 export type ChangeKind = "commit" | "pr";
 
+export interface Finding {
+  severity: string;
+  file: string;
+  line: number;
+  message: string;
+}
+
 export interface Review {
+  id: string;
   agent: AgentName;
   status: ReviewStatus;
   summary?: string;
-  findings?: string[];
+  findings?: Finding[];
 }
 
 export interface Change {
@@ -16,10 +24,14 @@ export interface Change {
   kind: ChangeKind;
   title: string;
   author: string;
+  /** Full head SHA; use `shortSha` to display it. */
   sha: string;
+  ref: string;
+  url: string;
   diff: string;
   truncated?: boolean;
-  reviews: Review[];
+  /** Absent when the source does not report reviews (the API channel listing). */
+  reviews?: Review[];
 }
 
 export interface Project {
@@ -47,15 +59,31 @@ export const projects: Project[] = [
         title: "fix: comparar el token de ingesta en tiempo constante",
         author: "renzo",
         sha: "a41f9c2",
+        ref: "main",
+        url: "https://github.com/RenzoRamosDEV/Duelo/commit/a41f9c2",
         diff: DIFF,
         reviews: [
           {
+            id: "r1",
             agent: "claude",
             status: "completed",
             summary: "Cambio correcto; elimina la comparación vulnerable a timing.",
-            findings: ["Falta test para token vacío.", "Considerar rotación del token."],
+            findings: [
+              {
+                severity: "medium",
+                file: "src/ingest.py",
+                line: 3,
+                message: "Falta test para token vacío.",
+              },
+              {
+                severity: "low",
+                file: "src/ingest.py",
+                line: 1,
+                message: "Considerar rotación del token.",
+              },
+            ],
           },
-          { agent: "codex", status: "running" },
+          { id: "r2", agent: "codex", status: "running" },
         ],
       },
       {
@@ -64,16 +92,26 @@ export const projects: Project[] = [
         title: "feat: exponer ingesta de commits",
         author: "renzo",
         sha: "9be03d1",
+        ref: "feat/ingest-commits",
+        url: "https://github.com/RenzoRamosDEV/Duelo/pull/7",
         diff: DIFF,
         truncated: true,
         reviews: [
           {
+            id: "r3",
             agent: "claude",
             status: "completed",
             summary: "Buen aislamiento de puertos; revisar idempotencia.",
-            findings: ["Idempotency-Key no se valida en longitud."],
+            findings: [
+              {
+                severity: "high",
+                file: "src/ingest.py",
+                line: 3,
+                message: "Idempotency-Key no se valida en longitud.",
+              },
+            ],
           },
-          { agent: "codex", status: "failed" },
+          { id: "r4", agent: "codex", status: "failed" },
         ],
       },
     ],

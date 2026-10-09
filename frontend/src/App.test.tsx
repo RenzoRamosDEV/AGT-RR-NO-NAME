@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,16 +27,17 @@ function setReducedMotion(reduced: boolean) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("navigation", () => {
-  it("redirects / to the first project channel and marks it active", () => {
+  it("redirects / to the first project channel and marks it active", async () => {
     renderAt("/");
-    expect(screen.getByRole("heading", { name: "#duelo" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "#duelo" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).getByRole("link", { name: /duelo/ })).toHaveClass("active");
+    expect(await within(nav).findByRole("link", { name: /duelo/ })).toHaveClass("active");
   });
 
   it("navigates to stats and settings from the sidebar", async () => {
     renderAt("/");
     const nav = screen.getByRole("navigation", { name: "Principal" });
+    await screen.findByRole("heading", { name: "#duelo" });
     await userEvent.click(within(nav).getByRole("link", { name: "Estadísticas" }));
     expect(screen.getByRole("heading", { name: "Estadísticas" })).toBeInTheDocument();
     await userEvent.click(within(nav).getByRole("link", { name: "Ajustes" }));
@@ -45,6 +46,7 @@ describe("navigation", () => {
 
   it("reaches interactive controls in order with Tab", async () => {
     renderAt("/p/duelo");
+    await screen.findByRole("link", { name: /demo-api/ });
     await userEvent.tab();
     expect(screen.getByRole("button", { name: "Menú" })).toHaveFocus();
     await userEvent.tab();
@@ -78,21 +80,22 @@ describe("mobile menu", () => {
 describe("channel search and summary", () => {
   it("filters by SHA and combines with the kind filter", async () => {
     renderAt("/p/duelo");
+    await screen.findAllByRole("button", { name: "Ver respuestas" });
     await userEvent.type(screen.getByRole("searchbox", { name: "Buscar cambios" }), "9BE0");
     expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1);
     expect(screen.getByText("feat: exponer ingesta de commits")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Commits" }));
-    expect(screen.getByText("Ningún cambio coincide con la búsqueda.")).toBeInTheDocument();
+    expect(await screen.findByText("Ningún cambio coincide con la búsqueda.")).toBeInTheDocument();
   });
 
-  it("tells an empty channel apart from no matches", () => {
+  it("tells an empty channel apart from no matches", async () => {
     renderAt("/p/demo-api");
-    expect(screen.getByText("Aún no hay cambios en este canal.")).toBeInTheDocument();
+    expect(await screen.findByText("Aún no hay cambios en este canal.")).toBeInTheDocument();
   });
 
-  it("shows the review summary without expanding the thread", () => {
+  it("shows the review summary without expanding the thread", async () => {
     renderAt("/p/duelo");
-    const [first] = screen.getAllByRole("list", { name: "Resumen de reviews" });
+    const [first] = await screen.findAllByRole("list", { name: "Resumen de reviews" });
     expect(within(first).getByText("1 completada")).toBeInTheDocument();
     expect(within(first).getByText("1 en curso")).toBeInTheDocument();
   });
@@ -101,7 +104,7 @@ describe("channel search and summary", () => {
 describe("channel threads", () => {
   it("expands replies with the keyboard and toggles aria-expanded", async () => {
     renderAt("/p/duelo");
-    const [toggle] = screen.getAllByRole("button", { name: "Ver respuestas" });
+    const [toggle] = await screen.findAllByRole("button", { name: "Ver respuestas" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     toggle.focus();
     await userEvent.keyboard("{Enter}");
@@ -112,59 +115,62 @@ describe("channel threads", () => {
 
   it("filters by kind", async () => {
     renderAt("/p/duelo");
-    expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(2);
+    expect(await screen.findAllByRole("button", { name: "Ver respuestas" })).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "PRs" }));
-    expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1);
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1),
+    );
   });
 });
 
 describe("review states", () => {
-  it("shows thinking indicator and beam for a running review", () => {
+  it("shows thinking indicator and beam for a running review", async () => {
     setReducedMotion(false);
     const { container } = renderAt("/p/duelo/changes/c1");
-    expect(screen.getByText("En curso")).toBeInTheDocument();
+    expect(await screen.findByText("En curso")).toBeInTheDocument();
     expect(screen.getByText("Codex está revisando…")).toBeInTheDocument();
     expect(container.querySelector('[data-status="running"]')).not.toBeNull();
     expect(screen.getByText("Completada")).toBeInTheDocument();
   });
 
-  it("shows failed state as text without thinking indicator", () => {
+  it("shows failed state as text without thinking indicator", async () => {
     renderAt("/p/duelo/changes/c2");
-    expect(screen.getByText("Fallida")).toBeInTheDocument();
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(await screen.findByText("Fallida")).toBeInTheDocument();
+    expect(screen.queryByText(/está revisando/)).toBeNull();
   });
 
-  it("falls back to a static indicator with reduced motion", () => {
+  it("falls back to a static indicator with reduced motion", async () => {
     setReducedMotion(true);
     const { container } = renderAt("/p/duelo/changes/c1");
-    expect(screen.getByText("Codex está revisando…")).toBeInTheDocument();
+    expect(await screen.findByText("Codex está revisando…")).toBeInTheDocument();
     expect(container.querySelector("canvas")).toBeNull();
     expect(container.querySelector("[data-beam-bloom]")).toBeNull();
   });
 });
 
 describe("other screens", () => {
-  it("renders the change detail with diff and both reviews", () => {
+  it("renders the change detail with diff and both reviews", async () => {
     renderAt("/p/duelo/changes/c1");
-    expect(screen.getByLabelText("Diff")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Diff")).toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(2);
   });
 
-  it("numbers diff lines and marks additions and deletions", () => {
+  it("numbers diff lines and marks additions and deletions", async () => {
     renderAt("/p/duelo/changes/c1");
-    const diff = screen.getByRole("table", { name: "Diff" });
+    const diff = await screen.findByRole("table", { name: "Diff" });
     expect(within(diff).getByText("src/ingest.py")).toBeInTheDocument();
     expect(within(diff).getAllByText(/^\+ /).length).toBeGreaterThan(0);
     expect(diff.querySelectorAll("tr.del").length).toBeGreaterThan(0);
     expect(diff.querySelector("tr.add td.ln:nth-child(2)")?.textContent).toBe("1");
   });
 
-  it("warns only when the diff is truncated", () => {
+  it("warns only when the diff is truncated", async () => {
     const { unmount } = renderAt("/p/duelo/changes/c1");
+    await screen.findByRole("table", { name: "Diff" });
     expect(screen.queryByRole("note")).toBeNull();
     unmount();
     renderAt("/p/duelo/changes/c2");
-    expect(screen.getByRole("note")).toHaveTextContent("truncado");
+    expect(await screen.findByRole("note")).toHaveTextContent("truncado");
   });
 
   it("keeps stats values as text and hides the bars from assistive tech", () => {

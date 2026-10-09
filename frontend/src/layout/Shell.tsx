@@ -1,7 +1,8 @@
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { Button } from "../components/ui/Button";
-import { projects } from "../data/mock";
+import { useDataSource } from "../data/source";
+import { useAsync } from "../lib/useAsync";
 
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
 
@@ -9,6 +10,8 @@ export function Shell() {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const { pathname } = useLocation();
+  const source = useDataSource();
+  const projects = useAsync(useCallback(() => source.projects(), [source]));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the menu whenever the route changes
   useEffect(() => setOpen(false), [pathname]);
@@ -35,11 +38,23 @@ export function Shell() {
         <div className="nav-panel" id={panelId}>
           <div className="nav-group">
             <div className="nav-title">Proyectos</div>
-            {projects.map((p) => (
-              <NavLink key={p.slug} to={`/p/${p.slug}`} className={link}>
-                <span aria-hidden="true">#</span> {p.name}
-              </NavLink>
-            ))}
+            {projects.status === "loading" && <output className="muted">Cargando…</output>}
+            {projects.status === "error" && (
+              <div role="alert">
+                <p className="muted">No se pudieron cargar los proyectos.</p>
+                <Button onClick={projects.retry}>Reintentar</Button>
+              </div>
+            )}
+            {projects.status === "ready" &&
+              (projects.data.length === 0 ? (
+                <p className="muted">Sin proyectos.</p>
+              ) : (
+                projects.data.map((p) => (
+                  <NavLink key={p.slug} to={`/p/${p.slug}`} className={link}>
+                    <span aria-hidden="true">#</span> {p.name}
+                  </NavLink>
+                ))
+              ))}
           </div>
           <div className="nav-group">
             <div className="nav-title">General</div>

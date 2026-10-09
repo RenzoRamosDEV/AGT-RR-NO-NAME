@@ -1,12 +1,17 @@
 import { useId, useState } from "react";
 import { Link, useParams } from "react-router";
+import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { ReviewCard } from "../../components/ReviewCard";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { type Change, type ChangeKind, findProject } from "../../data/mock";
+import type { Change, ChangeKind } from "../../data/mock";
+import { ApiError } from "../../lib/api";
+import { type StateFilter, matchesState } from "../../lib/changeFilters";
 import { summarizeReviews } from "../../lib/reviewSummary";
 import { matchesQuery } from "../../lib/search";
+import { shortSha } from "../../lib/url";
+import { useChannel } from "./useChannel";
 
 type Filter = "all" | ChangeKind;
 
@@ -14,6 +19,13 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Todo" },
   { value: "pr", label: "PRs" },
   { value: "commit", label: "Commits" },
+];
+
+const STATE_FILTERS: { value: StateFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "running", label: "En curso" },
+  { value: "failed", label: "Con fallos" },
+  { value: "completed", label: "Completados" },
 ];
 
 function ChangeThread({ change, slug }: { change: Change; slug: string }) {
@@ -28,10 +40,10 @@ function ChangeThread({ change, slug }: { change: Change; slug: string }) {
         </Link>
       </div>
       <p className="muted">
-        {change.author} · <span className="mono">{change.sha}</span>
+        {change.author} · <span className="mono">{shortSha(change.sha)}</span>
       </p>
       <ul className="review-summary" aria-label="Resumen de reviews">
-        {summarizeReviews(change.reviews).map((item) => (
+        {summarizeReviews(change.reviews ?? []).map((item) => (
           <li key={item.status}>
             <Badge
               tone={
@@ -52,8 +64,8 @@ function ChangeThread({ change, slug }: { change: Change; slug: string }) {
       </Button>
       {open && (
         <div className="thread reviews" id={panelId}>
-          {change.reviews.map((r) => (
-            <ReviewCard key={r.agent} review={r} />
+          {(change.reviews ?? []).map((r) => (
+            <ReviewCard key={r.id} review={r} />
           ))}
         </div>
       )}
@@ -62,13 +74,17 @@ function ChangeThread({ change, slug }: { change: Change; slug: string }) {
 }
 
 export function ChannelPage() {
-  const { slug } = useParams();
-  const project = findProject(slug);
+  const { slug = "" } = useParams();
   const [filter, setFilter] = useState<Filter>("all");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [query, setQuery] = useState("");
   const searchId = useId();
+  const { first, items, hasMore, moreState, loadMore } = useChannel(
+    slug,
+    filter === "all" ? undefined : filter,
+  );
 
-  if (!project || !slug) {
+  if (first.status === "error" && first.error instanceof ApiError && first.error.notFound) {
     return (
       <div className="page">
         <h1>Proyecto no encontrado</h1>
@@ -76,14 +92,12 @@ export function ChannelPage() {
     );
   }
 
-  const changes = project.changes.filter(
-    (c) => (filter === "all" || c.kind === filter) && matchesQuery(c, query),
-  );
+  const changes = items.filter((c) => matchesState(c, stateFilter) && matchesQuery(c, query));
   return (
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>#{project.name}</h1>
+          <h1>#{slug}</h1>
           <p>Commits y PRs revisados por Claude y Codex.</p>
         </div>
       </div>
@@ -110,18 +124,49 @@ export function ChannelPage() {
             </Button>
           ))}
         </fieldset>
+        <fieldset className="filters" aria-label="Estado de la review">
+          {STATE_FILTERS.map((f) => (
+            <Button
+              key={f.value}
+              aria-pressed={stateFilter === f.value}
+              onClick={() => setStateFilter(f.value)}
+            >
+              {f.label}
+            </Button>
+          ))}
+        </fieldset>
       </div>
       <div className="stack">
-        {changes.length === 0 && (
-          <output className="muted">
-            {project.changes.length === 0
-              ? "Aún no hay cambios en este canal."
-              : "Ningún cambio coincide con la búsqueda."}
-          </output>
-        )}
-        {changes.map((c) => (
-          <ChangeThread key={c.id} change={c} slug={slug} />
-        ))}
+        <AsyncBoundary state={first} loadingLabel="Cargando cambios…">
+          {() => (
+            <>
+              {changes.length === 0 && (
+                <output className="muted">
+                  {items.length === 0 && filter === "all"
+                    ? "Aún no hay cambios en este canal."
+                    : "Ningún cambio coincide con la búsqueda."}
+                </output>
+              )}
+              {changes.map((c) => (
+                <ChangeThread key={c.id} change={c} slug={slug} />
+              ))}
+              {moreState === "error" && (
+                <p className="notice" role="alert">
+                  No se pudieron cargar más cambios.
+                </p>
+              )}
+              {hasMore && (
+                <Button onClick={loadMore} disabled={moreState === "loading"}>
+                  {moreState === "loading"
+                    ? "Cargando…"
+                    : moreState === "error"
+                      ? "Reintentar"
+                      : "Cargar más"}
+                </Button>
+              )}
+            </>
+          )}
+        </AsyncBoundary>
       </div>
     </div>
   );

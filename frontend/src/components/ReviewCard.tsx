@@ -28,7 +28,12 @@ function Body({ review }: { review: Review }) {
           <p>{review.summary}</p>
           <ul>
             {review.findings?.map((f) => (
-              <li key={f}>{f}</li>
+              <li key={`${f.file}:${f.line}:${f.message}`}>
+                {f.message}{" "}
+                <span className="mono muted">
+                  {f.file}:{f.line}
+                </span>
+              </li>
             ))}
           </ul>
         </>
