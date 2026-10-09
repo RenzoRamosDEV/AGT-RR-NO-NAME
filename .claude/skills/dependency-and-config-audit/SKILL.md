@@ -30,6 +30,18 @@ sin mirar es un hallazgo malo.
 - **Renovate** abre PRs de actualización: revísalos con este mismo criterio, no los
   fusiones por inercia.
 
+## Compatibilidad de runtime y pares
+
+Lee los mínimos de los manifiestos, no de memoria: Python (`requires-python` en
+`backend/pyproject.toml`), Node y pnpm (`engines`/`packageManager` en
+`frontend/package.json`). Una subida de versión mayor exige evidencia: notas de la versión
+**y** que pasen los comandos que la ejercitan.
+- Frontend: React, Vite, TypeScript, Vitest, jsdom y Testing Library deben ser compatibles
+  entre sí (peer dependencies; `pnpm install --frozen-lockfile` no debe avisar de pares
+  incumplidos); la prueba es `pnpm build` y `pnpm test`.
+- Backend: `temporalio`, `sqlalchemy`, `alembic`, `asyncpg`, `pydantic` y `fastapi` se
+  prueban con `just test-integration` (migraciones y Temporal reales), no solo con los unitarios.
+
 ## Configuración y entorno
 
 - **Variables de entorno:** las obligatorias fallan rápido con mensaje claro (`INGEST_TOKEN`

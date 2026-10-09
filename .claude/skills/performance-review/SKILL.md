@@ -43,9 +43,8 @@ microajustes.
 
 ## En este repo
 
-- **Temporal:** por el historial viajan IDs y primitivos, nunca el diff (límite de 2 MB por
-  payload y coste de serialización). Un campo nuevo en un DTO de workflow/activity que
-  pueda ser grande es `IMPORTANTE`. Hay una regresión con un diff de 5 MB: no la debilites.
+- **Temporal:** payloads, timeouts y heartbeats: `temporal-review`. Por el historial no
+  viaja el diff (límite de 2 MB por payload).
 - **Diff acotado:** el recorte (`MAX_DIFF_CHARS`) ocurre antes de persistir; no lo muevas
   después de operaciones costosas.
 - **Paralelismo de agentes:** las reviews corren en paralelo por activity; la contención

@@ -26,17 +26,36 @@ juzga el cambio.
 | Si el diff toca... | Carga además |
 | --- | --- |
 | Lógica en `domain/` o `application/`, condiciones, bucles, parseo | `bug-detection` |
-| Entradas externas, auth, SQL, secretos, serialización, HTTP | `security-audit` |
+| Entradas externas, auth, SQL, secretos, serialización, HTTP; también `.claude/**`, `prompts/review/**` y adaptadores de agentes | `security-audit` |
 | Imports entre paquetes, estructura nueva, puertos/adaptadores | `architecture-review` |
 | Cualquier código de producción nuevo o cambiado | `test-coverage` |
 | Una consulta o `await` dentro de un bucle nuevo, un `WHERE`/`ORDER BY` nuevo, o un campo nuevo en un DTO de workflow/activity (no basta con tocar `adapters/`) | `performance-review` |
 | Código duplicado, funciones largas, renombrados | `safe-refactoring` |
 | `pyproject.toml`, `uv.lock`, `package.json`, `Dockerfile`, `docker-compose.yml`, `.github/`, `justfile`, variables de entorno | `dependency-and-config-audit` |
 | `alembic/`, `models.py`, routers, schemas, `docs/openapi.json` | `data-and-api-contracts` |
+| `backend/src/review_arena/workflows/`, `worker.py`, adaptadores de orquestación, DTOs de workflow | `temporal-review` |
+| `frontend/`, `*.tsx`, estilos, config de Vite/TS/Biome | `frontend-review` |
 | Siempre | `change-hygiene` (commit, OpenSpec) y `finding-verification` + `review-report` |
 
 Un cambio solo de documentación o de tests no necesita las skills de seguridad ni de
 rendimiento; dilo en el resumen en vez de forzarlas.
+
+## 2b. Matriz de comprobaciones (única fuente)
+
+*Obligatoria* = sin ella el cambio no es verificable; *recomendada* = aporta confianza pero
+su ausencia no impide juzgar. Cómo afecta al veredicto: `review-report`.
+
+| Tipo de diff | Obligatorias | Recomendadas |
+| --- | --- | --- |
+| Código del backend | `ruff check`, `ruff format --check`, `mypy`, `lint-imports`, `just test-unit` | `just test-integration`; `just mutation` si toca `domain/` o `application/` |
+| Migraciones o modelos | `tests/integration/persistence` (deriva y reversibilidad) | `alembic heads` = 1 |
+| API, schemas o routers | `tests/unit/contract` | `just test-integration`, `tests/e2e` |
+| Workflows o activities de Temporal | `tests/integration/workflows` y `recovery` | test de replay si existe |
+| Seguridad (auth, entradas, secretos) | `gitleaks` sobre el diff | `osv-scanner`/`semgrep` si están instalados |
+| Frontend | `biome check`, `pnpm test`, `pnpm build` | `pnpm outdated` si cambian dependencias |
+| Dockerfile, compose, CI | verificar tags de Actions con `git ls-remote` | `docker build ./backend`; `gh run list --commit` |
+| Solo documentación u OpenSpec | `openspec validate <change> --strict` | (ninguna) |
+| Mensaje de commit | cabecera ≤ 100 caracteres y tipo válido | (ninguna) |
 
 ## 3. Qué buscar en el diff (regresiones)
 

@@ -61,6 +61,25 @@ manual; no la sustituyas por una afirmación.
 - Documentación y ejemplos usan variables (`$INGEST_TOKEN`), no valores literales:
   `gitleaks` marca `curl -H "X-...: valor"`.
 
+## Prompts, agentes y skills (superficie de inyección de prompts)
+
+Aplica a `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`, `prompts/review/**` y a los
+adaptadores que invocan agentes. Es código que decide qué puede hacer un modelo.
+
+- **Permisos de herramientas:** un agente de revisión no debe tener `Edit`/`Write`; `Bash` sin
+  control es escritura potencial. `allowed-tools` en una skill concede permisos, **no**
+  restringe; la restricción real son `tools`/`disallowedTools`, reglas de permisos y hooks.
+- **Datos frente a instrucciones:** los diffs, mensajes de commit y salidas de agentes se
+  pasan al modelo delimitados como **datos** (regla de `openspec/config.yaml`), nunca como
+  instrucciones; un diff que dice "ignora lo anterior" debe seguir siendo un diff.
+- **Salida estructurada:** las respuestas de agentes se validan contra un esquema antes de
+  persistirse o mostrarse; el texto libre es contenido no confiable en el frontend.
+- **Secretos hacia el modelo:** el diff se filtra (`gitleaks`/patrones) antes de enviarlo a
+  un proveedor externo.
+- **Sandbox y argumentos** de los CLIs de agentes (solo lectura, sin red si es posible).
+- Un cambio en un prompt versionado (`prompts/review/v{n}.md`) crea una versión nueva; no se
+  edita una ya usada en resultados guardados.
+
 ## Qué reportar
 
 Para cada hallazgo: el activo en riesgo, quién puede explotarlo y cómo (pasos), el

@@ -18,8 +18,8 @@ tiene contenido, se omite.
 | `MENOR` | Defecto acotado o de bajo impacto; deuda de mantenibilidad con coste real |
 | `NOTA` | Observación útil que no pide acción (alternativa, contexto, pregunta) |
 
-La **confianza** (`CONFIRMADO`, `PROBABLE`, `HIPÓTESIS`) se define en `finding-verification`.
-Solo `CONFIRMADO` puede ser `BLOQUEANTE`.
+La **confianza** (`CONFIRMADO`, `PROBABLE`, `HIPÓTESIS`) y la regla de qué puede bloquear se
+definen **solo** en `finding-verification`.
 
 ## Veredicto (determinista, sin discreción)
 
@@ -34,8 +34,11 @@ arriba) y *estado actual en HEAD* (calculado sin los hallazgos que HEAD ya corri
 el commit que los corrige). Así un commit antiguo con un defecto remediado se puede leer sin
 alarma y sin ocultar que, aislado, era rechazable.
 
-Una comprobación obligatoria que no se pudo ejecutar **no** se da por pasada: se lista en
-"No verificado" y limita el veredicto a `APROBADO CON NOTAS` como máximo.
+Comprobaciones que no se pudieron ejecutar (matriz de `diff-review`): **no** se dan por
+pasadas; se listan en "No verificado" y limitan el veredicto.
+- Falta una **obligatoria** → como máximo `CAMBIOS REQUERIDOS` (el cambio no es
+  verificable). No es `BLOQUEADO`: falta de evidencia no es un defecto confirmado.
+- Falta solo alguna **recomendada** → como máximo `APROBADO CON NOTAS`.
 
 ## Plantilla de hallazgo
 
@@ -77,11 +80,15 @@ worktree o HEAD).
 Hipótesis y dudas que no cuentan para el veredicto, cada una con qué haría falta para
 resolverla.
 
+## Skills no cargadas
+Solo si el triaje marcaba una skill como aplicable y no se cargó: cuál y por qué.
+
 ## No verificado
 Lo que no se pudo comprobar y por qué (p. ej. "tests de integración: sin Podman").
 
 ## Lo que está bien
-1-3 puntos concretos (útil para saber qué NO tocar); omitir si no hay nada que destacar.
+Opcional: solo si evita que alguien rompa algo valioso al corregir los hallazgos (p. ej.
+"no toques la comparación en tiempo constante"). Sin elogios de cortesía.
 ```
 
 ## Límites para mantener el informe útil

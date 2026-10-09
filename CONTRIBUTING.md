@@ -14,9 +14,10 @@ antes de cada push.
 
 El agente `code-guardian` (`.claude/agents/`) revisa commits, ramas y PRs en solo lectura y
 emite un veredicto (`APROBADO`, `APROBADO CON NOTAS`, `CAMBIOS REQUERIDOS`, `BLOQUEADO`).
-Usa doce skills (`.claude/skills/`): las de análisis (`bug-detection`, `security-audit`,
+Usa catorce skills (`.claude/skills/`): las de análisis (`bug-detection`, `security-audit`,
 `architecture-review`, `test-coverage`, `performance-review`, `safe-refactoring`,
-`dependency-and-config-audit`, `data-and-api-contracts`) y las transversales (`diff-review`,
+`dependency-and-config-audit`, `data-and-api-contracts`, `temporal-review`,
+`frontend-review`) y las transversales (`diff-review`,
 `change-hygiene`, `finding-verification`, `review-report`).
 
 ```text
@@ -26,7 +27,10 @@ Usa doce skills (`.claude/skills/`): las de análisis (`bug-detection`, `securit
 /guardian backend/src/review_arena/application
 ```
 
-Úsalo antes de cada push y de abrir un PR. Propone, no edita: las correcciones las decides tú.
+Úsalo antes de cada push y de abrir un PR. Propone, no edita: no tiene `Edit`/`Write` y un
+hook (`.claude/hooks/guardian-readonly.py`, con tests) bloquea los comandos `Bash` que
+escriben. Los hooks de un agente de proyecto exigen aceptar la confianza del workspace.
+Las correcciones las decides tú.
 Los hallazgos llevan confianza (`CONFIRMADO`/`PROBABLE`/`HIPÓTESIS`); solo un `BLOQUEANTE`
 confirmado bloquea.
 

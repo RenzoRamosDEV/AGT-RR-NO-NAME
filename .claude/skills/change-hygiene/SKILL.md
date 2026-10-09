@@ -6,9 +6,8 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git show:*), Bash(git dif
 
 # Higiene del cambio
 
-Lo que en este repo ya ha roto CI por descuido: una cabecera de commit de 117 caracteres
-(`commitlint`), un token literal en un ejemplo de README (`gitleaks`), una variable
-obligatoria sin definir en el smoke test del contenedor. Esta skill los busca antes del push.
+Busca antes del push lo que rompe CI por descuido (cabecera larga, secreto de ejemplo,
+variable obligatoria sin definir). Casos reales del repo: `references/history.md`.
 
 ## Mensaje del commit
 

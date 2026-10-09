@@ -45,12 +45,8 @@ solución propuesta**.
 
 ## En este repo
 
-- **Temporal:** el código de un `@workflow.defn` debe ser determinista: sin `datetime.now()`,
-  `random`, `uuid4()`, I/O, `asyncio.sleep` real ni imports no pasados por sandbox. Todo eso
-  va en activities. Cambiar la forma de un workflow en vuelo sin versionado rompe ejecuciones.
-- **Activities:** reciben IDs y primitivos, nunca el diff; deben ser idempotentes por clave
-  natural. Un fallo del agente se registra como `Review` fallida; un agente o `Change`
-  inexistente es no reintentable (`ApplicationError(non_retryable=True)`).
+- **Temporal:** determinismo, versionado, timeouts y reintentos tienen su propia skill:
+  `temporal-review`. Aquí solo el efecto en la lógica de negocio.
 - **Persistencia:** idempotencia con `INSERT ... ON CONFLICT DO NOTHING RETURNING`, no con
   captura de excepciones. `session.begin()` falla si ya hay una transacción autobegin en la
   sesión (compartir sesión entre repositorios fue un bug real).

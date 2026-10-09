@@ -4,6 +4,7 @@ description: Lanza una revisión completa con el agente code-guardian sobre un c
 argument-hint: "[commit | rango | nº de PR | ruta]"
 disable-model-invocation: true
 context: fork
+background: false
 agent: code-guardian
 ---
 
