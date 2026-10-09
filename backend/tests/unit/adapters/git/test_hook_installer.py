@@ -20,6 +20,8 @@ from duelo.adapters.git.hook_installer import (
 from duelo.application.ports import HookInstallError
 from tests.unit.adapters.git.helpers import git, init_repo
 
+ENV = "/home/u/.config/duelo/hook.env"
+
 
 def installer(tmp_path: Path, **overrides: object) -> FileHookInstaller:
     values: dict[str, object] = {
@@ -71,14 +73,14 @@ def test_an_updated_block_replaces_the_old_one() -> None:
 
 def test_removing_the_block_gives_back_the_original_text_exactly() -> None:
     original = "#!/bin/sh\n# comentario\necho usuario\n\nexit 0\n"
-    block = render_block("post-commit", python="/py", slug="a/b")
+    block = render_block("post-commit", python="/py", slug="a/b", env_path=ENV)
 
     assert remove_block(insert_block(original, block)) == original
 
 
 @pytest.mark.parametrize("only_ours", ["#!/bin/sh\n", "#!/bin/sh\n\n  \n", ""])
 def test_a_hook_that_only_had_our_block_is_removed_entirely(only_ours: str) -> None:
-    block = render_block("pre-push", python="/py", slug="a/b")
+    block = render_block("pre-push", python="/py", slug="a/b", env_path=ENV)
 
     assert remove_block(insert_block(only_ours or None, block)) is None
 
@@ -91,7 +93,8 @@ def test_the_block_quotes_interpreter_and_slug_so_nothing_is_interpreted(tmp_pat
     fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$OUT"\n')
     fake.chmod(0o755)
     slug = f"x'; touch {marker}; echo '"
-    block = render_block("post-commit", python=str(fake), slug=slug)
+    env = str(tmp_path / "carpeta 'rara'; touch " / "hook.env")
+    block = render_block("post-commit", python=str(fake), slug=slug, env_path=env)
 
     subprocess.run(
         ["sh", "-c", block], check=True, env={**os.environ, "OUT": str(tmp_path / "out")}
@@ -104,6 +107,8 @@ def test_the_block_quotes_interpreter_and_slug_so_nothing_is_interpreted(tmp_pat
         "post-commit",
         "--project",
         slug,
+        "--env-file",
+        env,
     ]
 
 
@@ -424,3 +429,44 @@ async def test_install_without_git_in_the_path_is_reported(
 
     with pytest.raises(HookInstallError, match="git no está disponible"):
         await installer(tmp_path).install(str(repo), slug="a/b")
+
+
+# --- ruta del fichero de credenciales en el bloque -------------------------------------------
+
+
+async def test_the_installed_blocks_carry_the_absolute_env_file_path(tmp_path: Path) -> None:
+    """Regresión (revisión de Codex): con `HOOK_ENV_PATH` personalizada la API escribía el token
+    ahí pero el hook buscaba en la ruta por defecto y descartaba los commits sin avisar."""
+    repo = init_repo(tmp_path / "repo")
+    env = tmp_path / "otro sitio" / "hook.env"
+
+    await installer(tmp_path, env_path=env).install(str(repo), slug="a/b")
+
+    for name in ("post-commit", "pre-push"):
+        text = (hooks_of(repo) / name).read_text()
+        assert f"--env-file '{env}'" in text
+
+
+async def test_reinstalling_with_another_env_path_replaces_the_old_block(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path / "repo")
+    old, new = tmp_path / "viejo" / "hook.env", tmp_path / "nuevo" / "hook.env"
+    await installer(tmp_path, env_path=old).install(str(repo), slug="a/b")
+
+    await installer(tmp_path, env_path=new).install(str(repo), slug="a/b")
+
+    text = (hooks_of(repo) / "post-commit").read_text()
+    assert text.count(BEGIN) == 1 and str(new) in text and str(old) not in text
+
+
+async def test_a_relative_env_path_is_made_absolute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = init_repo(tmp_path / "repo")
+    monkeypatch.chdir(tmp_path)
+
+    await installer(tmp_path, env_path=Path("rel/hook.env")).install(str(repo), slug="a/b")
+
+    assert (
+        f"--env-file '{tmp_path / 'rel' / 'hook.env'}'"
+        in (hooks_of(repo) / "post-commit").read_text()
+    )

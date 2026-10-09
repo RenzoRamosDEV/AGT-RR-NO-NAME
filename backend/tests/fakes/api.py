@@ -157,7 +157,7 @@ def build_fake_api(
         return await add_local_project(git, hooks, projects, path)
 
     async def remove_project(slug: str) -> None:
-        await remove_local_project(hooks, projects, slug)
+        await remove_local_project(hooks, projects, projects, slug)
 
     async def sync_prs(slug: str) -> SyncResult:
         return await sync_pull_requests(projects, github, ingest_pull_request, slug)

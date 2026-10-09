@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from duelo.application.ingest_commit import ProjectNotFound
-from duelo.application.local_projects import ProjectHasNoFolder
+from duelo.application.local_projects import HookRemovalFailed, ProjectHasNoFolder
 from duelo.application.ports import (
     GithubUnavailable,
     HookInstallError,
@@ -68,13 +68,16 @@ async def add_project(body: AddProjectRequest, request: Request) -> ProjectRespo
     # `path`: los slugs tienen forma `owner/repo` y contienen una barra.
     "/projects/{slug:path}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=_ERRORS,
+    responses={**_ERRORS, 409: {"model": ErrorResponse}},
 )
 async def remove_project(slug: str, request: Request) -> None:
     try:
         await request.app.state.dependencies.remove_project(slug)
     except ProjectNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Proyecto desconocido: {exc.slug}") from exc
+    except HookRemovalFailed as exc:
+        # El proyecto y su historial se conservan para repetir la baja tras corregir los permisos.
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
 @router.post(

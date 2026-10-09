@@ -191,6 +191,23 @@ async def test_deleting_a_project_removes_it_and_uninstalls_its_hooks() -> None:
     assert [p["slug"] for p in listing] == ["acme/widgets"]
 
 
+async def test_a_failed_hook_removal_is_409_and_keeps_the_project() -> None:
+    # Regresión (revisión de Codex): antes la baja devolvía 204 y dejaba hooks activos con token.
+    api = _local_api()
+    async with _client(api) as client:
+        await client.post("/projects", json={"path": ROOT}, headers=HEADERS)
+        api.hooks.uninstall_fails = True
+        response = await client.delete(f"/projects/{SLUG}", headers=HEADERS)
+        listing = (await client.get("/projects")).json()
+        api.hooks.uninstall_fails = False
+        retry = await client.delete(f"/projects/{SLUG}", headers=HEADERS)
+
+    assert response.status_code == 409
+    assert f"{ROOT}/.git/hooks" in response.json()["detail"]  # dice qué corregir
+    assert SLUG in [p["slug"] for p in listing]  # el proyecto sigue ahí
+    assert retry.status_code == 204 and api.hooks.uninstalled == [ROOT]
+
+
 async def test_deleting_an_unknown_project_is_404() -> None:
     api = _local_api()
     async with _client(api) as client:

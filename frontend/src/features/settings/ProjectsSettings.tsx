@@ -80,7 +80,13 @@ function RemoveDialog({
       onRemoved();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) clearIngestToken();
-      setError(failureMessage(e, "quitar el proyecto"));
+      // 409: no se pudieron quitar los hooks y el proyecto se conserva. El servidor dice qué
+      // revisar (permisos de .git/hooks), así que su mensaje se muestra tal cual.
+      setError(
+        e instanceof ApiError && e.status === 409
+          ? `${e.message} El proyecto se conserva: puedes repetir la baja.`
+          : failureMessage(e, "quitar el proyecto"),
+      );
       setSending(false);
     }
   }

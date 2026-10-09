@@ -13,6 +13,7 @@ from duelo.application.ingest_commit import (
     ingest_pr,
 )
 from duelo.application.local_projects import (
+    HookRemovalFailed,
     ProjectHasNoFolder,
     SyncResult,
     add_local_project,
@@ -139,7 +140,7 @@ async def test_removing_uninstalls_the_hooks_and_deletes_the_project() -> None:
     catalog, hooks = FakeProjectRepository(), FakeHookInstaller()
     await add_local_project(_repo(), hooks, catalog, ROOT)
 
-    await remove_local_project(hooks, catalog, "acme/widgets")
+    await remove_local_project(hooks, catalog, catalog, "acme/widgets")
 
     assert hooks.uninstalled == [ROOT]
     assert await catalog.list_all() == []
@@ -149,7 +150,9 @@ async def test_removing_an_unknown_project_is_not_found() -> None:
     hooks = FakeHookInstaller()
 
     with pytest.raises(ProjectNotFound) as caught:
-        await remove_local_project(hooks, FakeProjectRepository(), "no/existe")
+        await remove_local_project(
+            hooks, FakeProjectRepository(), FakeProjectRepository(), "no/existe"
+        )
 
     assert caught.value.slug == "no/existe"
 
@@ -160,18 +163,67 @@ async def test_a_project_without_folder_is_removed_without_touching_any_hooks() 
     plain = Project(id=uuid4(), slug="solo/db")
     catalog, hooks = FakeProjectRepository(plain), FakeHookInstaller()
 
-    await remove_local_project(hooks, catalog, "solo/db")
+    await remove_local_project(hooks, catalog, catalog, "solo/db")
 
     assert hooks.uninstalled == [] and await catalog.list_all() == []
 
 
-async def test_a_failure_cleaning_the_hooks_does_not_prevent_the_removal() -> None:
+async def test_a_failure_removing_the_hooks_keeps_the_project_so_the_removal_can_be_retried() -> (
+    None
+):
+    # Regresión (revisión de Codex): antes se borraba el proyecto y luego se intentaba quitar los
+    # hooks; si fallaba, quedaban hooks activos con el token y sin registro para reintentar.
     catalog = FakeProjectRepository()
     await add_local_project(_repo(), FakeHookInstaller(), catalog, ROOT)
 
-    await remove_local_project(FakeHookInstaller(uninstall_fails=True), catalog, "acme/widgets")
+    with pytest.raises(HookRemovalFailed) as caught:
+        await remove_local_project(
+            FakeHookInstaller(uninstall_fails=True), catalog, catalog, "acme/widgets"
+        )
 
-    assert await catalog.list_all() == []
+    assert [p.slug for p in await catalog.list_all()] == ["acme/widgets"]  # sigue ahí
+    assert (caught.value.slug, caught.value.path) == ("acme/widgets", ROOT)
+    assert isinstance(caught.value.__cause__, HookInstallError)  # conserva la causa
+    assert f"{ROOT}/.git/hooks" in str(caught.value)  # el mensaje dice qué revisar
+
+    working = FakeHookInstaller()
+    await remove_local_project(working, catalog, catalog, "acme/widgets")  # y se puede repetir
+    assert working.uninstalled == [ROOT] and await catalog.list_all() == []
+
+
+async def test_the_hooks_are_removed_before_the_project_is_deleted() -> None:
+    order: list[str] = []
+
+    class Hooks(FakeHookInstaller):
+        async def uninstall(self, root: str) -> None:
+            order.append("hooks")
+            await super().uninstall(root)
+
+    class Catalog(FakeProjectRepository):
+        async def remove(self, slug: str) -> Project | None:
+            order.append("catalog")
+            return await super().remove(slug)
+
+    catalog = Catalog()
+    await add_local_project(_repo(), FakeHookInstaller(), catalog, ROOT)
+
+    await remove_local_project(Hooks(), catalog, catalog, "acme/widgets")
+
+    assert order == ["hooks", "catalog"]
+
+
+async def test_a_removal_that_lost_the_race_is_not_found() -> None:
+    class Gone(FakeProjectRepository):
+        async def remove(self, slug: str) -> Project | None:
+            return None  # otra baja se adelantó entre la búsqueda y el borrado
+
+    catalog = Gone()
+    await add_local_project(_repo(), FakeHookInstaller(), catalog, ROOT)
+
+    with pytest.raises(ProjectNotFound) as caught:
+        await remove_local_project(FakeHookInstaller(), catalog, catalog, "acme/widgets")
+
+    assert caught.value.slug == "acme/widgets"
 
 
 # --- sincronización de PRs -----------------------------------------------------------------
@@ -329,7 +381,10 @@ async def test_a_failed_hook_cleanup_is_logged_with_the_project(
     catalog = FakeProjectRepository()
     await add_local_project(_repo(), FakeHookInstaller(), catalog, ROOT)
 
-    await remove_local_project(FakeHookInstaller(uninstall_fails=True), catalog, "acme/widgets")
+    with pytest.raises(HookRemovalFailed):
+        await remove_local_project(
+            FakeHookInstaller(uninstall_fails=True), catalog, catalog, "acme/widgets"
+        )
 
     (record,) = log.records
     assert record.getMessage() == "No se pudieron quitar los hooks de acme/widgets"

@@ -13,6 +13,7 @@ from duelo.application.ports import (
     GithubPrSource,
     GitRepository,
     HookInstaller,
+    HookInstallError,
     InvalidRepository,
     ProjectCatalog,
     ProjectRepository,
@@ -28,6 +29,18 @@ class ProjectHasNoFolder(Exception):
     def __init__(self, slug: str) -> None:
         super().__init__(f"El proyecto {slug} no tiene carpeta local")
         self.slug = slug
+
+
+class HookRemovalFailed(Exception):
+    """No se pudieron quitar los hooks de la carpeta del proyecto: el proyecto se conserva."""
+
+    def __init__(self, slug: str, path: str) -> None:
+        super().__init__(
+            f"No se pudieron quitar los hooks de Duelo de {path}. Revisa los permisos de "
+            f"{path}/.git/hooks y repite la baja de {slug}."
+        )
+        self.slug = slug
+        self.path = path
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,17 +72,23 @@ async def add_local_project(
     return project
 
 
-async def remove_local_project(hooks: HookInstaller, catalog: ProjectCatalog, slug: str) -> None:
-    """Quita los hooks (si hay carpeta) y elimina el proyecto con sus changes, reviews y eventos."""
-    removed = await catalog.remove(slug)
-    if removed is None:
+async def remove_local_project(
+    hooks: HookInstaller, projects: ProjectRepository, catalog: ProjectCatalog, slug: str
+) -> None:
+    """Quita los hooks (si hay carpeta) y SOLO si se lograron elimina el proyecto con sus changes,
+    reviews y eventos. Si los hooks no se pueden quitar, lanza `HookRemovalFailed` y no toca nada:
+    borrar antes dejaría hooks activos con el token y sin registro desde el que reintentar."""
+    project = await projects.get_by_slug(slug)
+    if project is None:
         raise ProjectNotFound(slug)
-    if removed.path is not None:
-        # Ya no hay proyecto que informar: un fallo al limpiar los hooks no debe impedir la baja.
+    if project.path is not None:
         try:
-            await hooks.uninstall(removed.path)
-        except Exception:
+            await hooks.uninstall(project.path)
+        except (HookInstallError, OSError) as exc:
             logger.warning("No se pudieron quitar los hooks de %s", slug, exc_info=True)
+            raise HookRemovalFailed(slug, project.path) from exc
+    if await catalog.remove(slug) is None:
+        raise ProjectNotFound(slug)  # otra baja se adelantó entre la búsqueda y el borrado
 
 
 async def sync_pull_requests(

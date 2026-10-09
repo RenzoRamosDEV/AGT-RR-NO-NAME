@@ -36,8 +36,10 @@ def _git_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for who in ("AUTHOR", "COMMITTER"):
         monkeypatch.setenv(f"GIT_{who}_NAME", "Ana Pérez")
         monkeypatch.setenv(f"GIT_{who}_EMAIL", "ana@example.com")
-    # El hook lee el token de aquí (lo escribe la API al dar de alta el proyecto).
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    # Ni XDG ni HOME apuntan a donde la API guarda el token (`HOOK_ENV_PATH`, más abajo): el hook
+    # solo puede encontrarlo porque el bloque instalado lleva la ruta (revisión de Codex).
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-vacio"))
+    monkeypatch.setenv("HOME", str(tmp_path / "casa-vacia"))
     monkeypatch.delenv("INGEST_URL", raising=False)
     monkeypatch.delenv("INGEST_TOKEN", raising=False)
 
@@ -59,7 +61,7 @@ async def _server(
         temporal_address=temporal_address,
         local_projects_enabled=True,
         ingest_url=f"http://127.0.0.1:{port}",
-        hook_env_path=str(tmp_path / "xdg" / "duelo" / "hook.env"),
+        hook_env_path=str(tmp_path / "credenciales de duelo" / "hook.env"),
     )
     deps = build_api_dependencies(settings)
     server = uvicorn.Server(

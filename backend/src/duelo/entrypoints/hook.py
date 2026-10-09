@@ -17,6 +17,7 @@ import sys
 import urllib.request
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # Mismos límites que valida la API (duelo.domain.change): un campo más largo daría 422 y el commit
 # no aparecería. Este módulo no importa del paquete a propósito, para arrancar rápido.
@@ -37,8 +38,19 @@ def default_env_path() -> Path:
     return Path(base) / "duelo" / "hook.env"
 
 
+def _is_http_url(url: str) -> bool:
+    try:
+        parts = urlsplit(url)
+        return parts.scheme in {"http", "https"} and bool(parts.hostname)
+    except ValueError:
+        return False
+
+
 def load_config(env_path: Path | None = None) -> tuple[str, str] | None:
-    """`(INGEST_URL, INGEST_TOKEN)`; el entorno manda sobre `hook.env`. `None` si falta algo."""
+    """`(INGEST_URL, INGEST_TOKEN)` leídos SOLO del fichero de credenciales (`env_path`, o el de
+    por defecto). El entorno de quien lanza git no puede decidir a dónde viaja el token: un
+    `INGEST_URL=https://atacante git commit` se ignora. `None` si falta algo o la URL no es
+    http(s)."""
     values: dict[str, str] = {}
     try:
         for line in (env_path or default_env_path()).read_text(encoding="utf-8").splitlines():
@@ -47,9 +59,10 @@ def load_config(env_path: Path | None = None) -> tuple[str, str] | None:
                 values[key.strip()] = value.strip()
     except OSError:
         pass
-    url = os.environ.get("INGEST_URL") or values.get("INGEST_URL")
-    token = os.environ.get("INGEST_TOKEN") or values.get("INGEST_TOKEN")
-    return (url.rstrip("/"), token) if url and token else None
+    url, token = values.get("INGEST_URL"), values.get("INGEST_TOKEN")
+    if not url or not token or not _is_http_url(url):
+        return None
+    return url.rstrip("/"), token
 
 
 def _git(*args: str) -> str:
@@ -120,8 +133,13 @@ def pushed_commits(stdin_text: str, remote: str) -> list[tuple[str, str]]:
     return found
 
 
-def _send_all(project: str, commits: Iterable[tuple[str, str]], timeout: float) -> None:
-    config = load_config()
+def _send_all(
+    project: str,
+    commits: Iterable[tuple[str, str]],
+    timeout: float,
+    env_path: Path | None = None,
+) -> None:
+    config = load_config(env_path)
     if config is None:
         return
     url, token = config
@@ -158,6 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("event", choices=["post-commit", "pre-push"])
     parser.add_argument("--project", required=True)
     parser.add_argument("--stdin-file")
+    parser.add_argument("--env-file")
     parser.add_argument("remote", nargs="*")
     try:
         args = parser.parse_args(argv)
@@ -170,8 +189,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             commits = pushed_commits(stdin_text, args.remote[0] if args.remote else "origin")
         if commits:
             project = args.project
+            env_path = Path(args.env_file) if args.env_file else None
             _detach_and_run(
-                lambda timeout: _send_all(project, commits, timeout),
+                lambda timeout: _send_all(project, commits, timeout, env_path),
                 fallback_timeout=NO_FORK_TIMEOUT,
             )
     except BaseException:  # noqa: BLE001 - un hook jamás debe fallar el commit ni el push

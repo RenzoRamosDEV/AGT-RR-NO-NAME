@@ -281,4 +281,32 @@ describe("project settings", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Quitar proyecto" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("ya no existe");
   });
+
+  it("shows why the hooks could not be removed, keeps the project and lets you retry", async () => {
+    // Origen: revisión de Codex. La API ahora responde 409 (antes 204) si no puede quitar los
+    // hooks, y conserva el proyecto; la interfaz debe decirlo y no darlo por quitado.
+    const detail = "No se pudieron quitar los hooks de Duelo de /home/u/w. Revisa los permisos.";
+    const removeProject = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(detail, 409))
+      .mockResolvedValueOnce(undefined);
+    renderApp(projectSource([github, plain], { removeProject }), "/settings");
+    setIngestToken("tok");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Quitar proyecto acme/widgets" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Quitar proyecto" }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent(detail);
+    expect(alert).toHaveTextContent("puedes repetir la baja");
+    expect(screen.queryByText("Proyecto acme/widgets quitado.")).toBeNull();
+    expect(screen.getAllByText("acme/widgets", { selector: "strong" })).toHaveLength(1);
+    expect(within(dialog).getByRole("button", { name: "Quitar proyecto" })).toBeEnabled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Quitar proyecto" }));
+    expect(await screen.findByText("Proyecto acme/widgets quitado.")).toBeInTheDocument();
+    expect(removeProject).toHaveBeenCalledTimes(2);
+  });
 });

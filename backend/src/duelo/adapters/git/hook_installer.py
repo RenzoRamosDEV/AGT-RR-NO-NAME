@@ -25,10 +25,14 @@ def _quote(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
 
-def render_block(hook: str, *, python: str, slug: str) -> str:
-    """El bloque de Duelo para `hook`. Solo lleva datos que fija el instalador (ruta del intérprete
-    y slug, entre comillas simples); lo que viene de git lo lee el módulo del hook, no el shell."""
-    command = f"{_quote(python)} -m duelo.entrypoints.hook {hook} --project {_quote(slug)}"
+def render_block(hook: str, *, python: str, slug: str, env_path: str) -> str:
+    """El bloque de Duelo para `hook`. Solo lleva datos que fija el instalador (ruta del intérprete,
+    slug y ruta del fichero de credenciales, entre comillas simples); lo que viene de git lo lee el
+    módulo del hook, no el shell."""
+    command = (
+        f"{_quote(python)} -m duelo.entrypoints.hook {hook} --project {_quote(slug)}"
+        f" --env-file {_quote(env_path)}"
+    )
     if hook == "pre-push":
         # Git entrega las referencias por stdin. Se vuelcan a un fichero para dárselas al módulo
         # y se restauran en stdin para los hooks del usuario que vengan después.
@@ -100,7 +104,10 @@ class FileHookInstaller:
             existing = _read_hook(path)
             originals[name] = existing
             planned[name] = insert_block(
-                existing, render_block(name, python=self._python, slug=slug)
+                existing,
+                render_block(
+                    name, python=self._python, slug=slug, env_path=os.path.abspath(self._env_path)
+                ),
             )
         # Todo comprobado: a partir de aquí solo escritura (con vuelta atrás si falla).
         self._write_env()

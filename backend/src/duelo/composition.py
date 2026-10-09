@@ -216,7 +216,7 @@ def _local_projects_wiring(
         return await add_local_project(git, hooks, projects, path)
 
     async def remove(slug: str) -> None:
-        await remove_local_project(hooks, projects, slug)
+        await remove_local_project(hooks, projects, projects, slug)
 
     async def sync(slug: str) -> SyncResult:
         return await sync_pull_requests(projects, github, ingest_pull_request, slug)
