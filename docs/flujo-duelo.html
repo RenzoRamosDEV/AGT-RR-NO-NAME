@@ -266,12 +266,12 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
 
 <section id="temporal">
 <h2>4 · Temporal: workflows, activities y colas</h2>
-<p>Hay <b>dos workflows</b> y <b>una activity</b>, repartidos en <b>dos colas de tareas</b>. Un solo proceso (<code>python -m duelo.worker</code>) levanta los dos workers (<span class="ref">worker.py:24-39</span>).</p>
-<div class="tree" aria-label="Árbol de ejecución">API ── start_workflow ──▶ cola <b>platform</b>
+<p>Hay <b>dos workflows</b> y <b>una activity</b>, repartidos en <b>dos colas de tareas</b>: <code>platform</code> (los <b>dos</b> workflows, padre e hijo) y <code>agents</code> (la activity). Un solo proceso (<code>python -m duelo.worker</code>) levanta los dos workers (<span class="ref">worker.py:24-39</span>).</p>
+<div class="tree" aria-label="Árbol de ejecución">API ── start_workflow ──▶ cola <b>platform</b>   (el worker de esta cola registra AMBOS workflows: worker.py:33-37)
                          │
                          ▼
    <b>ReviewCommitWorkflow</b>           id: {kind}-{project_id}-{sha}[-r{run}]     (workflows/review_commit.py:22-31)
-        │  execute_child_workflow
+        │  execute_child_workflow   (sin indicar otra cola: el hijo corre también en <b>platform</b>)
         ▼
    <b>ReviewChangeWorkflow</b>           id: review-{change_id}-r{run}              (workflows/review_change.py:29-47)
         │  asyncio.gather  (fan-out en paralelo, uno por agente)
@@ -293,7 +293,7 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
   <div class="card"><h3>Qué pasa cuando algo falla</h3>
     <table>
       <tr><td><b>El agente lanza una excepción</b></td><td>La activity la captura, guarda <code>Review(status=failed, error)</code> + evento <code>review.failed</code> y <b>devuelve</b> <code>status=failed</code>; no la relanza (<span class="ref">workflows/activities.py:57-70</span>). El workflow termina <i>Completed</i>.</td></tr>
-      <tr><td><b>Fallo de infraestructura</b> (BD, red)</td><td>Lo reintenta la <code>RetryPolicy</code> (3 intentos, idempotentes). Si se agotan, falla la activity, el hijo y el padre.</td></tr>
+      <tr><td><b>Fallo de infraestructura</b> del worker (p. ej. Postgres caído al cargar el change o al guardar la review; «red» = la conexión del worker con Postgres/Temporal, <b>no</b> una llamada de un agente)</td><td>La <code>RetryPolicy</code> (3 intentos, idempotentes) <b>solo actúa sobre excepciones que escapan de la activity</b>; las del agente se capturan y no las reintenta Temporal. Si se agotan los 3 intentos, falla la activity, el hijo y el padre, y <b>no se guarda ninguna <code>Review(failed)</code></b> (solo se persiste el fallo cuando se captura una excepción de <code>agent.review()</code>, <span class="ref">workflows/activities.py:57-70</span>). Consecuencias en «Limitaciones».</td></tr>
       <tr><td><b>Agente desconocido / change inexistente</b></td><td><code>ApplicationError(non_retryable=True)</code> sin guardar review (<span class="ref">workflows/activities.py:43-47, 53-54</span>): rompe todo el workflow.</td></tr>
     </table></div>
 </div>
@@ -371,6 +371,7 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
 <details><summary>Solo existe el FakeAgent</summary><p>Sin adaptadores de Claude o Codex; el worker no está en <code>docker-compose.yml</code>; la lista de agentes debe coincidir entre la API y el worker o el estado se calcula mal.</p></details>
 <details><summary>Un fallo del agente no falla el workflow</summary><p>Se guarda como <code>Review(failed)</code> y el workflow termina <i>Completed</i>; por eso <code>ALLOW_DUPLICATE_FAILED_ONLY</code> no lo relanza al reenviar el commit y hace falta el reintento (<code>-r{run}</code>).</p></details>
 <details><summary>Sin versionado de workflows, cancelación ni señales</summary><p>No hay <code>workflow.patched</code>, <code>continue_as_new</code>, señales ni consultas. Cambiar el código de un workflow con ejecuciones en vuelo no está protegido contra no determinismo.</p></details>
+<details open><summary>Fallo de infraestructura: sin <code>Review(failed)</code> y sin reintento por la API</summary><p>Si una activity falla por infraestructura y agota sus 3 intentos, <b>no se guarda ninguna review fallida</b> (<span class="ref">workflows/activities.py:57-70</span> solo persiste el fallo cuando se captura una excepción de <code>agent.review()</code>). Fallan la activity, el hijo y el padre, y la API sigue derivando <code>pending</code> o <code>running</code> según las reviews que sí llegaron a guardarse. Esos estados <b>no están en <code>RETRYABLE_STATUSES</code></b> (<span class="ref">domain/review_status.py:56-58</span>), así que <code>POST /changes/{id}/retry</code> responde 409. Lo que ayuda: <b>reenviar el commit</b> (idempotente), porque con <code>ALLOW_DUPLICATE_FAILED_ONLY</code> un workflow que quedó <i>Failed</i> sí se vuelve a arrancar con el mismo id; mientras tanto <code>stale</code> lo marca como diagnóstico a los 30 min.</p></details>
 <details><summary>Ventana entre guardar y arrancar</summary><p>Si la API muere entre guardar el change y arrancar Temporal, queda <code>pending</code> sin workflow. Solo lo señala <code>stale</code>; un <code>pending</code> no se puede reintentar (409) — la salida es reenviar el commit, que es idempotente.</p></details>
 <details><summary><code>raw_output</code> siempre nulo</summary><p>La activity guarda <code>raw_output=None</code> (<span class="ref">workflows/activities.py:80</span>), así que <code>/reviews/{id}/raw-output</code> da 404 para toda review creada por el flujo actual. El endpoint funcionaría (200 con token de operador) si algo guardara salida cruda.</p></details>
 <details><summary>El evento <code>review.failed</code> guarda el error</summary><p>La API no lo expone, pero está en la tabla <code>events</code>; puede contener texto interno del agente.</p></details>
@@ -540,7 +541,7 @@ const stPoll1 = () => ({title: '7 · La UI lo ve: «Pendiente»', from: 'ui', to
   text: 'No hay <i>push</i> hacia el navegador: la UI pregunta cada 5 s. En el siguiente sondeo aparece el change con <code>review_status = pending</code> (0 reviews guardadas) y una insignia gris «Pendiente». El valor se <b>deriva</b> de las reviews; no se lee de ninguna columna de estado.',
   ref: [REF.status, REF.poll], fx: (s) => { poll(s); }});
 const stChild = () => ({title: '8 · El worker de platform ejecuta el padre', from: 'temporal', to: 'wp', label: 'workflow task', nodes: ['temporal', 'wp'], dt: 60,
-  text: 'El worker de la cola <code>platform</code> recoge el workflow. <code>ReviewCommitWorkflow</code> hace una sola cosa: lanzar el hijo <code>ReviewChangeWorkflow</code> con id <code>review-{change_id}-r{run}</code> y devolver su resultado. El padre existe para que el id del hijo incluya el <code>run</code> y un reintento no choque.',
+  text: 'El worker de la cola <code>platform</code> recoge el workflow. <code>ReviewCommitWorkflow</code> hace una sola cosa: lanzar el hijo <code>ReviewChangeWorkflow</code> con id <code>review-{change_id}-r{run}</code> y devolver su resultado. El hijo se lanza sin indicar otra cola: corre <b>también en <code>platform</code></b>, en el mismo worker, que registra los dos workflows (<code>worker.py:33-37</code>). El padre existe para que el id del hijo incluya el <code>run</code> y un reintento no choque.',
   ref: [REF.parent, REF.worker], fx: (s) => { setLane(s, 'platform', 'review-' + CID + '-r' + curChange(s).run, 'running'); log(s, 'INFO', 'wp', 'ReviewCommitWorkflow → execute_child_workflow review-' + CID + '-r' + curChange(s).run); }});
 const stFan = (run) => ({title: '9 · Fan-out: un agente por activity, en paralelo', from: 'wp', to: 'temporal', label: '2× run_review', nodes: ['wp', 'temporal', 'wa'], dt: 40,
   text: '<code>ReviewChangeWorkflow</code> hace <code>asyncio.gather</code> de una activity <code>run_review</code> por cada nombre de <code>agent_names</code>, en la cola <code>agents</code>: <b>timeout 5 min, heartbeat 30 s, 3 intentos</b>. Cada activity recibe solo <code>(change_id, agent_name, run)</code>. (El heartbeat está declarado pero ninguna activity lo envía.)',
@@ -550,7 +551,7 @@ function stAgent(agent, ok, run, extra) {
   return {title: (extra || '10') + ' · ' + agent + (ok ? ' revisa y guarda' : ' falla'), from: 'wa', to: 'pg', label: ok ? 'INSERT review' : 'INSERT review (failed)', nodes: ['wa', 'pg'], dt: 180, bad: ok ? [] : ['wa'],
     text: ok
       ? 'La activity carga el <code>Change</code> de Postgres (no del workflow), llama al agente (el <code>FakeAgent</code>: nota 7 y un hallazgo <code>nit</code>) y guarda <b>una</b> transacción con la <code>Review</code> (<code>completed</code>) y el evento <code>review.completed</code>. La clave <code>UNIQUE (change_id, agent, run)</code> hace que reintentos y reentregas no dupliquen filas ni eventos.'
-      : 'El agente lanza <code>RuntimeError</code>. La activity <b>captura la excepción</b>: guarda la review con <code>status=failed</code> y el texto del error, más el evento <code>review.failed</code>, y devuelve <code>RunReviewResult(status="failed")</code>. <b>No relanza</b>: para Temporal la activity terminó bien, así que el workflow no falla y el otro agente sigue.',
+      : 'El agente lanza <code>RuntimeError</code>. La activity <b>captura la excepción</b>: guarda la review con <code>status=failed</code> y el texto del error, más el evento <code>review.failed</code>, y devuelve <code>RunReviewResult(status="failed")</code>. <b>No relanza</b>: para Temporal la activity terminó bien, así que el workflow no falla y el otro agente sigue. (Otra cosa es un fallo de infraestructura que agote los 3 intentos: ahí <b>no</b> se guarda <code>Review(failed)</code>; ver «Limitaciones».)',
     ref: ok ? [REF.act, REF.fake, REF.rvAdd] : [REF.actFail, REF.rvAdd], fx: (s) => {
       setLane(s, 'agents', lbl, ok ? 'completed' : 'failed');
       addRv(s, agent, run, ok ? 'completed' : 'failed', ok ? 7 : null, ok ? '' : 'RuntimeError: agente agent_2 falló');
@@ -611,7 +612,7 @@ SCENARIOS.temporal = {name: 'Temporal caído → 503 → reenvío idempotente', 
     text: 'Se reenvía exactamente el mismo commit. La inserción choca con <code>UNIQUE (project_id, kind, head_sha)</code>, <b>no inserta</b> ni crea evento y devuelve la fila existente: <code>created=false</code>. Pero el caso de uso vuelve a llamar a <code>start()</code> con ese change, y ahora Temporal sí responde.',
     ref: [REF.existing, REF.created], fx: (s) => { s.bad = []; log(s, 'INFO', 'api', 'reenvío: ON CONFLICT → fila existente (created=false), sin evento nuevo'); }},
   Object.assign(stStart(), {title: '9 · Esta vez el workflow arranca'}),
-  Object.assign(stResp(), {title: '10 · 202 con <code>created:false</code>', label: '202 created:false', text: 'La respuesta es 202 con <code>created:false</code>: el change ya existía, pero la review está por fin en marcha. <b>Reenviar es seguro</b>: nunca duplica el change ni los eventos.'}),
+  Object.assign(stResp(), {title: '10 · 202 con <code>created:false</code>', label: '202 created:false', text: 'La respuesta es 202 con <code>created:false</code>: el change ya existía, pero la review está por fin en marcha. <b>Reenviar es seguro</b>: nunca duplica el change ni los eventos. Es también la salida cuando un workflow quedó <i>Failed</i> por infraestructura: el botón «Reintentar» no sirve en <code>pending</code>/<code>running</code> (409).'}),
   stChild(), stFan(1), stAgent('agent_1', true, 1, '13'), stAgent('agent_2', true, 1, '13b'), stWfDone(1),
   stPollFinal('El flujo se recupera solo con reenviar el commit: 1 fila en <code>changes</code> (no se duplicó), 2 reviews y 3 eventos.')]};
 SCENARIOS.duplicado = {name: 'Commit duplicado (created = false)', preloaded: true, steps: [
