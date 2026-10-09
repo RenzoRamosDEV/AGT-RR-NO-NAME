@@ -3,11 +3,13 @@ invariantes y existen para no cargar datos que la consulta no necesita (p. ej. e
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
+from duelo.domain.diff import DiffSummary
 from duelo.domain.review import Review
 from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
 
@@ -29,6 +31,7 @@ class ChangeSummary:
     review_status: ChangeReviewStatus
     run: int
     created_at: datetime
+    diff_summary: DiffSummary
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,3 +64,30 @@ class AgentStats:
     failed: int
     avg_duration_ms: float | None
     avg_score: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredEvent:
+    """Una fila del outbox tal como está guardada: `payload` es crudo y NO se expone tal cual."""
+
+    id: int
+    type: str
+    payload: Mapping[str, object]
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeEvent:
+    """Evento de un change con el payload reducido que la API puede mostrar."""
+
+    id: int
+    type: str
+    created_at: datetime
+    agent: str | None
+    review_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class RawOutput:
+    review_id: UUID
+    raw_output: str

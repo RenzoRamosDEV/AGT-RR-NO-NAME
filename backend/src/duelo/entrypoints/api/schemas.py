@@ -7,8 +7,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from duelo.application.ingest_commit import ChangeSubmission
-from duelo.application.read_models import AgentStats, ChangeDetail, ChangePage, ChangeSummary
+from duelo.application.read_models import (
+    AgentStats,
+    ChangeDetail,
+    ChangeEvent,
+    ChangePage,
+    ChangeSummary,
+    RawOutput,
+)
 from duelo.domain.change import MAX_HEAD_SHA, MAX_REF, MAX_URL, ChangeKind, ChangeStatus
+from duelo.domain.diff import DiffSummary
 from duelo.domain.project import Project
 from duelo.domain.review import Finding, Review, ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
@@ -40,6 +48,8 @@ class IngestCommitRequest(BaseModel):
 class IngestCommitResponse(BaseModel):
     change_id: UUID
     diff_truncated: bool
+    # `False` si el change ya existía (reingesta idempotente); el estado sigue siendo 202.
+    created: bool
 
 
 class IngestPrRequest(IngestCommitRequest):
@@ -60,6 +70,34 @@ class ProjectResponse(BaseModel):
         return cls(id=project.id, slug=project.slug)
 
 
+class DiffFileResponse(BaseModel):
+    path: str
+    additions: int
+    deletions: int
+
+
+class DiffSummaryResponse(BaseModel):
+    """Archivos y líneas del diff, calculados al ingerir. `files` se acota a 200 entradas;
+    `files_changed` es el recuento real."""
+
+    files_changed: int
+    additions: int
+    deletions: int
+    files: list[DiffFileResponse]
+
+    @classmethod
+    def from_domain(cls, summary: DiffSummary) -> DiffSummaryResponse:
+        return cls(
+            files_changed=summary.files_changed,
+            additions=summary.additions,
+            deletions=summary.deletions,
+            files=[
+                DiffFileResponse(path=f.path, additions=f.additions, deletions=f.deletions)
+                for f in summary.files
+            ],
+        )
+
+
 class ChangeSummaryResponse(BaseModel):
     id: UUID
     project_id: UUID
@@ -74,6 +112,7 @@ class ChangeSummaryResponse(BaseModel):
     review_status: ChangeReviewStatus
     run: int
     created_at: datetime
+    diff_summary: DiffSummaryResponse
 
     @classmethod
     def from_summary(cls, change: ChangeSummary) -> ChangeSummaryResponse:
@@ -91,6 +130,7 @@ class ChangeSummaryResponse(BaseModel):
             review_status=change.review_status,
             run=change.run,
             created_at=change.created_at,
+            diff_summary=DiffSummaryResponse.from_domain(change.diff_summary),
         )
 
 
@@ -202,6 +242,7 @@ class ChangeDetailResponse(ChangeSummaryResponse):
             review_status=detail.review_status,
             run=change.run,
             created_at=change.created_at,
+            diff_summary=DiffSummaryResponse.from_domain(change.diff_summary),
             diff=change.diff,
             reviews=[ReviewResponse.from_domain(r) for r in detail.reviews],
             findings_summary=FindingsSummaryResponse.from_domain(detail.findings_summary),
@@ -226,6 +267,36 @@ class AgentStatsResponse(BaseModel):
             avg_duration_ms=stats.avg_duration_ms,
             avg_score=stats.avg_score,
         )
+
+
+class ChangeEventResponse(BaseModel):
+    """Evento de la línea de tiempo con el payload reducido: solo `agent` y `review_id`, nunca la
+    salida cruda ni el texto de un error."""
+
+    id: int
+    type: str
+    created_at: datetime
+    agent: str | None
+    review_id: UUID | None
+
+    @classmethod
+    def from_domain(cls, event: ChangeEvent) -> ChangeEventResponse:
+        return cls(
+            id=event.id,
+            type=event.type,
+            created_at=event.created_at,
+            agent=event.agent,
+            review_id=event.review_id,
+        )
+
+
+class RawOutputResponse(BaseModel):
+    review_id: UUID
+    raw_output: str
+
+    @classmethod
+    def from_domain(cls, output: RawOutput) -> RawOutputResponse:
+        return cls(review_id=output.review_id, raw_output=output.raw_output)
 
 
 class RetryReviewResponse(BaseModel):

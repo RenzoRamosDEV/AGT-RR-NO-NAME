@@ -44,6 +44,16 @@ que ya está en el spec o en `openspec/specs/`.
   (con token) lanza `run + 1` si la ejecución actual terminó con fallos, con id de workflow
   `-r{run}` desde el segundo run y `run` avanzado por compare-and-swap;
   `GET /health/dependencies` da estado y latencia de Postgres y Temporal.
+- `change-events`, `review-raw-output` y ampliaciones de `change-queries`, `commit-ingestion` y
+  `pr-ingestion` (change `round3-backend-api`): cada change expone `diff_summary` (archivos y
+  líneas, calculado por `domain/diff.py` al ingerir y guardado en `changes.diff_summary`, de
+  modo que el canal no carga el diff; la migración rellena los existentes);
+  `GET /stats/agents?project=` filtra por proyecto; las respuestas de ingesta añaden `created`
+  (se deduce comparando el id candidato con el que devuelve `ChangeRepository.add`);
+  `GET /changes/{id}/events` lee el outbox con una lista blanca en la aplicación (sin el texto
+  de los errores ni la salida cruda) y `GET /reviews/{id}/raw-output` da la salida cruda solo
+  con `OPERATOR_TOKEN`, un secreto distinto del de ingesta (404 si no está configurado; ver los
+  riesgos en su `design.md`).
 
 ## Calidad y tests
 

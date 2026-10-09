@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from duelo.application.read_models import AgentStats, ChangeCursor, ChangeSummary
+from duelo.application.read_models import AgentStats, ChangeCursor, ChangeSummary, StoredEvent
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
 from duelo.domain.project import Project
@@ -16,7 +16,8 @@ class ChangeRepository(Protocol):
         """Persiste `change` y `event` en una única transacción.
 
         Si ya existía un `Change` con la misma identidad natural
-        (project_id, kind, head_sha), lo devuelve sin crear un segundo evento.
+        (project_id, kind, head_sha), lo devuelve sin crear un segundo evento; su `id` es el del
+        existente, distinto del de `change`, y así se distingue una reingesta.
         """
         ...
 
@@ -71,9 +72,21 @@ class ReviewRepository(Protocol):
         """Devuelve las reviews del change (completadas y fallidas) por fecha de creación."""
         ...
 
-    async def agent_stats(self) -> list[AgentStats]:
-        """Métricas agregadas por agente, ordenadas por nombre. Las medias ignoran los
-        valores nulos y son `None` si no hay ninguno."""
+    async def get(self, review_id: UUID) -> Review | None:
+        """Devuelve la review con ese id (con su `raw_output`), o `None` si no existe."""
+        ...
+
+    async def agent_stats(self, *, project_id: UUID | None) -> list[AgentStats]:
+        """Métricas agregadas por agente, ordenadas por nombre, de todas las reviews o solo de
+        las de los changes de `project_id`. Las medias ignoran los valores nulos y son `None`
+        si no hay ninguno."""
+        ...
+
+
+class ChangeEventRepository(Protocol):
+    async def list_for_change(self, project_id: UUID, change_id: UUID) -> list[StoredEvent]:
+        """Devuelve los eventos del outbox cuyo payload pertenece a `change_id`, en el orden en
+        que se escribieron. El payload es crudo: filtrarlo es cosa del caso de uso."""
         ...
 
 

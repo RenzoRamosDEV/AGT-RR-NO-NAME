@@ -68,6 +68,9 @@
             "title": "Diff",
             "type": "string"
           },
+          "diff_summary": {
+            "$ref": "#/components/schemas/DiffSummaryResponse"
+          },
           "diff_truncated": {
             "title": "Diff Truncated",
             "type": "boolean"
@@ -136,11 +139,62 @@
           "review_status",
           "run",
           "created_at",
+          "diff_summary",
           "diff",
           "reviews",
           "findings_summary"
         ],
         "title": "ChangeDetailResponse",
+        "type": "object"
+      },
+      "ChangeEventResponse": {
+        "description": "Evento de la l\u00ednea de tiempo con el payload reducido: solo `agent` y `review_id`, nunca la\nsalida cruda ni el texto de un error.",
+        "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "created_at",
+          "agent",
+          "review_id"
+        ],
+        "title": "ChangeEventResponse",
         "type": "object"
       },
       "ChangeKind": {
@@ -207,6 +261,9 @@
             "title": "Created At",
             "type": "string"
           },
+          "diff_summary": {
+            "$ref": "#/components/schemas/DiffSummaryResponse"
+          },
           "diff_truncated": {
             "title": "Diff Truncated",
             "type": "boolean"
@@ -264,7 +321,8 @@
           "status",
           "review_status",
           "run",
-          "created_at"
+          "created_at",
+          "diff_summary"
         ],
         "title": "ChangeSummaryResponse",
         "type": "object"
@@ -329,6 +387,61 @@
           "latency_ms"
         ],
         "title": "DependencyHealthResponse",
+        "type": "object"
+      },
+      "DiffFileResponse": {
+        "properties": {
+          "additions": {
+            "title": "Additions",
+            "type": "integer"
+          },
+          "deletions": {
+            "title": "Deletions",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "additions",
+          "deletions"
+        ],
+        "title": "DiffFileResponse",
+        "type": "object"
+      },
+      "DiffSummaryResponse": {
+        "description": "Archivos y l\u00edneas del diff, calculados al ingerir. `files` se acota a 200 entradas;\n`files_changed` es el recuento real.",
+        "properties": {
+          "additions": {
+            "title": "Additions",
+            "type": "integer"
+          },
+          "deletions": {
+            "title": "Deletions",
+            "type": "integer"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DiffFileResponse"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "files_changed": {
+            "title": "Files Changed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files_changed",
+          "additions",
+          "deletions",
+          "files"
+        ],
+        "title": "DiffSummaryResponse",
         "type": "object"
       },
       "ErrorResponse": {
@@ -461,6 +574,10 @@
             "title": "Change Id",
             "type": "string"
           },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
           "diff_truncated": {
             "title": "Diff Truncated",
             "type": "boolean"
@@ -468,7 +585,8 @@
         },
         "required": [
           "change_id",
-          "diff_truncated"
+          "diff_truncated",
+          "created"
         ],
         "title": "IngestCommitResponse",
         "type": "object"
@@ -532,6 +650,10 @@
             "title": "Change Id",
             "type": "string"
           },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
           "diff_truncated": {
             "title": "Diff Truncated",
             "type": "boolean"
@@ -539,7 +661,8 @@
         },
         "required": [
           "change_id",
-          "diff_truncated"
+          "diff_truncated",
+          "created"
         ],
         "title": "IngestPrResponse",
         "type": "object"
@@ -561,6 +684,25 @@
           "slug"
         ],
         "title": "ProjectResponse",
+        "type": "object"
+      },
+      "RawOutputResponse": {
+        "properties": {
+          "raw_output": {
+            "title": "Raw Output",
+            "type": "string"
+          },
+          "review_id": {
+            "format": "uuid",
+            "title": "Review Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "raw_output"
+        ],
+        "title": "RawOutputResponse",
         "type": "object"
       },
       "RetryReviewResponse": {
@@ -810,6 +952,64 @@
           }
         },
         "summary": "Get Change",
+        "tags": [
+          "changes"
+        ]
+      }
+    },
+    "/changes/{change_id}/events": {
+      "get": {
+        "description": "L\u00ednea de tiempo del change: `change.created`, `review.completed` y `review.failed`.",
+        "operationId": "get_change_events_changes__change_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeEventResponse"
+                  },
+                  "title": "Response Get Change Events Changes  Change Id  Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Change Events",
         "tags": [
           "changes"
         ]
@@ -1339,9 +1539,110 @@
         ]
       }
     },
+    "/reviews/{review_id}/raw-output": {
+      "get": {
+        "description": "Salida \u00edntegra del agente, solo para el operador (`X-Operator-Token`). Es contenido sin\nfiltrar sobre un diff privado: no se cachea y el detalle p\u00fablico nunca la incluye.",
+        "operationId": "get_raw_output_reviews__review_id__raw_output_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawOutputResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Raw Output",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
     "/stats/agents": {
       "get": {
+        "description": "M\u00e9tricas por agente: globales, o solo de un proyecto (`project=owner/repo`).",
         "operationId": "agent_stats_stats_agents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "pattern": "^[^\\x00]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1356,6 +1657,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Agent Stats",

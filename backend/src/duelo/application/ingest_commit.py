@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 from duelo.application.ingest_change import ingest_change
 from duelo.application.ports import ChangeRepository, ProjectRepository, ReviewStarter
@@ -29,6 +30,13 @@ class ChangeSubmission:
 CommitSubmission = ChangeSubmission
 
 
+@dataclass(frozen=True)
+class IngestResult:
+    change: Change
+    # `False` si el change ya existía (reingesta idempotente).
+    created: bool
+
+
 async def _ingest(
     kind: ChangeKind,
     projects: ProjectRepository,
@@ -37,11 +45,12 @@ async def _ingest(
     submission: ChangeSubmission,
     *,
     max_diff_chars: int,
-) -> Change:
+) -> IngestResult:
     project = await projects.get_by_slug(submission.project)
     if project is None:
         raise ProjectNotFound(submission.project)
 
+    candidate_id = uuid4()
     change = await ingest_change(
         changes,
         project_id=project.id,
@@ -53,9 +62,10 @@ async def _ingest(
         url=submission.url,
         diff=submission.diff[:max_diff_chars],
         diff_truncated=len(submission.diff) > max_diff_chars,
+        change_id=candidate_id,
     )
     await starter.start(change)
-    return change
+    return IngestResult(change=change, created=change.id == candidate_id)
 
 
 async def ingest_commit(
@@ -65,7 +75,7 @@ async def ingest_commit(
     submission: ChangeSubmission,
     *,
     max_diff_chars: int,
-) -> Change:
+) -> IngestResult:
     """Persiste el commit y arranca su review. Ambos pasos son idempotentes, así que
     reintentar tras un fallo del starter es seguro: el `Change` ya está guardado."""
     return await _ingest(
@@ -80,7 +90,7 @@ async def ingest_pr(
     submission: ChangeSubmission,
     *,
     max_diff_chars: int,
-) -> Change:
+) -> IngestResult:
     """Igual que `ingest_commit` para un PR: la identidad es (proyecto, `pr`, head_sha)."""
     return await _ingest(
         ChangeKind.PR, projects, changes, starter, submission, max_diff_chars=max_diff_chars

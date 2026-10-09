@@ -10,9 +10,17 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from temporalio.testing import WorkflowEnvironment
 
 from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
-from duelo.domain.events import ReviewFailed
-from duelo.domain.review import Review
-from tests.e2e.test_ingest_flow import HEADERS, _api, _body, _two, _until, _workers
+from duelo.domain.events import ReviewCompleted, ReviewFailed
+from duelo.domain.review import Review, ReviewResult
+from tests.e2e.test_ingest_flow import (
+    HEADERS,
+    OPERATOR_TOKEN,
+    _api,
+    _body,
+    _two,
+    _until,
+    _workers,
+)
 from tests.integration.conftest import create_project
 
 
@@ -30,6 +38,7 @@ async def test_a_pr_and_a_commit_show_up_in_the_channel_detail_and_stats(
         pr = await client.post(
             "/ingest/pr", json=_body(slug, ref="refs/pull/7/head"), headers=HEADERS
         )
+        commit_again = await client.post("/ingest/commit", json=_body(slug), headers=HEADERS)
         commit_id, pr_id = commit.json()["change_id"], pr.json()["change_id"]
         await _until(lambda: _two(session_factory, commit_id))
         await _until(lambda: _two(session_factory, pr_id))
@@ -45,7 +54,27 @@ async def test_a_pr_and_a_commit_show_up_in_the_channel_detail_and_stats(
         only_prs = (await client.get(f"/projects/{slug}/changes", params={"kind": "pr"})).json()
         detail = (await client.get(f"/changes/{pr_id}")).json()
         stats = {s["agent"]: s for s in (await client.get("/stats/agents")).json()}
+        scoped = {
+            s["agent"]: s
+            for s in (await client.get("/stats/agents", params={"project": slug})).json()
+        }
+        unknown_project = await client.get("/stats/agents", params={"project": "no/existe"})
+        events = (await client.get(f"/changes/{commit_id}/events")).json()
+        # Los workflows no guardan `raw_output`: el endpoint de operador responde 404 con ellos.
+        agent_review_id = detail["reviews"][0]["id"]
+        no_raw = await client.get(
+            f"/reviews/{agent_review_id}/raw-output", headers={"X-Operator-Token": OPERATOR_TOKEN}
+        )
 
+    assert (commit.json()["created"], pr.json()["created"]) == (True, True)
+    assert commit_again.json() == {**commit.json(), "created": False}
+    assert [i["diff_summary"]["files_changed"] for i in first["items"] + second["items"]] == [1, 1]
+    assert detail["diff_summary"]["files"] == [{"path": "x", "additions": 0, "deletions": 0}]
+    assert scoped["agent_1"]["total"] == 2 and scoped["agent_2"]["total"] == 2  # PR + commit
+    assert unknown_project.status_code == 404
+    assert [e["type"] for e in events] == ["change.created", "review.completed", "review.completed"]
+    assert sorted(e["agent"] for e in events[1:]) == ["agent_1", "agent_2"]
+    assert no_raw.status_code == 404
     assert commit.status_code == pr.status_code == 202 and commit_id != pr_id
     assert {"id": str(project_id), "slug": slug} in projects
     # Mismo sha, dos changes: el PR (más reciente) primero y el commit en la segunda página.
@@ -134,3 +163,47 @@ async def _fail_both_agents(
         )
         async with session_factory() as session:
             await SqlAlchemyReviewRepository(session).add(review, event)
+
+
+async def test_the_operator_reads_raw_output_with_its_own_token_and_nobody_else_can(
+    temporal_env: WorkflowEnvironment, database_url: str, session_factory: async_sessionmaker
+) -> None:
+    project_id = await create_project(session_factory)
+    slug = f"test-{project_id}"
+    address = temporal_env.client.service_client.config.target_host
+
+    async with _api(database_url, address) as client:
+        change_id = UUID(
+            (await client.post("/ingest/commit", json=_body(slug), headers=HEADERS)).json()[
+                "change_id"
+            ]
+        )
+        review = Review.succeeded(
+            change_id=change_id,
+            agent="agent_1",
+            run=1,
+            result=ReviewResult(summary="ok", score=7),
+            raw_output="SALIDA CRUDA DEL AGENTE",
+            duration_ms=5,
+            created_at=datetime.now(UTC),
+        )
+        event = ReviewCompleted(
+            review_id=review.id, change_id=change_id, project_id=project_id, agent="agent_1"
+        )
+        async with session_factory() as session:
+            await SqlAlchemyReviewRepository(session).add(review, event)
+        url = f"/reviews/{review.id}/raw-output"
+
+        operator = await client.get(url, headers={"X-Operator-Token": OPERATOR_TOKEN})
+        with_ingest_token = await client.get(
+            url, headers={"X-Operator-Token": HEADERS["X-Ingest-Token"]}
+        )
+        anonymous = await client.get(url)
+        detail = await client.get(f"/changes/{change_id}")
+        events = await client.get(f"/changes/{change_id}/events")
+
+    assert operator.status_code == 200
+    assert operator.json() == {"review_id": str(review.id), "raw_output": "SALIDA CRUDA DEL AGENTE"}
+    assert operator.headers["cache-control"] == "no-store"
+    assert (with_ingest_token.status_code, anonymous.status_code) == (401, 401)
+    assert "SALIDA CRUDA" not in detail.text + events.text

@@ -12,11 +12,19 @@ from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
 from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter
 from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
 from duelo.adapters.persistence.db import create_engine, create_session_factory
+from duelo.adapters.persistence.event_repository import SqlAlchemyChangeEventRepository
 from duelo.adapters.persistence.project_repository import SqlAlchemyProjectRepository
 from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
 from duelo.application import queries
-from duelo.application.ingest_commit import ChangeSubmission, ingest_commit, ingest_pr
-from duelo.application.read_models import AgentStats, ChangeCursor, ChangeDetail, ChangePage
+from duelo.application.ingest_commit import ChangeSubmission, IngestResult, ingest_commit, ingest_pr
+from duelo.application.read_models import (
+    AgentStats,
+    ChangeCursor,
+    ChangeDetail,
+    ChangeEvent,
+    ChangePage,
+    RawOutput,
+)
 from duelo.application.retry_review import retry_review
 from duelo.config import Settings
 from duelo.domain.change import Change, ChangeKind
@@ -34,7 +42,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
 
     projects = SqlAlchemyProjectRepository(session_factory)
 
-    async def ingest(submission: ChangeSubmission) -> Change:
+    async def ingest(submission: ChangeSubmission) -> IngestResult:
         async with session_factory() as session:
             return await ingest_commit(
                 projects,
@@ -44,7 +52,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 max_diff_chars=settings.max_diff_chars,
             )
 
-    async def ingest_pull_request(submission: ChangeSubmission) -> Change:
+    async def ingest_pull_request(submission: ChangeSubmission) -> IngestResult:
         async with session_factory() as session:
             return await ingest_pr(
                 projects,
@@ -100,9 +108,23 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 expected_agents=expected_agents,
             )
 
-    async def agent_stats() -> list[AgentStats]:
+    async def agent_stats(project: str | None) -> list[AgentStats]:
         async with session_factory() as session:
-            return await queries.agent_stats(SqlAlchemyReviewRepository(session))
+            return await queries.agent_stats(
+                projects, SqlAlchemyReviewRepository(session), project=project
+            )
+
+    async def list_change_events(change_id: UUID) -> list[ChangeEvent] | None:
+        async with session_factory() as session:
+            return await queries.change_events(
+                SqlAlchemyChangeRepository(session),
+                SqlAlchemyChangeEventRepository(session),
+                change_id,
+            )
+
+    async def get_review_raw_output(review_id: UUID) -> RawOutput | None:
+        async with session_factory() as session:
+            return await queries.review_raw_output(SqlAlchemyReviewRepository(session), review_id)
 
     async def check_postgres() -> None:
         async with engine.connect() as connection:
@@ -116,6 +138,8 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         get_change=get_change,
         retry_review=retry,
         agent_stats=agent_stats,
+        list_change_events=list_change_events,
+        get_review_raw_output=get_review_raw_output,
         readiness_checks={"postgres": check_postgres, "temporal": temporal.check_health},
         close=engine.dispose,
     )

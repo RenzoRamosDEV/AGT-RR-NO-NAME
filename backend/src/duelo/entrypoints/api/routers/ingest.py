@@ -5,9 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from duelo.application.ingest_commit import ProjectNotFound
+from duelo.application.ingest_commit import IngestResult, ProjectNotFound
 from duelo.application.ports import ReviewStartError
-from duelo.domain.change import Change
 from duelo.entrypoints.api.auth import require_ingest_token
 from duelo.entrypoints.api.schemas import (
     ErrorResponse,
@@ -27,7 +26,7 @@ _ERRORS: dict[int | str, dict[str, Any]] = {
 }
 
 
-async def _run(ingest: Callable[[], Awaitable[Change]]) -> Change:
+async def _run(ingest: Callable[[], Awaitable[IngestResult]]) -> IngestResult:
     try:
         return await ingest()
     except ProjectNotFound as exc:
@@ -49,8 +48,12 @@ async def _run(ingest: Callable[[], Awaitable[Change]]) -> Change:
     responses=_ERRORS,
 )
 async def ingest_commit(body: IngestCommitRequest, request: Request) -> IngestCommitResponse:
-    change = await _run(lambda: request.app.state.dependencies.ingest_commit(body.to_submission()))
-    return IngestCommitResponse(change_id=change.id, diff_truncated=change.diff_truncated)
+    result = await _run(lambda: request.app.state.dependencies.ingest_commit(body.to_submission()))
+    return IngestCommitResponse(
+        change_id=result.change.id,
+        diff_truncated=result.change.diff_truncated,
+        created=result.created,
+    )
 
 
 @router.post(
@@ -60,5 +63,9 @@ async def ingest_commit(body: IngestCommitRequest, request: Request) -> IngestCo
     responses=_ERRORS,
 )
 async def ingest_pr(body: IngestPrRequest, request: Request) -> IngestPrResponse:
-    change = await _run(lambda: request.app.state.dependencies.ingest_pr(body.to_submission()))
-    return IngestPrResponse(change_id=change.id, diff_truncated=change.diff_truncated)
+    result = await _run(lambda: request.app.state.dependencies.ingest_pr(body.to_submission()))
+    return IngestPrResponse(
+        change_id=result.change.id,
+        diff_truncated=result.change.diff_truncated,
+        created=result.created,
+    )

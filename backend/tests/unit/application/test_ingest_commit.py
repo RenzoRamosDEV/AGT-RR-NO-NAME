@@ -37,7 +37,9 @@ def _deps(starter: FakeReviewStarter | None = None):
 async def test_valid_commit_is_persisted_and_its_review_started() -> None:
     projects, changes, starter = _deps()
 
-    change = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    change = (
+        await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    ).change
 
     assert change.project_id == PROJECT.id
     assert change.diff_truncated is False
@@ -72,9 +74,9 @@ async def test_diff_is_cut_at_the_limit_and_flagged(
 ) -> None:
     projects, changes, starter = _deps()
 
-    change = await ingest_commit(
-        projects, changes, starter, _submission(diff=diff), max_diff_chars=10
-    )
+    change = (
+        await ingest_commit(projects, changes, starter, _submission(diff=diff), max_diff_chars=10)
+    ).change
 
     assert change.diff == expected
     assert change.diff_truncated is truncated
@@ -83,8 +85,12 @@ async def test_diff_is_cut_at_the_limit_and_flagged(
 async def test_reingesting_returns_the_same_change_without_duplicating_the_event() -> None:
     projects, changes, starter = _deps()
 
-    first = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
-    second = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    first = (
+        await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    ).change
+    second = (
+        await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    ).change
 
     assert first.id == second.id
     assert len(changes.persisted_events) == 1
@@ -100,7 +106,9 @@ async def test_starter_failure_leaves_the_change_persisted_and_retry_recovers() 
     assert len(changes.persisted_events) == 1 and failing.started == {}
 
     working = FakeReviewStarter()
-    change = await ingest_commit(projects, changes, working, _submission(), max_diff_chars=100)
+    change = (
+        await ingest_commit(projects, changes, working, _submission(), max_diff_chars=100)
+    ).change
 
     assert len(changes.persisted_events) == 1  # no se duplicó el Change
     assert working.started[("commit", str(PROJECT.id), "a" * 40, 1)] == change
@@ -115,3 +123,31 @@ async def test_invalid_input_is_rejected_before_starting_a_review() -> None:
         )
 
     assert changes.persisted_events == [] and starter.calls == 0
+
+
+async def test_the_result_says_whether_the_change_was_created_or_already_existed() -> None:
+    projects, changes, starter = _deps()
+
+    first = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    second = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    other = await ingest_commit(
+        projects, changes, starter, _submission(head_sha="c" * 40), max_diff_chars=100
+    )
+
+    assert (first.created, second.created, other.created) == (True, False, True)
+    assert first.change.id == second.change.id != other.change.id
+
+
+async def test_a_retry_after_a_starter_failure_is_reported_as_not_created() -> None:
+    """El change ya se guardó en el intento fallido: el reintento solo recupera el arranque."""
+    projects, changes, _ = _deps()
+    with pytest.raises(ReviewStartError):
+        await ingest_commit(
+            projects, changes, FakeReviewStarter(fail=True), _submission(), max_diff_chars=100
+        )
+
+    retry = await ingest_commit(
+        projects, changes, FakeReviewStarter(), _submission(), max_diff_chars=100
+    )
+
+    assert retry.created is False

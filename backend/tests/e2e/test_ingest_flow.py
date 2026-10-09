@@ -21,6 +21,7 @@ from duelo.worker import build_workers
 from tests.integration.conftest import create_project
 
 TOKEN = "e2e-token"
+OPERATOR_TOKEN = "e2e-operator-token-0123456789"
 HEADERS = {"X-Ingest-Token": TOKEN}
 DEAD_TEMPORAL = "127.0.0.1:1"
 
@@ -42,7 +43,10 @@ def _body(slug: str, **overrides: object) -> dict[str, object]:
 @asynccontextmanager
 async def _api(database_url: str, temporal_address: str) -> AsyncIterator[httpx.AsyncClient]:
     settings = Settings(
-        ingest_token=TOKEN, database_url=database_url, temporal_address=temporal_address
+        ingest_token=TOKEN,
+        operator_token=OPERATOR_TOKEN,
+        database_url=database_url,
+        temporal_address=temporal_address,
     )
     deps = build_api_dependencies(settings)
     transport = httpx.ASGITransport(app=create_app(settings, deps))

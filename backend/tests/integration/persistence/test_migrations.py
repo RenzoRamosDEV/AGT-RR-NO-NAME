@@ -9,16 +9,18 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from duelo.adapters.persistence.models import Base
+from duelo.domain.diff import summarize_diff
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 EXPECTED_TABLES = {"projects", "changes", "events", "reviews"}
@@ -56,3 +58,77 @@ async def test_migrations_are_reversible_upgrade_downgrade_upgrade(
 
     await asyncio.to_thread(command.upgrade, _alembic(), "head")
     assert await _tables(engine) == EXPECTED_TABLES
+
+
+_BACKFILL_DIFFS = [
+    "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1,2 +1,2 @@\n ctx\n-old\n+new\n",
+    "diff --git a/x b/x\n@@ -1 +1 @@\n-- guiones\n+++ mas\n",
+    "diff --git a/dir/f b/dir/f\nBinary files differ\n",
+    "",
+    "texto sin formato git",
+    "".join(f"diff --git a/f{i} b/f{i}\n@@ -0,0 +1 @@\n+x\n" for i in range(210)),
+]
+
+
+async def test_the_diff_summary_migration_backfills_existing_changes_like_the_domain(
+    database_url: str, engine: AsyncEngine
+) -> None:
+    """La migración lleva una copia congelada del algoritmo: debe coincidir con el dominio, y
+    rellenar por lotes (hay más filas que el tamaño del lote)."""
+    os.environ["DATABASE_URL"] = database_url
+    await asyncio.to_thread(command.downgrade, _alembic(), "1f9758d504b6")
+    project_id = uuid4()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO projects (id, slug) VALUES (:id, :slug)"),
+            {"id": project_id, "slug": f"mig-{project_id}"},
+        )
+        for i in range(105):
+            diff = _BACKFILL_DIFFS[i % len(_BACKFILL_DIFFS)]
+            await conn.execute(
+                text(
+                    "INSERT INTO changes (id, project_id, kind, ref, head_sha, title, author,"
+                    " url, diff, diff_truncated, status, run)"
+                    " VALUES (:id, :project_id, 'commit', 'r', :sha, 't', 'a', 'u', :diff,"
+                    " false, 'pending', 1)"
+                ),
+                {"id": uuid4(), "project_id": project_id, "sha": f"{i:040d}", "diff": diff},
+            )
+
+    await asyncio.to_thread(command.upgrade, _alembic(), "head")
+
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text("SELECT diff, diff_summary FROM changes WHERE project_id = :p"),
+                {"p": project_id},
+            )
+        ).all()
+    assert len(rows) == 105
+    for diff, stored in rows:
+        expected = summarize_diff(diff)
+        assert stored["files_changed"] == expected.files_changed
+        assert (stored["additions"], stored["deletions"]) == (
+            expected.additions,
+            expected.deletions,
+        )
+        assert stored["files"] == [
+            {"path": f.path, "additions": f.additions, "deletions": f.deletions}
+            for f in expected.files
+        ]
+
+
+async def test_migrations_leave_new_changes_with_an_empty_summary_by_default(
+    engine: AsyncEngine,
+) -> None:
+    async with engine.connect() as conn:
+        default = (
+            await conn.execute(
+                text(
+                    "SELECT column_default FROM information_schema.columns"
+                    " WHERE table_name = 'changes' AND column_name = 'diff_summary'"
+                )
+            )
+        ).scalar_one()
+
+    assert "files_changed" in default and "[]" in default

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -52,10 +53,21 @@ class ChangeModel(Base):
     status: Mapped[str] = mapped_column(String(20))
     run: Mapped[int] = mapped_column(Integer(), default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Resumen del diff (archivos y líneas) calculado al ingerir: el canal lo lee sin cargar `diff`.
+    diff_summary: Mapped[dict[str, object]] = mapped_column(
+        JSONB(),
+        server_default=text(
+            """'{"files_changed": 0, "additions": 0, "deletions": 0, "files": []}'::jsonb"""
+        ),
+    )
 
 
 class EventModel(Base):
     __tablename__ = "events"
+    __table_args__ = (
+        # `GET /changes/{id}/events` busca por el change dentro del payload.
+        Index("ix_events_change_id", text("(payload ->> 'change_id')")),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, autoincrement=True)
     project_id: Mapped[uuid.UUID] = mapped_column(

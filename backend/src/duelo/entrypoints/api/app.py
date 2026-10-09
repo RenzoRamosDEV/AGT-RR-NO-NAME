@@ -12,6 +12,7 @@ from duelo.entrypoints.api.routers.health import ready_router
 from duelo.entrypoints.api.routers.health import router as health_router
 from duelo.entrypoints.api.routers.ingest import router as ingest_router
 from duelo.entrypoints.api.routers.projects import router as projects_router
+from duelo.entrypoints.api.routers.reviews import router as reviews_router
 from duelo.entrypoints.api.routers.stats import router as stats_router
 
 
@@ -36,5 +37,6 @@ def create_app(
         app.include_router(ingest_router)
         app.include_router(projects_router)
         app.include_router(changes_router)
+        app.include_router(reviews_router)
         app.include_router(stats_router)
     return app

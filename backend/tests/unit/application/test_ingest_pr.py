@@ -39,7 +39,7 @@ def _deps(starter: FakeReviewStarter | None = None):
 async def test_pr_is_persisted_as_kind_pr_and_its_review_started() -> None:
     projects, changes, starter = _deps()
 
-    change = await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)
+    change = (await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)).change
 
     assert change.kind is ChangeKind.PR
     assert changes.persisted_events[0].kind == "pr"
@@ -49,8 +49,8 @@ async def test_pr_is_persisted_as_kind_pr_and_its_review_started() -> None:
 async def test_resending_a_pr_is_idempotent() -> None:
     projects, changes, starter = _deps()
 
-    first = await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)
-    second = await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)
+    first = (await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)).change
+    second = (await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)).change
 
     assert first.id == second.id
     assert len(changes.persisted_events) == 1 and len(starter.started) == 1
@@ -59,8 +59,10 @@ async def test_resending_a_pr_is_idempotent() -> None:
 async def test_pr_and_commit_with_the_same_sha_are_distinct_changes_with_their_own_review() -> None:
     projects, changes, starter = _deps()
 
-    commit = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
-    pr = await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)
+    commit = (
+        await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+    ).change
+    pr = (await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)).change
 
     assert commit.id != pr.id
     assert {k[0] for k in starter.started} == {"commit", "pr"}
@@ -69,9 +71,9 @@ async def test_pr_and_commit_with_the_same_sha_are_distinct_changes_with_their_o
 async def test_pr_diff_is_cut_like_a_commit_diff() -> None:
     projects, changes, starter = _deps()
 
-    change = await ingest_pr(
-        projects, changes, starter, _submission(diff="x" * 11), max_diff_chars=10
-    )
+    change = (
+        await ingest_pr(projects, changes, starter, _submission(diff="x" * 11), max_diff_chars=10)
+    ).change
 
     assert change.diff == "x" * 10 and change.diff_truncated is True
 
@@ -95,7 +97,17 @@ async def test_starter_failure_keeps_the_pr_and_a_retry_recovers() -> None:
             projects, changes, FakeReviewStarter(fail=True), _submission(), max_diff_chars=100
         )
     working = FakeReviewStarter()
-    change = await ingest_pr(projects, changes, working, _submission(), max_diff_chars=100)
+    change = (await ingest_pr(projects, changes, working, _submission(), max_diff_chars=100)).change
 
     assert len(changes.persisted_events) == 1
     assert working.started[("pr", str(PROJECT.id), "b" * 40, 1)] == change
+
+
+async def test_the_result_reports_creation_and_a_commit_with_the_same_sha_is_new() -> None:
+    projects, changes, starter = _deps()
+
+    first = await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)
+    second = await ingest_pr(projects, changes, starter, _submission(), max_diff_chars=100)
+    commit = await ingest_commit(projects, changes, starter, _submission(), max_diff_chars=100)
+
+    assert (first.created, second.created, commit.created) == (True, False, True)

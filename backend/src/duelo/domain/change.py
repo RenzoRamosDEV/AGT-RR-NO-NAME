@@ -5,6 +5,8 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
+from duelo.domain.diff import EMPTY_DIFF_SUMMARY, DiffSummary, summarize_diff
+
 # Límites de negocio; coinciden con las columnas de `changes` (un test lo garantiza).
 MAX_HEAD_SHA = 64
 MAX_REF = 255
@@ -44,6 +46,7 @@ class Change:
     status: ChangeStatus
     run: int
     created_at: datetime
+    diff_summary: DiffSummary = EMPTY_DIFF_SUMMARY
 
     @classmethod
     def new(
@@ -59,6 +62,7 @@ class Change:
         diff: str,
         diff_truncated: bool,
         created_at: datetime,
+        id: UUID | None = None,
     ) -> Change:
         if not head_sha:
             raise ValueError("head_sha no puede estar vacío")
@@ -66,7 +70,7 @@ class Change:
         _validate_identifier("ref", ref, MAX_REF)
         _validate_identifier("url", url, MAX_URL)
         return cls(
-            id=uuid4(),
+            id=id if id is not None else uuid4(),
             project_id=project_id,
             kind=kind,
             ref=ref,
@@ -79,4 +83,5 @@ class Change:
             status=ChangeStatus.PENDING,
             run=1,
             created_at=created_at,
+            diff_summary=summarize_diff(diff),
         )

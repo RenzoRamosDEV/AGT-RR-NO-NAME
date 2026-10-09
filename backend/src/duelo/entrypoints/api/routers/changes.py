@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from duelo.application.ports import ReviewStartError
 from duelo.application.retry_review import ChangeNotFound, RetryNotAllowed
 from duelo.entrypoints.api.auth import require_ingest_token
-from duelo.entrypoints.api.schemas import ChangeDetailResponse, ErrorResponse, RetryReviewResponse
+from duelo.entrypoints.api.schemas import (
+    ChangeDetailResponse,
+    ChangeEventResponse,
+    ErrorResponse,
+    RetryReviewResponse,
+)
 
 router = APIRouter(tags=["changes"])
 
@@ -22,6 +27,19 @@ async def get_change(change_id: UUID, request: Request) -> ChangeDetailResponse:
     if detail is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Change inexistente")
     return ChangeDetailResponse.from_detail(detail)
+
+
+@router.get(
+    "/changes/{change_id}/events",
+    response_model=list[ChangeEventResponse],
+    responses={404: {"model": ErrorResponse}},
+)
+async def get_change_events(change_id: UUID, request: Request) -> list[ChangeEventResponse]:
+    """Línea de tiempo del change: `change.created`, `review.completed` y `review.failed`."""
+    events = await request.app.state.dependencies.list_change_events(change_id)
+    if events is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Change inexistente")
+    return [ChangeEventResponse.from_domain(e) for e in events]
 
 
 @router.post(

@@ -63,3 +63,55 @@ def test_worker_settings_do_not_require_the_ingest_token(monkeypatch: pytest.Mon
     monkeypatch.delenv("INGEST_TOKEN", raising=False)
 
     assert WorkerSettings().agent_names
+
+
+_OPERATOR = "o" * 16
+
+
+def test_operator_token_is_optional_and_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.delenv("OPERATOR_TOKEN", raising=False)
+
+    assert Settings().operator_token is None  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_operator_token_means_not_configured(
+    monkeypatch: pytest.MonkeyPatch, blank: str
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("OPERATOR_TOKEN", blank)
+
+    assert Settings().operator_token is None  # type: ignore[call-arg]
+
+
+def test_operator_token_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("OPERATOR_TOKEN", _OPERATOR)
+
+    assert Settings().operator_token == _OPERATOR  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(("length", "valid"), [(15, False), (16, True), (17, True)])
+def test_operator_token_needs_at_least_16_characters(
+    monkeypatch: pytest.MonkeyPatch, length: int, valid: bool
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("OPERATOR_TOKEN", "x" * length)
+
+    if valid:
+        assert Settings().operator_token == "x" * length  # type: ignore[call-arg]
+    else:
+        with pytest.raises(ValidationError):
+            Settings()  # type: ignore[call-arg]
+
+
+def test_operator_token_must_differ_from_the_ingest_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """El token de ingesta lo llevan los hooks de los repos: no puede abrir la salida cruda."""
+    monkeypatch.setenv("INGEST_TOKEN", _OPERATOR)
+    monkeypatch.setenv("OPERATOR_TOKEN", _OPERATOR)
+
+    with pytest.raises(ValidationError, match="distinto de INGEST_TOKEN"):
+        Settings()  # type: ignore[call-arg]

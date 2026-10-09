@@ -20,7 +20,10 @@ async def ingest_change(
     url: str,
     diff: str,
     diff_truncated: bool,
+    change_id: UUID | None = None,
 ) -> Change:
+    """Persiste el change. `change_id` fija el id del candidato: si el repositorio devuelve un
+    change con otro id, ya existía (la identidad natural es otra)."""
     change = Change.new(
         project_id=project_id,
         kind=kind,
@@ -32,6 +35,7 @@ async def ingest_change(
         diff=diff,
         diff_truncated=diff_truncated,
         created_at=datetime.now(UTC),
+        id=change_id,
     )
     event = ChangeCreated(
         change_id=change.id,

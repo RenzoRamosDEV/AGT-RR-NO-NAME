@@ -7,14 +7,18 @@ from duelo.application.read_models import ChangeCursor, ChangeSummary
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated
 from duelo.domain.review_status import ChangeReviewStatus, review_status_of_run
+from tests.fakes.event_log import FakeEventLog
 from tests.fakes.review_repository import FakeReviewRepository
 
 
 class FakeChangeRepository:
     """Repositorio en memoria para testear `ingest_change` sin Postgres."""
 
-    def __init__(self, reviews: FakeReviewRepository | None = None) -> None:
+    def __init__(
+        self, reviews: FakeReviewRepository | None = None, events: FakeEventLog | None = None
+    ) -> None:
         self._reviews = reviews or FakeReviewRepository()
+        self._events = events
         self._by_natural_key: dict[tuple[str, str, str], Change] = {}
         self._by_id: dict[UUID, Change] = {}
         self.persisted_events: list[ChangeCreated] = []
@@ -28,6 +32,9 @@ class FakeChangeRepository:
         self._by_natural_key[key] = change
         self._by_id[change.id] = change
         self.persisted_events.append(event)
+        self._reviews.register_change(change.id, change.project_id)
+        if self._events is not None:
+            self._events.append(event, project_id=change.project_id)
         return change
 
     async def get(self, change_id: UUID) -> Change | None:
@@ -87,6 +94,7 @@ class FakeChangeRepository:
                     review_status=review_status,
                     run=c.run,
                     created_at=c.created_at,
+                    diff_summary=c.diff_summary,
                 )
             )
         return summaries[:limit]

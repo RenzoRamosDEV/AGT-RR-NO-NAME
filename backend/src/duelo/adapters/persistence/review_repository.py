@@ -6,7 +6,7 @@ from sqlalchemy import func, insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from duelo.adapters.persistence.models import EventModel, ReviewModel
+from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from duelo.application.read_models import AgentStats
 from duelo.domain.events import ReviewCompleted, ReviewFailed
@@ -80,10 +80,16 @@ class SqlAlchemyReviewRepository:
         )
         return [_to_domain(row) for row in rows.scalars()]
 
-    async def agent_stats(self) -> list[AgentStats]:
+    async def get(self, review_id: UUID) -> Review | None:
+        row = (
+            await self._session.execute(select(ReviewModel).where(ReviewModel.id == review_id))
+        ).scalar_one_or_none()
+        return _to_domain(row) if row is not None else None
+
+    async def agent_stats(self, *, project_id: UUID | None) -> list[AgentStats]:
         completed = ReviewStatus.COMPLETED.value
         failed = ReviewStatus.FAILED.value
-        rows = await self._session.execute(
+        stmt = (
             select(
                 ReviewModel.agent,
                 func.count().label("total"),
@@ -95,6 +101,11 @@ class SqlAlchemyReviewRepository:
             .group_by(ReviewModel.agent)
             .order_by(ReviewModel.agent)
         )
+        if project_id is not None:
+            stmt = stmt.join(ChangeModel, ChangeModel.id == ReviewModel.change_id).where(
+                ChangeModel.project_id == project_id
+            )
+        rows = await self._session.execute(stmt)
         return [
             AgentStats(
                 agent=r.agent,

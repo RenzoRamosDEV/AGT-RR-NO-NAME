@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, and_, func, insert, or_, select, tuple_, update
@@ -10,6 +11,7 @@ from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewMod
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from duelo.application.read_models import ChangeCursor, ChangeSummary
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
+from duelo.domain.diff import DiffSummary, FileDiff
 from duelo.domain.events import ChangeCreated
 from duelo.domain.review import ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, review_status_from_counts
@@ -39,6 +41,7 @@ class SqlAlchemyChangeRepository:
                     status=change.status.value,
                     run=change.run,
                     created_at=change.created_at,
+                    diff_summary=_summary_to_json(change.diff_summary),
                 )
                 # La constraint UNIQUE (project_id, kind, head_sha) resuelve la
                 # idempotencia de forma atómica: si ya existía, no se inserta fila y
@@ -121,6 +124,7 @@ class SqlAlchemyChangeRepository:
                 ChangeModel.status,
                 ChangeModel.run,
                 ChangeModel.created_at,
+                ChangeModel.diff_summary,
                 completed.label("completed_reviews"),
                 failed.label("failed_reviews"),
             )
@@ -169,6 +173,7 @@ class SqlAlchemyChangeRepository:
                 ),
                 run=r.run,
                 created_at=r.created_at,
+                diff_summary=_summary_from_json(r.diff_summary),
             )
             for r in rows
         ]
@@ -227,4 +232,33 @@ def _to_domain(row: ChangeModel) -> Change:
         status=ChangeStatus(row.status),
         run=row.run,
         created_at=row.created_at,
+        diff_summary=_summary_from_json(row.diff_summary),
+    )
+
+
+def _summary_to_json(summary: DiffSummary) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "files_changed": summary.files_changed,
+        "additions": summary.additions,
+        "deletions": summary.deletions,
+        "files": [
+            {"path": f.path, "additions": f.additions, "deletions": f.deletions}
+            for f in summary.files
+        ],
+    }
+    sanitized: dict[str, Any] = sanitize_json(payload)
+    return sanitized
+
+
+def _summary_from_json(data: dict[str, Any]) -> DiffSummary:
+    return DiffSummary(
+        files_changed=int(data["files_changed"]),
+        additions=int(data["additions"]),
+        deletions=int(data["deletions"]),
+        files=tuple(
+            FileDiff(
+                path=str(f["path"]), additions=int(f["additions"]), deletions=int(f["deletions"])
+            )
+            for f in data["files"]
+        ),
     )

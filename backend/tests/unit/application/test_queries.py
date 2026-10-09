@@ -7,7 +7,14 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from duelo.application.ingest_commit import ProjectNotFound
-from duelo.application.queries import agent_stats, get_change_detail, list_changes, list_projects
+from duelo.application.queries import (
+    agent_stats,
+    change_events,
+    get_change_detail,
+    list_changes,
+    list_projects,
+    review_raw_output,
+)
 from duelo.application.read_models import ChangeCursor
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
@@ -15,6 +22,7 @@ from duelo.domain.project import Project
 from duelo.domain.review import Finding, Review, ReviewResult
 from duelo.domain.review_status import ChangeReviewStatus
 from tests.fakes.change_repository import FakeChangeRepository
+from tests.fakes.event_log import FakeChangeEventRepository, FakeEventLog
 from tests.fakes.project_repository import FakeProjectRepository
 from tests.fakes.review_repository import FakeReviewRepository
 
@@ -228,7 +236,7 @@ async def test_agent_stats_delegates_to_the_repository() -> None:
     change = await _add(changes, "1" * 40, at=T0)
     await _persist(reviews, _review(change, "a", score=8, ms=100, fail=False), PROJECT)
 
-    stats = await agent_stats(reviews)
+    stats = await agent_stats(FakeProjectRepository(PROJECT), reviews, project=None)
 
     assert [(s.agent, s.total, s.avg_score, s.avg_duration_ms) for s in stats] == [
         ("a", 1, 8.0, 100.0)
@@ -382,3 +390,143 @@ async def test_the_search_text_and_one_extra_row_are_requested_from_the_reposito
     assert call["q"] == "change 1" and call["status"] == only and call["expected_agents"] == 3
     assert call["limit"] == 2  # uno de más para saber si hay página siguiente
     assert [c.head_sha for c in page.items] == ["1" * 40]
+
+
+async def test_agent_stats_can_be_scoped_to_a_project() -> None:
+    other_project = Project(id=uuid4(), slug="otro/repo")
+    projects = FakeProjectRepository(PROJECT, other_project)
+    reviews = FakeReviewRepository()
+    changes = FakeChangeRepository(reviews)
+    mine = await _add(changes, "1" * 40, at=T0)
+    theirs = await _add(changes, "2" * 40, at=T0, project=other_project)
+    await _persist(reviews, _review(mine, "a", score=8, ms=100, fail=False), PROJECT)
+    await _persist(reviews, _review(theirs, "a", score=2, ms=900, fail=False), other_project)
+
+    scoped = await agent_stats(projects, reviews, project=PROJECT.slug)
+    everyone = await agent_stats(projects, reviews, project=None)
+
+    assert [(s.total, s.avg_score) for s in scoped] == [(1, 8.0)]
+    assert [(s.total, s.avg_score) for s in everyone] == [(2, 5.0)]
+
+
+async def test_agent_stats_of_a_project_without_reviews_is_empty_not_an_error() -> None:
+    projects, reviews = FakeProjectRepository(PROJECT), FakeReviewRepository()
+
+    assert await agent_stats(projects, reviews, project=PROJECT.slug) == []
+
+
+async def test_agent_stats_of_an_unknown_project_raises() -> None:
+    with pytest.raises(ProjectNotFound) as error:
+        await agent_stats(FakeProjectRepository(PROJECT), FakeReviewRepository(), project="no/hay")
+
+    assert error.value.slug == "no/hay"
+
+
+async def _history() -> tuple[FakeChangeRepository, FakeEventLog, Change]:
+    log = FakeEventLog()
+    reviews = FakeReviewRepository(log)
+    changes = FakeChangeRepository(reviews, log)
+    change = await _add(changes, "1" * 40, at=T0)
+    await _persist(reviews, _review(change, "a", score=5, ms=10, fail=False), PROJECT)
+    await _persist(reviews, _review(change, "b", score=None, ms=None, fail=True), PROJECT)
+    return changes, log, change
+
+
+async def test_change_events_are_ordered_and_expose_only_agent_and_review_id() -> None:
+    changes, log, change = await _history()
+
+    events = await change_events(changes, FakeChangeEventRepository(log), change.id)
+
+    assert events is not None
+    assert [(e.type, e.agent) for e in events] == [
+        ("change.created", None),
+        ("review.completed", "a"),
+        ("review.failed", "b"),
+    ]
+    assert [e.id for e in events] == sorted(e.id for e in events)
+    assert events[0].review_id is None and events[1].review_id is not None
+    assert all(isinstance(e.created_at, datetime) for e in events)
+
+
+async def test_change_events_never_expose_the_error_text_or_other_payload_fields() -> None:
+    changes, log, change = await _history()
+    log.append_raw(
+        project_id=PROJECT.id,
+        type="review.failed",
+        payload={
+            "change_id": str(change.id),
+            "agent": "c",
+            "error": "Traceback: token=SECRETO",
+            "raw_output": "SALIDA CRUDA",
+        },
+    )
+
+    events = await change_events(changes, FakeChangeEventRepository(log), change.id)
+
+    assert events is not None
+    assert "SECRETO" not in repr(events) and "SALIDA CRUDA" not in repr(events)
+    assert not hasattr(events[-1], "error") and not hasattr(events[-1], "payload")
+
+
+async def test_change_events_skip_unknown_types_and_other_changes() -> None:
+    changes, log, change = await _history()
+    other = await _add(changes, "2" * 40, at=T0)
+    log.append_raw(project_id=PROJECT.id, type="vote.cast", payload={"change_id": str(change.id)})
+    log.append_raw(
+        project_id=PROJECT.id,
+        type="review.completed",
+        payload={"change_id": str(other.id), "agent": "z"},
+    )
+
+    events = await change_events(changes, FakeChangeEventRepository(log), change.id)
+
+    assert events is not None
+    assert [e.type for e in events] == ["change.created", "review.completed", "review.failed"]
+    assert "z" not in [e.agent for e in events]
+
+
+async def test_change_events_tolerate_a_malformed_review_id_and_a_non_text_agent() -> None:
+    changes, log, change = await _history()
+    log.append_raw(
+        project_id=PROJECT.id,
+        type="review.completed",
+        payload={"change_id": str(change.id), "agent": 7, "review_id": "no-es-uuid"},
+    )
+
+    events = await change_events(changes, FakeChangeEventRepository(log), change.id)
+
+    assert events is not None
+    assert events[-1].agent is None and events[-1].review_id is None
+
+
+async def test_change_events_of_an_unknown_change_is_none() -> None:
+    log = FakeEventLog()
+
+    assert (
+        await change_events(FakeChangeRepository(), FakeChangeEventRepository(log), uuid4()) is None
+    )
+
+
+async def test_review_raw_output_returns_it_only_when_the_review_has_one() -> None:
+    changes, reviews = FakeChangeRepository(), FakeReviewRepository()
+    change = await _add(changes, "1" * 40, at=T0)
+    done = Review.succeeded(
+        change_id=change.id,
+        agent="a",
+        run=1,
+        result=ReviewResult(summary="ok", score=1),
+        raw_output="SALIDA",
+        duration_ms=1,
+        created_at=T0,
+    )
+    quiet = _review(change, "b", score=1, ms=1, fail=False)  # raw_output=None
+    broken = _review(change, "c", score=None, ms=None, fail=True)
+    for review in (done, quiet, broken):
+        await _persist(reviews, review, PROJECT)
+
+    output = await review_raw_output(reviews, done.id)
+
+    assert output is not None and (output.review_id, output.raw_output) == (done.id, "SALIDA")
+    assert await review_raw_output(reviews, quiet.id) is None
+    assert await review_raw_output(reviews, broken.id) is None
+    assert await review_raw_output(reviews, uuid4()) is None

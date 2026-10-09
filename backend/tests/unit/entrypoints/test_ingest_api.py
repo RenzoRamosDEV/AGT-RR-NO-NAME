@@ -33,6 +33,7 @@ async def test_valid_commit_returns_202_with_the_change_id() -> None:
     assert response.json() == {
         "change_id": str(api.changes.persisted_events[0].change_id),
         "diff_truncated": False,
+        "created": True,
     }
     assert api.starter.calls == 1
 
@@ -263,7 +264,11 @@ async def test_valid_pr_returns_202_and_is_stored_as_a_pr() -> None:
 
     assert response.status_code == 202
     (change,) = api.changes._by_id.values()
-    assert response.json() == {"change_id": str(change.id), "diff_truncated": False}
+    assert response.json() == {
+        "change_id": str(change.id),
+        "diff_truncated": False,
+        "created": True,
+    }
     assert change.kind.value == "pr" and change.ref == "refs/pull/7/head"
     assert api.starter.calls == 1
 

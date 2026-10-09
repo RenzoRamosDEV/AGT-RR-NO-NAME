@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+MIN_OPERATOR_TOKEN = 16
 
 
 class WorkerSettings(BaseSettings):
@@ -37,3 +39,18 @@ class Settings(WorkerSettings):
     # Obligatorio: sin él la API no arranca, en vez de quedar abierta por accidente.
     ingest_token: str = Field(min_length=1)
     max_diff_chars: int = Field(default=200_000, gt=0)
+    # Opcional: sin él, `GET /reviews/{id}/raw-output` queda deshabilitado (404). Es un secreto
+    # distinto del de ingesta: ese lo llevan los hooks de los repos y no debe abrir lecturas.
+    operator_token: str | None = Field(default=None, min_length=MIN_OPERATOR_TOKEN)
+
+    @field_validator("operator_token", mode="before")
+    @classmethod
+    def _blank_operator_token_is_unset(cls, value: object) -> object:
+        # `OPERATOR_TOKEN=` en un compose o .env significa "sin configurar", no un token vacío.
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @model_validator(mode="after")
+    def _operator_token_differs_from_ingest_token(self) -> Settings:
+        if self.operator_token is not None and self.operator_token == self.ingest_token:
+            raise ValueError("OPERATOR_TOKEN debe ser distinto de INGEST_TOKEN")
+        return self

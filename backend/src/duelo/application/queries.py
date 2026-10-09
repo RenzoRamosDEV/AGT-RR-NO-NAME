@@ -5,12 +5,20 @@ from __future__ import annotations
 from uuid import UUID
 
 from duelo.application.ingest_commit import ProjectNotFound
-from duelo.application.ports import ChangeRepository, ProjectRepository, ReviewRepository
+from duelo.application.ports import (
+    ChangeEventRepository,
+    ChangeRepository,
+    ProjectRepository,
+    ReviewRepository,
+)
 from duelo.application.read_models import (
     AgentStats,
     ChangeCursor,
     ChangeDetail,
+    ChangeEvent,
     ChangePage,
+    RawOutput,
+    StoredEvent,
 )
 from duelo.domain.change import ChangeKind
 from duelo.domain.project import Project
@@ -84,5 +92,57 @@ async def get_change_detail(
     )
 
 
-async def agent_stats(reviews: ReviewRepository) -> list[AgentStats]:
-    return await reviews.agent_stats()
+async def agent_stats(
+    projects: ProjectRepository, reviews: ReviewRepository, *, project: str | None
+) -> list[AgentStats]:
+    """Métricas por agente, globales o de un proyecto (`ProjectNotFound` si no existe)."""
+    if project is None:
+        return await reviews.agent_stats(project_id=None)
+    found = await projects.get_by_slug(project)
+    if found is None:
+        raise ProjectNotFound(project)
+    return await reviews.agent_stats(project_id=found.id)
+
+
+# Lista blanca de lo que la API muestra de un evento: lo que no esté aquí (el `error` de una
+# review fallida, campos futuros del payload) no sale nunca, aunque esté guardado.
+_EXPOSED_EVENT_TYPES = frozenset({"change.created", "review.completed", "review.failed"})
+
+
+def _as_uuid(value: object) -> UUID | None:
+    try:
+        return UUID(str(value))
+    except ValueError:
+        return None
+
+
+def _expose(event: StoredEvent) -> ChangeEvent | None:
+    if event.type not in _EXPOSED_EVENT_TYPES:
+        return None
+    agent = event.payload.get("agent")
+    return ChangeEvent(
+        id=event.id,
+        type=event.type,
+        created_at=event.created_at,
+        agent=agent if isinstance(agent, str) else None,
+        review_id=_as_uuid(event.payload["review_id"]) if "review_id" in event.payload else None,
+    )
+
+
+async def change_events(
+    changes: ChangeRepository, events: ChangeEventRepository, change_id: UUID
+) -> list[ChangeEvent] | None:
+    """Línea de tiempo del change con el payload reducido, o `None` si el change no existe."""
+    change = await changes.get(change_id)
+    if change is None:
+        return None
+    stored = await events.list_for_change(change.project_id, change_id)
+    return [e for e in (_expose(s) for s in stored) if e is not None]
+
+
+async def review_raw_output(reviews: ReviewRepository, review_id: UUID) -> RawOutput | None:
+    """Salida cruda de una review; `None` si no existe o no tiene (las fallidas no la tienen)."""
+    review = await reviews.get(review_id)
+    if review is None or review.raw_output is None:
+        return None
+    return RawOutput(review_id=review.id, raw_output=review.raw_output)

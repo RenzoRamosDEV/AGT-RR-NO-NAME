@@ -252,7 +252,8 @@ async def test_agent_stats_average_only_the_values_that_exist(
     await _persist_review(session_factory, changes[1], _ko(changes[1], broken, ms=None, at=T0))
 
     async with session_factory() as session:
-        stats = {s.agent: s for s in await SqlAlchemyReviewRepository(session).agent_stats()}
+        repo = SqlAlchemyReviewRepository(session)
+        stats = {s.agent: s for s in await repo.agent_stats(project_id=None)}
 
     assert (stats[good].total, stats[good].completed, stats[good].failed) == (2, 2, 0)
     assert (stats[good].avg_score, stats[good].avg_duration_ms) == (7.0, 200.0)

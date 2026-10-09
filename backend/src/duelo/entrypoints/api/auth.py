@@ -16,3 +16,17 @@ async def require_ingest_token(
         x_ingest_token.encode(), expected.encode()
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token de ingesta inválido")
+
+
+async def require_operator_token(
+    request: Request,
+    x_operator_token: Annotated[str | None, Header()] = None,
+) -> None:
+    expected: str | None = request.app.state.settings.operator_token
+    if expected is None:
+        # Deshabilitado: 404 a toda petición, con o sin cabecera, para no delatar que existe.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No encontrado")
+    if x_operator_token is None or not hmac.compare_digest(
+        x_operator_token.encode(), expected.encode()
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token de operador inválido")
