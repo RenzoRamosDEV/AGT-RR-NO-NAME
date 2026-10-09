@@ -45,3 +45,18 @@ class TestAgentNameBoundaries:
 
 def test_agent_limit_is_50() -> None:
     assert MAX_AGENT == 50
+
+
+class TestExactValidationMessages:
+    def test_empty_agent(self) -> None:
+        with pytest.raises(ValueError) as error:
+            _succeeded("")
+        assert str(error.value) == "agent no puede estar vacío"
+
+    def test_too_long_agent(self) -> None:
+        with pytest.raises(ValueError) as error:
+            _failed("a" * (MAX_AGENT + 1))
+        assert (
+            str(error.value)
+            == f"agent no puede superar {MAX_AGENT} caracteres (recibidos {MAX_AGENT + 1})"
+        )

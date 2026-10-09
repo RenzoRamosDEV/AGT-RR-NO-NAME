@@ -14,23 +14,23 @@
 
 ## 2. Lógica y requisitos (unit)
 
-- [ ] 2.1 Tests de propagación de campos de `Change.new`, `Review.succeeded/failed`,
+- [x] 2.1 Tests de propagación de campos de `Change.new`, `Review.succeeded/failed`,
       `ingest_change` y `record_review_success/failure` (cada campo de entrada acaba en la
       entidad y en el evento; los ids son únicos por llamada); verificar con la medición de
       mutación (tarea 4) que los supervivientes de reenvío desaparecen.
-- [ ] 2.2 Tabla de decisión de `run_review` llamando a la activity directamente con fakes:
+- [x] 2.2 Tabla de decisión de `run_review` llamando a la activity directamente con fakes:
       las 8 combinaciones (agente conocido × change existente × el agente lanza) con su
       resultado esperado y la precedencia (agente desconocido antes que change inexistente);
       verificar que cubre la rama "el change no existe" y que los errores de configuración
       son `non_retryable`.
-- [ ] 2.3 Invariantes de estado de `Review`: los constructores producen solo combinaciones
+- [x] 2.3 Invariantes de estado de `Review`: los constructores producen solo combinaciones
       coherentes (completed ⇒ sin error; failed ⇒ sin resumen/score/findings), las entidades
       son inmutables (`FrozenInstanceError`) y los enums rechazan valores desconocidos;
       verificar que quitar `frozen=True` hace fallar el test.
 
 ## 3. Property-based (hypothesis)
 
-- [ ] 3.1 Propiedades de `Change.new`/`Review` (entradas válidas preservan los campos y
+- [x] 3.1 Propiedades de `Change.new`/`Review` (entradas válidas preservan los campos y
       las inválidas lanzan `ValueError`), round-trip JSON de los payloads de eventos y ley de
       idempotencia de `FakeChangeRepository`/`FakeReviewRepository` (n ingestas con claves
       aleatorias ⇒ tantos cambios como claves distintas, mismo id por clave); perfil `ci`
@@ -38,11 +38,11 @@
 
 ## 4. Mutation testing
 
-- [ ] 4.1 Añadir `mutmut` como dependencia de desarrollo, configurar `[tool.mutmut]` para
+- [x] 4.1 Añadir `mutmut` como dependencia de desarrollo, configurar `[tool.mutmut]` para
       `domain/` y `application/` con los tests de `tests/unit/domain` y `tests/unit/application`,
       receta `just mutation` y un script que lea las estadísticas y falle bajo el umbral;
       verificar que corre en pocos segundos y reproduce la línea base (~206 mutantes).
-- [ ] 4.2 Revisar los supervivientes: matar los reales con tests y documentar los
+- [x] 4.2 Revisar los supervivientes: matar los reales con tests y documentar los
       equivalentes; fijar el umbral con el resultado medido; verificar que la puntuación sube
       por encima del ~71 % de partida.
 

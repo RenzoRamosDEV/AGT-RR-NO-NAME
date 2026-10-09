@@ -31,3 +31,7 @@ frontend/dist/
 .coverage
 .coverage.*
 htmlcov/
+
+# Mutation testing
+mutants/
+.mutmut-cache

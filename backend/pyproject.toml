@@ -24,6 +24,7 @@ dev = [
     "import-linter>=2.1",
     "testcontainers[postgres]>=4.9",
     "hypothesis>=6.100",
+    "mutmut>=3.8",
 ]
 
 [build-system]
@@ -71,3 +72,9 @@ layers = [
     "review_arena.application",
     "review_arena.domain",
 ]
+
+[tool.mutmut]
+# Solo domain/ y application/: son puros y sus tests no necesitan contenedores.
+source_paths = ["src/review_arena/domain/", "src/review_arena/application/"]
+pytest_add_cli_args_test_selection = ["tests/unit/domain", "tests/unit/application"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "--no-cov"]

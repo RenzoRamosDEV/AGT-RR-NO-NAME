@@ -60,3 +60,16 @@ gen-client:
 ci: lint test
     {{compose}} --profile infra config
     {{compose}} --profile app config
+
+# Umbral mínimo de puntuación de mutación (%) sobre domain/ y application/
+mutation_min := "95"
+
+# Mutation testing sobre domain/ y application/ (unos segundos); falla bajo el umbral
+mutation:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd backend
+    rm -rf mutants
+    uv run mutmut run 2>&1 | tr '\r' '\n' | grep -E "mutations/second|^[0-9]+/[0-9]+ " | tail -2 || true
+    uv run mutmut export-cicd-stats >/dev/null
+    uv run python ../scripts/mutation_gate.py mutants/mutmut-cicd-stats.json --min {{mutation_min}}
