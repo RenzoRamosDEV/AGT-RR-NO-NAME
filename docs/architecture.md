@@ -24,8 +24,16 @@ que ya está en el spec o en `openspec/specs/`.
 - [`service-health`](../openspec/specs/service-health/spec.md): liveness del proceso de
   la API (Fase 0).
 - [`change-ingestion`](../openspec/specs/change-ingestion/spec.md): persistencia atómica
-  e idempotente de un `Change` y su evento outbox (Fase 1, primer slice - sin
-  `Review`/`Vote`/agentes/Temporal/endpoint HTTP todavía).
+  e idempotente de un `Change` y su evento outbox, con límites de campo, recorte de
+  metadatos y saneado de NUL (Fase 1).
+- [`change-review`](../openspec/specs/change-review/spec.md): reviews en paralelo con
+  `FakeAgent` mediante workflows de Temporal, tolerantes a fallos parciales, atómicas e
+  idempotentes por `(change, agent, run)` (Fase 2, primer slice; sin endpoint HTTP todavía).
+
+## Calidad y tests
+
+- [Estrategia de tests](testing.md): capas unit/integration, mutation testing, umbrales de
+  cobertura y el mapa de cada tipo de test (cubierto / diferido con motivo).
 
 ## Regla de dependencias (backend)
 

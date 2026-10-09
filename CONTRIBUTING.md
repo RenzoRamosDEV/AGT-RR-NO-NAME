@@ -3,6 +3,13 @@
 Proyecto personal; esta guía es para mantener la disciplina del repo
 consistente entre sesiones, no para colaboradores externos.
 
+## Tests
+
+Solo se añaden tests que aportan valor; la estrategia, las capas y el mapa del checklist
+(qué está cubierto, qué diferido y por qué) están en [`docs/testing.md`](docs/testing.md).
+Receta rápida: `just test-unit` (segundos, sin Docker) mientras desarrollas y `just ci`
+antes de cada push.
+
 ## Antes de tocar código
 
 1. Lee `docs/spec/review-arena.md` (spec completo) y `openspec/specs/`
@@ -21,6 +28,8 @@ pre-commit install   # una vez
 just ci               # lint + test + validación de compose, antes de cada push
 ```
 
+- Todo cambio (también mejoras, tests y tooling) va como change de OpenSpec, nunca como
+  commit suelto.
 - Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`, `docs:`...) -
   `commitlint` lo exige en CI.
 - Cada ADR importante va en `docs/adr/NNNN-slug.md` y se enlaza desde

@@ -71,6 +71,30 @@
       capacidades nuevas en `docs/architecture.md`.
 - [ ] 7.3 Verificación final: `just ci` en verde y CI real de GitHub en verde.
 
+## 8. Tests que dependen de la API (heredados de `strengthen-test-suite`)
+
+Estos tipos de test no se pudieron escribir antes porque no existía el endpoint
+(ver `docs/testing.md`). Entran con el código que prueban, no después.
+
+- [ ] 8.1 Contratos: snapshot del OpenAPI generado (`docs/openapi.json`) con un test que falla
+      si cambia sin actualizarlo, y `schemathesis` ejecutado contra la app ASGI (contrato +
+      fuzzing de entradas); verificar que una respuesta fuera de contrato rompe el test.
+- [ ] 8.2 Autenticación y autorización: token ausente, vacío, con espacios, con distinta
+      capitalización y de longitud distinta → siempre 401 sin efectos; `/health` y `/ready`
+      no exigen token y `POST /ingest/commit` sí; comprobar que se usa comparación en tiempo
+      constante (espía sobre `hmac.compare_digest`).
+- [ ] 8.3 Seguridad de la API: cuerpo malformado o con tipos erróneos → 422 sin traza,
+      payloads hostiles (SQL, NUL, Unicode raro, campos por encima de los límites de
+      `harden-input-limits`) → rechazo o persistencia segura, y que ni el token ni trazas
+      internas aparecen en respuestas de error ni en logs.
+- [ ] 8.4 E2E de flujos críticos por HTTP: el test vertical de la tarea 7.1 cubre el camino
+      feliz; añadir los críticos restantes (reingesta idempotente, Temporal caído → 503 y
+      reenvío posterior que arranca la review, proyecto inexistente).
+- [ ] 8.5 Carga: prueba de carga ligera sobre `POST /ingest/commit` (Locust o k6) con
+      presupuesto explícito (p95 de latencia y 0 errores a la concurrencia esperada de un
+      uso personal), ejecutable bajo demanda y no en cada push; documentar el presupuesto y
+      el resultado de la primera medición en `docs/testing.md`.
+
 ## Workflow follow-up
 
 - Archivar con `openspec archive expose-commit-ingestion --yes` tras mergear, para que

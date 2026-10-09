@@ -91,17 +91,17 @@
 - [x] 9.1 Activar `--cov-branch`, medir y fijar `fail_under` global y el umbral estricto de
       `domain/`+`application/` (`coverage report --include=... --fail-under`); verificar que
       un test borrado hace fallar el umbral.
-- [ ] 9.2 `ci.yml`: pasos separados (unit, integration, umbrales) con
+- [x] 9.2 `ci.yml`: pasos separados (unit, integration, umbrales) con
       `HYPOTHESIS_PROFILE=ci`, y workflow nuevo `mutation.yml` programado (semanal) y manual
       con acciones fijadas por SHA; verificar con `actionlint` y una ejecución real
       (`workflow_dispatch`).
 
 ## 10. Documentación y siguiente change
 
-- [ ] 10.1 `docs/testing.md`: mapa de cada punto del checklist (cubierto / añadido /
+- [x] 10.1 `docs/testing.md`: mapa de cada punto del checklist (cubierto / añadido /
       diferido con motivo), qué test va en qué capa, cómo ejecutar cada receta; enlazar desde
       `CONTRIBUTING.md` y `docs/architecture.md`.
-- [ ] 10.2 Añadir a `tasks.md` de `expose-commit-ingestion` los tests que dependen de la API
+- [x] 10.2 Añadir a `tasks.md` de `expose-commit-ingestion` los tests que dependen de la API
       (contratos con schemathesis y snapshot de OpenAPI, autenticación y autorización,
       seguridad de API, E2E por HTTP, carga de `POST /ingest/commit`); verificar con
       `openspec validate expose-commit-ingestion --strict`.

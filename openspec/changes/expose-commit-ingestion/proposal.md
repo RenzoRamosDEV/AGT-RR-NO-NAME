@@ -33,6 +33,10 @@ deterministas. PRs, debounce y webhooks quedan para Fase 5, como indica el spec.
 - Puerto `ProjectRepository` (`get_by_slug`) y puerto `ReviewStarter` (arrancar la review
   de un change), con sus adaptadores SQLAlchemy y Temporal.
 
+- **Tests dependientes de la API** (contratos, autenticación y autorización, seguridad de
+  API, E2E por HTTP y carga), heredados del checklist de `strengthen-test-suite`: ver
+  `docs/testing.md` y el grupo 8 de `tasks.md`.
+
 Fuera de este change: tokens por proyecto con hash y creación de proyectos por API
 (slice de `Project`), agentes reales, PRs/webhooks de GitHub, SSE, frontend, cliente
 TypeScript generado, workers separados en Docker (`platform`) y local (`agents`).
