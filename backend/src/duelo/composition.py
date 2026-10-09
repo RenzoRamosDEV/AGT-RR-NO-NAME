@@ -17,9 +17,11 @@ from duelo.adapters.persistence.review_repository import SqlAlchemyReviewReposit
 from duelo.application import queries
 from duelo.application.ingest_commit import ChangeSubmission, ingest_commit, ingest_pr
 from duelo.application.read_models import AgentStats, ChangeCursor, ChangeDetail, ChangePage
+from duelo.application.retry_review import retry_review
 from duelo.config import Settings
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.project import Project
+from duelo.domain.review_status import ChangeReviewStatus
 from duelo.entrypoints.api.app import create_app
 from duelo.entrypoints.api.dependencies import ApiDependencies
 
@@ -56,8 +58,15 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
     async def list_projects() -> list[Project]:
         return await queries.list_projects(projects)
 
+    expected_agents = len(settings.agent_names)
+
     async def list_changes(
-        slug: str, kind: ChangeKind | None, limit: int, after: ChangeCursor | None
+        slug: str,
+        kind: ChangeKind | None,
+        status: frozenset[ChangeReviewStatus] | None,
+        q: str | None,
+        limit: int,
+        after: ChangeCursor | None,
     ) -> ChangePage:
         async with session_factory() as session:
             return await queries.list_changes(
@@ -65,6 +74,9 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 SqlAlchemyChangeRepository(session),
                 slug=slug,
                 kind=kind,
+                status=status,
+                q=q,
+                expected_agents=expected_agents,
                 limit=limit,
                 after=after,
             )
@@ -72,7 +84,20 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
     async def get_change(change_id: UUID) -> ChangeDetail | None:
         async with session_factory() as session:
             return await queries.get_change_detail(
-                SqlAlchemyChangeRepository(session), SqlAlchemyReviewRepository(session), change_id
+                SqlAlchemyChangeRepository(session),
+                SqlAlchemyReviewRepository(session),
+                change_id,
+                expected_agents=expected_agents,
+            )
+
+    async def retry(change_id: UUID) -> Change:
+        async with session_factory() as session:
+            return await retry_review(
+                SqlAlchemyChangeRepository(session),
+                SqlAlchemyReviewRepository(session),
+                starter,
+                change_id,
+                expected_agents=expected_agents,
             )
 
     async def agent_stats() -> list[AgentStats]:
@@ -89,6 +114,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         list_projects=list_projects,
         list_changes=list_changes,
         get_change=get_change,
+        retry_review=retry,
         agent_stats=agent_stats,
         readiness_checks={"postgres": check_postgres, "temporal": temporal.check_health},
         close=engine.dispose,

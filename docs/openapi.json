@@ -72,6 +72,9 @@
             "title": "Diff Truncated",
             "type": "boolean"
           },
+          "findings_summary": {
+            "$ref": "#/components/schemas/FindingsSummaryResponse"
+          },
           "head_sha": {
             "title": "Head Sha",
             "type": "string"
@@ -92,6 +95,9 @@
           "ref": {
             "title": "Ref",
             "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ChangeReviewStatus"
           },
           "reviews": {
             "items": {
@@ -127,10 +133,12 @@
           "url",
           "diff_truncated",
           "status",
+          "review_status",
           "run",
           "created_at",
           "diff",
-          "reviews"
+          "reviews",
+          "findings_summary"
         ],
         "title": "ChangeDetailResponse",
         "type": "object"
@@ -169,6 +177,17 @@
         ],
         "title": "ChangePageResponse",
         "type": "object"
+      },
+      "ChangeReviewStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "partial_failed",
+          "failed",
+          "completed"
+        ],
+        "title": "ChangeReviewStatus",
+        "type": "string"
       },
       "ChangeStatus": {
         "enum": [
@@ -213,6 +232,9 @@
             "title": "Ref",
             "type": "string"
           },
+          "review_status": {
+            "$ref": "#/components/schemas/ChangeReviewStatus"
+          },
           "run": {
             "title": "Run",
             "type": "integer"
@@ -240,10 +262,73 @@
           "url",
           "diff_truncated",
           "status",
+          "review_status",
           "run",
           "created_at"
         ],
         "title": "ChangeSummaryResponse",
+        "type": "object"
+      },
+      "DependenciesHealthResponse": {
+        "properties": {
+          "dependencies": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DependencyHealthResponse"
+            },
+            "title": "Dependencies",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "dependencies"
+        ],
+        "title": "DependenciesHealthResponse",
+        "type": "object"
+      },
+      "DependencyHealthResponse": {
+        "properties": {
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "timeout",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "latency_ms"
+        ],
+        "title": "DependencyHealthResponse",
         "type": "object"
       },
       "ErrorResponse": {
@@ -285,6 +370,24 @@
           "message"
         ],
         "title": "FindingResponse",
+        "type": "object"
+      },
+      "FindingsSummaryResponse": {
+        "description": "Findings del run actual con las severidades normalizadas (`other`: no reconocidas).",
+        "properties": {
+          "by_severity": {
+            "$ref": "#/components/schemas/SeverityCountsResponse"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_severity"
+        ],
+        "title": "FindingsSummaryResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -460,6 +563,25 @@
         "title": "ProjectResponse",
         "type": "object"
       },
+      "RetryReviewResponse": {
+        "properties": {
+          "change_id": {
+            "format": "uuid",
+            "title": "Change Id",
+            "type": "string"
+          },
+          "run": {
+            "title": "Run",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "change_id",
+          "run"
+        ],
+        "title": "RetryReviewResponse",
+        "type": "object"
+      },
       "ReviewResponse": {
         "description": "Una review sin su `raw_output`: es salida cruda del agente y puede ser enorme.",
         "properties": {
@@ -558,6 +680,39 @@
         ],
         "title": "ReviewStatus",
         "type": "string"
+      },
+      "SeverityCountsResponse": {
+        "properties": {
+          "bug": {
+            "title": "Bug",
+            "type": "integer"
+          },
+          "improvement": {
+            "title": "Improvement",
+            "type": "integer"
+          },
+          "nit": {
+            "title": "Nit",
+            "type": "integer"
+          },
+          "other": {
+            "title": "Other",
+            "type": "integer"
+          },
+          "risk": {
+            "title": "Risk",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bug",
+          "risk",
+          "improvement",
+          "nit",
+          "other"
+        ],
+        "title": "SeverityCountsResponse",
+        "type": "object"
       },
       "ValidationError": {
         "properties": {
@@ -660,6 +815,106 @@
         ]
       }
     },
+    "/changes/{change_id}/retry": {
+      "post": {
+        "description": "Nueva ejecuci\u00f3n de la review de un change cuya ejecuci\u00f3n actual termin\u00f3 con fallos.",
+        "operationId": "retry_review_changes__change_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Change Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-ingest-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Ingest-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Retry Review",
+        "tags": [
+          "changes"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "description": "Liveness check: the API process is up. Does not check Postgres or Temporal.",
@@ -681,6 +936,28 @@
           }
         },
         "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/dependencies": {
+      "get": {
+        "description": "Diagn\u00f3stico: estado y latencia de cada dependencia. Siempre 200 (el sondeo para\norquestadores es `/ready`); sin el texto de los errores, que puede llevar credenciales.",
+        "operationId": "dependencies_health_health_dependencies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependenciesHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Dependencies Health",
         "tags": [
           "health"
         ]
@@ -936,6 +1213,42 @@
                 }
               ],
               "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeReviewStatus"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {

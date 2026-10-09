@@ -37,6 +37,13 @@ que ya está en el spec o en `openspec/specs/`.
   (`GET /projects`, `GET /projects/{slug}/changes` con cursor, `GET /changes/{id}`,
   `GET /stats/agents`; ver la decisión sobre autenticación de lecturas en su `design.md`) y
   `POST /ingest/pr` con la misma identidad idempotente que los commits.
+- `review-retry` y ampliaciones de `change-queries` y `service-health` (change
+  `round2-backend-api`): el canal filtra por `status` de review y por texto (`q`); cada change
+  expone `review_status` (`pending`/`running`/`partial_failed`/`failed`/`completed`, calculado
+  sobre el `run` actual) y el detalle un `findings_summary`; `POST /changes/{id}/retry`
+  (con token) lanza `run + 1` si la ejecución actual terminó con fallos, con id de workflow
+  `-r{run}` desde el segundo run y `run` avanzado por compare-and-swap;
+  `GET /health/dependencies` da estado y latencia de Postgres y Temporal.
 
 ## Calidad y tests
 

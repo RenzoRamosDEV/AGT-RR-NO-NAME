@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -15,7 +16,7 @@ from duelo.application.ports import ReviewStartError
 from duelo.domain.change import Change, ChangeKind
 from duelo.workflows.review_change import ReviewChangeWorkflow
 from duelo.workflows.review_commit import ReviewCommitWorkflow
-from tests.integration.helpers import make_activities, persist_change
+from tests.integration.helpers import make_activities, persist_change, reviews_for
 
 
 def _change(
@@ -155,3 +156,26 @@ async def test_a_failed_review_can_be_started_again(
         await starter.start(ghost)
 
     assert (await temporal_env.client.get_workflow_handle(workflow_id).describe()).run_id != first
+
+
+async def test_the_second_run_gets_its_own_workflow_id_and_its_reviews_carry_the_run(
+    temporal_env: WorkflowEnvironment, session_factory: async_sessionmaker
+) -> None:
+    starter = _starter(temporal_env)
+    change = await persist_change(session_factory, "d" * 40)
+    base_id = f"commit-{change.project_id}-{change.head_sha}"
+
+    async with _workers(temporal_env, session_factory):
+        await starter.start(change)
+        first = temporal_env.client.get_workflow_handle(base_id)
+        await first.result()
+
+        # Reintento: el id del run 1 (completado) no se reutiliza, el run 2 arranca otra ejecución.
+        await starter.start(replace(change, run=2))
+        second = temporal_env.client.get_workflow_handle(f"{base_id}-r2")
+        await second.result()
+        await starter.start(replace(change, run=2))  # idempotente: misma ejecución
+
+    assert (await first.describe()).run_id != (await second.describe()).run_id
+    runs = sorted((r.agent, r.run) for r in await reviews_for(session_factory, change))
+    assert runs == [("agent_1", 1), ("agent_1", 2), ("agent_2", 1), ("agent_2", 2)]

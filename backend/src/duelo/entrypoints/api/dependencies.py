@@ -8,6 +8,7 @@ from duelo.application.ingest_commit import ChangeSubmission
 from duelo.application.read_models import AgentStats, ChangeCursor, ChangeDetail, ChangePage
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.project import Project
+from duelo.domain.review_status import ChangeReviewStatus
 
 Check = Callable[[], Awaitable[None]]
 
@@ -26,9 +27,19 @@ class ApiDependencies:
     list_projects: Callable[[], Awaitable[list[Project]]]
     # Lanza `ProjectNotFound` si el slug no existe.
     list_changes: Callable[
-        [str, ChangeKind | None, int, ChangeCursor | None], Awaitable[ChangePage]
+        [
+            str,
+            ChangeKind | None,
+            frozenset[ChangeReviewStatus] | None,
+            str | None,
+            int,
+            ChangeCursor | None,
+        ],
+        Awaitable[ChangePage],
     ]
     get_change: Callable[[UUID], Awaitable[ChangeDetail | None]]
+    # Lanza `ChangeNotFound`, `RetryNotAllowed` o `ReviewStartError`; devuelve el change con su run.
+    retry_review: Callable[[UUID], Awaitable[Change]]
     agent_stats: Callable[[], Awaitable[list[AgentStats]]]
     readiness_checks: Mapping[str, Check] = field(default_factory=dict)
     close: Callable[[], Awaitable[None]] = _noop

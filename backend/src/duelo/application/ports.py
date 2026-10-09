@@ -8,6 +8,7 @@ from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
 from duelo.domain.project import Project
 from duelo.domain.review import Review, ReviewResult
+from duelo.domain.review_status import ChangeReviewStatus
 
 
 class ChangeRepository(Protocol):
@@ -28,12 +29,23 @@ class ChangeRepository(Protocol):
         project_id: UUID,
         *,
         kind: ChangeKind | None,
+        status: frozenset[ChangeReviewStatus] | None,
+        q: str | None,
+        expected_agents: int,
         limit: int,
         after: ChangeCursor | None,
     ) -> list[ChangeSummary]:
         """Devuelve a lo sumo `limit` changes del proyecto, del más reciente al más antiguo
-        (orden por (created_at, id) descendente), posteriores a `after` si se indica y
-        filtrados por `kind` si se indica. No incluye el diff."""
+        (orden por (created_at, id) descendente), posteriores a `after` si se indica. Filtra por
+        `kind`, por `review_status` (cualquiera de los indicados, calculado frente a
+        `expected_agents`) y por `q` (subcadena sin distinguir mayúsculas en título, autor, SHA o
+        ref; sus comodines son texto literal) cuando se indican. No incluye el diff."""
+        ...
+
+    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+        """Compare-and-swap: pasa `run` de `from_run` a `from_run + 1` y devuelve el change
+        actualizado, o `None` si `run` ya no era `from_run` (otro reintento llegó antes) o el
+        change no existe."""
         ...
 
 

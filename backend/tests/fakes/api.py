@@ -10,9 +10,11 @@ from fastapi import FastAPI
 from duelo.application import queries
 from duelo.application.ingest_commit import ChangeSubmission, ingest_commit, ingest_pr
 from duelo.application.read_models import ChangeCursor, ChangeDetail, ChangePage
+from duelo.application.retry_review import retry_review
 from duelo.config import Settings
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.project import Project
+from duelo.domain.review_status import ChangeReviewStatus
 from duelo.entrypoints.api.app import create_app
 from duelo.entrypoints.api.dependencies import ApiDependencies, Check
 from tests.fakes.change_repository import FakeChangeRepository
@@ -22,6 +24,7 @@ from tests.fakes.review_starter import FakeReviewStarter
 
 TOKEN = "s3cr3t-token"
 PROJECT_SLUG = "acme/widgets"
+EXPECTED_AGENTS = 2
 
 
 @dataclass
@@ -40,9 +43,9 @@ def build_fake_api(
 ) -> FakeApi:
     settings = Settings(ingest_token=TOKEN, max_diff_chars=max_diff_chars)
     project = Project(id=uuid4(), slug=PROJECT_SLUG)
-    changes = FakeChangeRepository()
-    starter = starter or FakeReviewStarter()
     reviews = FakeReviewRepository()
+    changes = FakeChangeRepository(reviews)
+    starter = starter or FakeReviewStarter()
     projects = FakeProjectRepository(project)
     checks: dict[str, Check] = {}
 
@@ -57,14 +60,34 @@ def build_fake_api(
         )
 
     async def list_changes(
-        slug: str, kind: ChangeKind | None, limit: int, after: ChangeCursor | None
+        slug: str,
+        kind: ChangeKind | None,
+        status: frozenset[ChangeReviewStatus] | None,
+        q: str | None,
+        limit: int,
+        after: ChangeCursor | None,
     ) -> ChangePage:
         return await queries.list_changes(
-            projects, changes, slug=slug, kind=kind, limit=limit, after=after
+            projects,
+            changes,
+            slug=slug,
+            kind=kind,
+            status=status,
+            q=q,
+            expected_agents=EXPECTED_AGENTS,
+            limit=limit,
+            after=after,
         )
 
     async def get_change(change_id: UUID) -> ChangeDetail | None:
-        return await queries.get_change_detail(changes, reviews, change_id)
+        return await queries.get_change_detail(
+            changes, reviews, change_id, expected_agents=EXPECTED_AGENTS
+        )
+
+    async def retry(change_id: UUID) -> Change:
+        return await retry_review(
+            changes, reviews, starter, change_id, expected_agents=EXPECTED_AGENTS
+        )
 
     deps = ApiDependencies(
         ingest_commit=ingest,
@@ -72,6 +95,7 @@ def build_fake_api(
         list_projects=lambda: queries.list_projects(projects),
         list_changes=list_changes,
         get_change=get_change,
+        retry_review=retry,
         agent_stats=lambda: queries.agent_stats(reviews),
         readiness_checks=checks,
     )

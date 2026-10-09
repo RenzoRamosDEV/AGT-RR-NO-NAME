@@ -19,6 +19,7 @@ from duelo.domain.review import Finding, Review, ReviewResult
 from tests.integration.conftest import create_project
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
+NO_FILTER = {"status": None, "q": None, "expected_agents": 2}
 
 
 async def _add_change(
@@ -59,7 +60,7 @@ async def _page(
 ):
     async with session_factory() as session:
         return await SqlAlchemyChangeRepository(session).list_for_project(
-            project_id, kind=kind, limit=limit, after=after
+            project_id, kind=kind, limit=limit, after=after, **NO_FILTER
         )
 
 
@@ -127,6 +128,7 @@ async def test_keyset_pagination_neither_repeats_nor_skips_changes_with_equal_ti
                 kind=None,
                 limit=3,
                 after=after,
+                **NO_FILTER,
             )
         seen += [c.id for c in page.items]
         sizes.append(len(page.items))
@@ -155,7 +157,7 @@ async def test_the_channel_query_never_loads_the_diff(
     try:
         async with session_factory() as session:
             await SqlAlchemyChangeRepository(session).list_for_project(
-                project, kind=None, limit=10, after=None
+                project, kind=None, limit=10, after=None, **NO_FILTER
             )
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", capture)

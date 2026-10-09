@@ -9,6 +9,7 @@ from uuid import UUID
 
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
 from duelo.domain.review import Review
+from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,7 @@ class ChangeSummary:
     url: str
     diff_truncated: bool
     status: ChangeStatus
+    review_status: ChangeReviewStatus
     run: int
     created_at: datetime
 
@@ -47,6 +49,8 @@ class ChangePage:
 class ChangeDetail:
     change: Change
     reviews: tuple[Review, ...]
+    review_status: ChangeReviewStatus
+    findings_summary: FindingsSummary
 
 
 @dataclass(frozen=True, slots=True)

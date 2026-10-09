@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -10,6 +11,7 @@ from duelo.application.read_models import AgentStats, ChangeDetail, ChangePage, 
 from duelo.domain.change import MAX_HEAD_SHA, MAX_REF, MAX_URL, ChangeKind, ChangeStatus
 from duelo.domain.project import Project
 from duelo.domain.review import Finding, Review, ReviewStatus
+from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
 
 
 class IngestCommitRequest(BaseModel):
@@ -69,6 +71,7 @@ class ChangeSummaryResponse(BaseModel):
     url: str
     diff_truncated: bool
     status: ChangeStatus
+    review_status: ChangeReviewStatus
     run: int
     created_at: datetime
 
@@ -85,6 +88,7 @@ class ChangeSummaryResponse(BaseModel):
             url=change.url,
             diff_truncated=change.diff_truncated,
             status=change.status,
+            review_status=change.review_status,
             run=change.run,
             created_at=change.created_at,
         )
@@ -148,9 +152,38 @@ class ReviewResponse(BaseModel):
         )
 
 
+class SeverityCountsResponse(BaseModel):
+    bug: int
+    risk: int
+    improvement: int
+    nit: int
+    other: int
+
+
+class FindingsSummaryResponse(BaseModel):
+    """Findings del run actual con las severidades normalizadas (`other`: no reconocidas)."""
+
+    total: int
+    by_severity: SeverityCountsResponse
+
+    @classmethod
+    def from_domain(cls, summary: FindingsSummary) -> FindingsSummaryResponse:
+        return cls(
+            total=summary.total,
+            by_severity=SeverityCountsResponse(
+                bug=summary.bug,
+                risk=summary.risk,
+                improvement=summary.improvement,
+                nit=summary.nit,
+                other=summary.other,
+            ),
+        )
+
+
 class ChangeDetailResponse(ChangeSummaryResponse):
     diff: str
     reviews: list[ReviewResponse]
+    findings_summary: FindingsSummaryResponse
 
     @classmethod
     def from_detail(cls, detail: ChangeDetail) -> ChangeDetailResponse:
@@ -166,10 +199,12 @@ class ChangeDetailResponse(ChangeSummaryResponse):
             url=change.url,
             diff_truncated=change.diff_truncated,
             status=change.status,
+            review_status=detail.review_status,
             run=change.run,
             created_at=change.created_at,
             diff=change.diff,
             reviews=[ReviewResponse.from_domain(r) for r in detail.reviews],
+            findings_summary=FindingsSummaryResponse.from_domain(detail.findings_summary),
         )
 
 
@@ -191,6 +226,23 @@ class AgentStatsResponse(BaseModel):
             avg_duration_ms=stats.avg_duration_ms,
             avg_score=stats.avg_score,
         )
+
+
+class RetryReviewResponse(BaseModel):
+    change_id: UUID
+    run: int
+
+
+class DependencyHealthResponse(BaseModel):
+    status: Literal["ok", "unavailable"]
+    latency_ms: int
+    # Vocabulario cerrado: nunca el texto de la excepción (puede llevar credenciales).
+    reason: Literal["timeout", "error"] | None = None
+
+
+class DependenciesHealthResponse(BaseModel):
+    status: Literal["ok", "degraded"]
+    dependencies: dict[str, DependencyHealthResponse]
 
 
 class ErrorResponse(BaseModel):

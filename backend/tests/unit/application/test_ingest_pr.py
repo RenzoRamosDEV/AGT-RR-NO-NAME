@@ -43,7 +43,7 @@ async def test_pr_is_persisted_as_kind_pr_and_its_review_started() -> None:
 
     assert change.kind is ChangeKind.PR
     assert changes.persisted_events[0].kind == "pr"
-    assert starter.started[("pr", str(PROJECT.id), "b" * 40)] == change
+    assert starter.started[("pr", str(PROJECT.id), "b" * 40, 1)] == change
 
 
 async def test_resending_a_pr_is_idempotent() -> None:
@@ -98,4 +98,4 @@ async def test_starter_failure_keeps_the_pr_and_a_retry_recovers() -> None:
     change = await ingest_pr(projects, changes, working, _submission(), max_diff_chars=100)
 
     assert len(changes.persisted_events) == 1
-    assert working.started[("pr", str(PROJECT.id), "b" * 40)] == change
+    assert working.started[("pr", str(PROJECT.id), "b" * 40, 1)] == change

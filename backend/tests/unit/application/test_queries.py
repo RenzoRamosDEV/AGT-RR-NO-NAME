@@ -12,13 +12,15 @@ from duelo.application.read_models import ChangeCursor
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
 from duelo.domain.project import Project
-from duelo.domain.review import Review, ReviewResult
+from duelo.domain.review import Finding, Review, ReviewResult
+from duelo.domain.review_status import ChangeReviewStatus
 from tests.fakes.change_repository import FakeChangeRepository
 from tests.fakes.project_repository import FakeProjectRepository
 from tests.fakes.review_repository import FakeReviewRepository
 
 PROJECT = Project(id=uuid4(), slug="acme/widgets")
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
+_NO_FILTER = {"status": None, "q": None, "expected_agents": 2}
 
 
 async def _add(
@@ -56,7 +58,7 @@ async def _walk(
     after: ChangeCursor | None = None
     while True:
         page = await list_changes(
-            projects, changes, slug=PROJECT.slug, kind=kind, limit=limit, after=after
+            projects, changes, slug=PROJECT.slug, kind=kind, limit=limit, after=after, **_NO_FILTER
         )
         pages.append([c.id for c in page.items])
         if page.next_cursor is None:
@@ -114,7 +116,9 @@ def test_walking_every_page_returns_each_change_once_in_order(
         for i, offset in enumerate(offsets):
             await _add(changes, f"{i:040d}", at=T0 + timedelta(minutes=offset))
         walked = [cid for page in await _walk(projects, changes, limit=limit) for cid in page]
-        everything = await changes.list_for_project(PROJECT.id, kind=None, limit=1000, after=None)
+        everything = await changes.list_for_project(
+            PROJECT.id, kind=None, limit=1000, after=None, **_NO_FILTER
+        )
         return walked, [c.id for c in everything]
 
     walked, everything = asyncio.run(scenario())
@@ -144,7 +148,9 @@ async def test_next_cursor_points_at_the_last_returned_item() -> None:
     for i in range(3):
         await _add(changes, f"{i:040d}", at=T0 + timedelta(minutes=i))
 
-    page = await list_changes(projects, changes, slug=PROJECT.slug, kind=None, limit=2, after=None)
+    page = await list_changes(
+        projects, changes, slug=PROJECT.slug, kind=None, limit=2, after=None, **_NO_FILTER
+    )
 
     assert page.next_cursor == ChangeCursor(
         created_at=page.items[-1].created_at, id=page.items[-1].id
@@ -160,6 +166,7 @@ async def test_unknown_project_is_reported() -> None:
             kind=None,
             limit=5,
             after=None,
+            **_NO_FILTER,
         )
 
     assert error.value.slug == "no/existe"
@@ -200,7 +207,7 @@ async def test_change_detail_has_the_change_and_only_its_reviews() -> None:
     await _persist(reviews, _review(mine, "a", score=None, ms=None, fail=True), PROJECT)
     await _persist(reviews, _review(other, "a", score=1, ms=1, fail=False), PROJECT)
 
-    detail = await get_change_detail(changes, reviews, mine.id)
+    detail = await get_change_detail(changes, reviews, mine.id, expected_agents=2)
 
     assert detail is not None and detail.change == mine
     assert [r.agent for r in detail.reviews] == ["a", "b"]
@@ -208,7 +215,12 @@ async def test_change_detail_has_the_change_and_only_its_reviews() -> None:
 
 
 async def test_change_detail_of_an_unknown_change_is_none() -> None:
-    assert await get_change_detail(FakeChangeRepository(), FakeReviewRepository(), uuid4()) is None
+    assert (
+        await get_change_detail(
+            FakeChangeRepository(), FakeReviewRepository(), uuid4(), expected_agents=2
+        )
+        is None
+    )
 
 
 async def test_agent_stats_delegates_to_the_repository() -> None:
@@ -221,3 +233,152 @@ async def test_agent_stats_delegates_to_the_repository() -> None:
     assert [(s.agent, s.total, s.avg_score, s.avg_duration_ms) for s in stats] == [
         ("a", 1, 8.0, 100.0)
     ]
+
+
+async def _persist_review(
+    reviews: FakeReviewRepository,
+    change: Change,
+    agent: str,
+    *,
+    fail: bool,
+    run: int = 1,
+    severities: tuple[str, ...] = (),
+) -> None:
+    ids = {"change_id": change.id, "agent": agent, "run": run, "created_at": T0}
+    if fail:
+        review = Review.failed(error="boom", duration_ms=None, **ids)
+    else:
+        findings = tuple(Finding(severity=s, file="f.py", line=1, message="m") for s in severities)
+        review = Review.succeeded(
+            result=ReviewResult(summary="ok", score=5, findings=findings),
+            raw_output="RAW",
+            duration_ms=1,
+            **ids,
+        )
+    await _persist(reviews, review, PROJECT)
+
+
+async def test_the_channel_filters_by_review_status_and_exposes_it() -> None:
+    reviews = FakeReviewRepository()
+    projects, changes = FakeProjectRepository(PROJECT), FakeChangeRepository(reviews)
+    done = await _add(changes, "1" * 40, at=T0)
+    broken = await _add(changes, "2" * 40, at=T0 + timedelta(minutes=1))
+    fresh = await _add(changes, "3" * 40, at=T0 + timedelta(minutes=2))
+    for agent in ("a", "b"):
+        await _persist_review(reviews, done, agent, fail=False)
+        await _persist_review(reviews, broken, agent, fail=True)
+
+    async def listed(status: set[ChangeReviewStatus] | None) -> dict[UUID, ChangeReviewStatus]:
+        page = await list_changes(
+            projects,
+            changes,
+            slug=PROJECT.slug,
+            kind=None,
+            status=frozenset(status) if status else None,
+            q=None,
+            expected_agents=2,
+            limit=10,
+            after=None,
+        )
+        return {c.id: c.review_status for c in page.items}
+
+    assert await listed(None) == {
+        fresh.id: ChangeReviewStatus.PENDING,
+        broken.id: ChangeReviewStatus.FAILED,
+        done.id: ChangeReviewStatus.COMPLETED,
+    }
+    assert set(await listed({ChangeReviewStatus.FAILED})) == {broken.id}
+    in_progress = {ChangeReviewStatus.PENDING, ChangeReviewStatus.RUNNING}
+    assert set(await listed(in_progress)) == {fresh.id}
+
+
+async def test_pagination_applies_the_filter_before_the_limit() -> None:
+    reviews = FakeReviewRepository()
+    projects, changes = FakeProjectRepository(PROJECT), FakeChangeRepository(reviews)
+    failing: list[UUID] = []
+    for i in range(6):
+        change = await _add(changes, f"{i:040d}", at=T0 + timedelta(minutes=i))
+        if i % 2 == 0:
+            failing.append(change.id)
+            for agent in ("a", "b"):
+                await _persist_review(reviews, change, agent, fail=True)
+
+    pages: list[list[UUID]] = []
+    after: ChangeCursor | None = None
+    while True:
+        page = await list_changes(
+            projects,
+            changes,
+            slug=PROJECT.slug,
+            kind=None,
+            status=frozenset({ChangeReviewStatus.FAILED}),
+            q=None,
+            expected_agents=2,
+            limit=2,
+            after=after,
+        )
+        pages.append([c.id for c in page.items])
+        if page.next_cursor is None:
+            break
+        after = page.next_cursor
+
+    assert pages == [[failing[2], failing[1]], [failing[0]]]
+
+
+async def test_detail_reports_status_and_findings_of_the_current_run_only() -> None:
+    changes, reviews = FakeChangeRepository(), FakeReviewRepository()
+    change = await _add(changes, "1" * 40, at=T0)
+    await _persist_review(reviews, change, "a", fail=False, severities=("bug", "bug"))  # run 1
+    await _persist_review(reviews, change, "b", fail=True)  # run 1
+    change = await changes.advance_run(change.id, from_run=1)  # type: ignore[assignment]
+    await _persist_review(reviews, change, "a", fail=False, run=2, severities=("Risk", "banana"))
+    await _persist_review(reviews, change, "b", fail=True, run=2)
+
+    detail = await get_change_detail(changes, reviews, change.id, expected_agents=2)
+
+    assert detail is not None
+    assert detail.review_status is ChangeReviewStatus.PARTIAL_FAILED
+    summary = detail.findings_summary
+    assert (summary.total, summary.bug, summary.risk, summary.other) == (2, 0, 1, 1)
+    assert len(detail.reviews) == 4  # el historial completo sigue visible
+
+
+async def test_detail_of_a_change_without_reviews_is_pending_with_no_findings() -> None:
+    changes, reviews = FakeChangeRepository(), FakeReviewRepository()
+    change = await _add(changes, "1" * 40, at=T0)
+
+    detail = await get_change_detail(changes, reviews, change.id, expected_agents=2)
+
+    assert detail is not None and detail.review_status is ChangeReviewStatus.PENDING
+    assert detail.findings_summary.total == 0
+
+
+async def test_the_search_text_and_one_extra_row_are_requested_from_the_repository() -> None:
+    class Spy(FakeChangeRepository):
+        calls: list[dict[str, object]] = []
+
+        async def list_for_project(self, project_id: UUID, **kwargs):  # type: ignore[no-untyped-def]
+            self.calls.append(kwargs)
+            return await super().list_for_project(project_id, **kwargs)
+
+    changes = Spy()
+    await _add(changes, "1" * 40, at=T0)
+    await _add(changes, "2" * 40, at=T0 + timedelta(minutes=1))
+    only = frozenset({ChangeReviewStatus.PENDING})
+
+    page = await list_changes(
+        FakeProjectRepository(PROJECT),
+        changes,
+        slug=PROJECT.slug,
+        kind=None,
+        status=only,
+        q="change 1",
+        expected_agents=3,
+        limit=1,
+        after=None,
+    )
+
+    (call,) = changes.calls
+    assert call["q"] == "change 1" and call["status"] == only and call["expected_agents"] == 3
+    assert call["limit"] == 2  # uno de más para saber si hay página siguiente
+    assert [c.head_sha for c in page.items] == ["1" * 40]

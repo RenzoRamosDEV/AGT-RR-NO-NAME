@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import insert, select, tuple_
+from sqlalchemy import ColumnElement, and_, func, insert, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from duelo.adapters.persistence.models import ChangeModel, EventModel
+from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from duelo.application.read_models import ChangeCursor, ChangeSummary
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
 from duelo.domain.events import ChangeCreated
+from duelo.domain.review import ReviewStatus
+from duelo.domain.review_status import ChangeReviewStatus, review_status_from_counts
 
 
 class SqlAlchemyChangeRepository:
@@ -76,9 +78,34 @@ class SqlAlchemyChangeRepository:
         project_id: UUID,
         *,
         kind: ChangeKind | None,
+        status: frozenset[ChangeReviewStatus] | None,
+        q: str | None,
+        expected_agents: int,
         limit: int,
         after: ChangeCursor | None,
     ) -> list[ChangeSummary]:
+        # Contadores de reviews del `run` actual de cada change: de ellos sale el estado agregado.
+        counts = (
+            select(
+                ReviewModel.change_id.label("change_id"),
+                func.count()
+                .filter(ReviewModel.status == ReviewStatus.COMPLETED.value)
+                .label("completed"),
+                func.count()
+                .filter(ReviewModel.status == ReviewStatus.FAILED.value)
+                .label("failed"),
+            )
+            .join(
+                ChangeModel,
+                and_(ChangeModel.id == ReviewModel.change_id, ChangeModel.run == ReviewModel.run),
+            )
+            .where(ChangeModel.project_id == project_id)
+            .group_by(ReviewModel.change_id)
+            .subquery()
+        )
+        completed = func.coalesce(counts.c.completed, 0)
+        failed = func.coalesce(counts.c.failed, 0)
+
         # Se seleccionan columnas concretas (sin `diff`): un canal no debe mover diffs enteros.
         stmt = (
             select(
@@ -94,13 +121,30 @@ class SqlAlchemyChangeRepository:
                 ChangeModel.status,
                 ChangeModel.run,
                 ChangeModel.created_at,
+                completed.label("completed_reviews"),
+                failed.label("failed_reviews"),
             )
+            .outerjoin(counts, counts.c.change_id == ChangeModel.id)
             .where(ChangeModel.project_id == project_id)
             .order_by(ChangeModel.created_at.desc(), ChangeModel.id.desc())
             .limit(limit)
         )
         if kind is not None:
             stmt = stmt.where(ChangeModel.kind == kind.value)
+        if status:
+            stmt = stmt.where(
+                or_(*(_status_predicate(s, completed, failed, expected_agents) for s in status))
+            )
+        if q:
+            # `autoescape`: `%`, `_` y `\` de la búsqueda son texto, no comodines de LIKE.
+            stmt = stmt.where(
+                or_(
+                    ChangeModel.title.icontains(q, autoescape=True),
+                    ChangeModel.author.icontains(q, autoescape=True),
+                    ChangeModel.head_sha.icontains(q, autoescape=True),
+                    ChangeModel.ref.icontains(q, autoescape=True),
+                )
+            )
         if after is not None:
             stmt = stmt.where(
                 tuple_(ChangeModel.created_at, ChangeModel.id) < tuple_(after.created_at, after.id)
@@ -118,11 +162,54 @@ class SqlAlchemyChangeRepository:
                 url=r.url,
                 diff_truncated=r.diff_truncated,
                 status=ChangeStatus(r.status),
+                review_status=review_status_from_counts(
+                    completed=r.completed_reviews,
+                    failed=r.failed_reviews,
+                    expected_agents=expected_agents,
+                ),
                 run=r.run,
                 created_at=r.created_at,
             )
             for r in rows
         ]
+
+    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+        row = (
+            await self._session.execute(
+                update(ChangeModel)
+                .where(ChangeModel.id == change_id, ChangeModel.run == from_run)
+                .values(run=from_run + 1)
+                .returning(ChangeModel)
+            )
+        ).scalar_one_or_none()
+        # Compare-and-swap resuelto por la propia fila (READ COMMITTED reevalúa el WHERE al
+        # desbloquearse). Se convierte antes del commit para no tocar atributos caducados.
+        advanced = _to_domain(row) if row is not None else None
+        await self._session.commit()
+        return advanced
+
+
+def _status_predicate(
+    status: ChangeReviewStatus,
+    completed: ColumnElement[int],
+    failed: ColumnElement[int],
+    expected_agents: int,
+) -> ColumnElement[bool]:
+    """Predicado SQL equivalente a `review_status_from_counts` (un test de integración recorre
+    la matriz de contadores para garantizar que coinciden)."""
+    total = completed + failed
+    all_registered = and_(total > 0, total >= expected_agents)
+    match status:
+        case ChangeReviewStatus.PENDING:
+            return total == 0
+        case ChangeReviewStatus.RUNNING:
+            return and_(total > 0, total < expected_agents)
+        case ChangeReviewStatus.COMPLETED:
+            return and_(all_registered, failed == 0)
+        case ChangeReviewStatus.FAILED:
+            return and_(all_registered, completed == 0)
+        case ChangeReviewStatus.PARTIAL_FAILED:
+            return and_(all_registered, completed > 0, failed > 0)
 
 
 def _to_domain(row: ChangeModel) -> Change:
