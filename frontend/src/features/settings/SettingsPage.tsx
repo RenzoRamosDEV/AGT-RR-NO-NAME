@@ -72,7 +72,7 @@ export function SettingsPage() {
           <h2 id="settings-health">Diagnóstico</h2>
           <Button onClick={health.retry}>Actualizar</Button>
         </div>
-        <AsyncBoundary state={health} loadingLabel="Comprobando dependencias…">
+        <AsyncBoundary state={health} loadingLabel="Comprobando dependencias…" activity="connect">
           {(data) => <Diagnostics health={data} />}
         </AsyncBoundary>
       </section>

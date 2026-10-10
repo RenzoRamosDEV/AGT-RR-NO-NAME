@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
+import { Busy } from "../components/Busy";
 import { Button } from "../components/ui/Button";
 import { ProjectsProvider, useProjects } from "../features/projects/ProjectsContext";
 import { projectPath } from "../lib/projectPath";
@@ -45,7 +46,7 @@ function ShellLayout() {
         <div className="nav-panel" id={panelId}>
           <div className="nav-group">
             <div className="nav-title">Proyectos</div>
-            {projects.status === "loading" && <output className="muted">Cargando…</output>}
+            {projects.status === "loading" && <Busy activity="load" label="Cargando…" />}
             {projects.status === "error" && (
               <div role="alert">
                 <p className="muted">No se pudieron cargar los proyectos.</p>

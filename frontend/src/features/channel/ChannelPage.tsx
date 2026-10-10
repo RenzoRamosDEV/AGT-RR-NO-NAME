@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
+import { Busy } from "../../components/Busy";
 import { CopyButton } from "../../components/CopyButton";
 import { ReviewCard } from "../../components/ReviewCard";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
@@ -20,6 +21,7 @@ import { AGGREGATE_LABEL, AGGREGATE_TONE } from "../../lib/reviewStatus";
 import { summarizeReviews } from "../../lib/reviewSummary";
 import { shortSha } from "../../lib/url";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
+import { PendingAgents } from "../review/PendingAgents";
 import { useChannel } from "./useChannel";
 
 type Filter = "all" | ChangeKind;
@@ -112,10 +114,12 @@ function ChangeThread({
   change,
   slug,
   compact,
+  agentNames,
 }: {
   change: Change;
   slug: string;
   compact: boolean;
+  agentNames: readonly string[] | null;
 }) {
   const [open, setOpen] = useState(false);
   const [full, retryFull] = useFullReviews(change, open);
@@ -145,12 +149,13 @@ function ChangeThread({
           </li>
         ))}
       </ul>
+      <PendingAgents change={change} agentNames={agentNames} />
       <Button aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((o) => !o)}>
         {open ? "Ocultar respuestas" : "Ver respuestas"}
       </Button>
       {open && (
         <div className="thread reviews" id={panelId}>
-          {full.status === "loading" && <output className="muted">Cargando respuestas…</output>}
+          {full.status === "loading" && <Busy activity="load" label="Cargando respuestas…" />}
           {full.status === "error" && (
             <p className="notice" role="alert">
               No se pudieron cargar las respuestas completas.{" "}
@@ -194,7 +199,8 @@ export function ChannelPage({ slug }: { slug: string }) {
   const [query, setQuery] = useState("");
   const [density, setDensity] = useState<Density>("cards");
   const searchId = useId();
-  const agents = agentList(useAgentNames());
+  const agentNames = useAgentNames();
+  const agents = agentList(agentNames);
   const search = useDebouncedValue(query.trim(), SEARCH_DELAY_MS);
   const { first, items, hasMore, moreState, loadMore } = useChannel(slug, {
     kind: filter === "all" ? undefined : filter,
@@ -276,7 +282,13 @@ export function ChannelPage({ slug }: { slug: string }) {
               )}
               {emptyChannel && <EmptyChannel slug={slug} agents={agents} />}
               {items.map((c) => (
-                <ChangeThread key={c.id} change={c} slug={slug} compact={density === "compact"} />
+                <ChangeThread
+                  key={c.id}
+                  change={c}
+                  slug={slug}
+                  compact={density === "compact"}
+                  agentNames={agentNames}
+                />
               ))}
               {moreState === "error" && (
                 <p className="notice" role="alert">
@@ -285,11 +297,13 @@ export function ChannelPage({ slug }: { slug: string }) {
               )}
               {hasMore && (
                 <Button onClick={loadMore} disabled={moreState === "loading"}>
-                  {moreState === "loading"
-                    ? "Cargando…"
-                    : moreState === "error"
-                      ? "Reintentar"
-                      : "Cargar más"}
+                  {moreState === "loading" ? (
+                    <Busy activity="more" label="Cargando…" inline />
+                  ) : moreState === "error" ? (
+                    "Reintentar"
+                  ) : (
+                    "Cargar más"
+                  )}
                 </Button>
               )}
             </>

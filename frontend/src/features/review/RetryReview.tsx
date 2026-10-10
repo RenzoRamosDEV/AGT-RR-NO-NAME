@@ -1,4 +1,5 @@
 import { type FormEvent, useId, useState } from "react";
+import { Busy } from "../../components/Busy";
 import { Button } from "../../components/ui/Button";
 import { useDataSource } from "../../data/source";
 import { ApiError } from "../../lib/api";
@@ -74,7 +75,7 @@ export function RetryReview({ changeId, onSettled }: Props) {
         onChange={(e) => setToken(e.target.value)}
       />
       <Button type="submit" disabled={sending}>
-        {sending ? "Reintentando…" : "Reintentar review"}
+        {sending ? <Busy activity="retry" label="Reintentando…" inline /> : "Reintentar review"}
       </Button>
       {error && (
         <p className="notice" role="alert">

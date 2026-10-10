@@ -1,4 +1,5 @@
 import { type FormEvent, useId, useState } from "react";
+import { Busy } from "../../components/Busy";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/ui/Button";
 import { useDataSource } from "../../data/source";
@@ -103,7 +104,7 @@ export function AddProjectDialog({ onClose, onAdded }: Props) {
         <div className="modal-actions">
           <Button onClick={onClose}>Cancelar</Button>
           <Button type="submit" variant="primary" disabled={sending}>
-            {sending ? "Añadiendo…" : "Añadir"}
+            {sending ? <Busy activity="connect" label="Añadiendo…" inline /> : "Añadir"}
           </Button>
         </div>
       </form>

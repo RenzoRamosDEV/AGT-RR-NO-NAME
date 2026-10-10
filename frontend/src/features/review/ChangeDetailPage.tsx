@@ -6,7 +6,7 @@ import { ReviewCard } from "../../components/ReviewCard";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
 import { Badge } from "../../components/ui/Badge";
 import type { Change } from "../../data/mock";
-import { useDataSource } from "../../data/source";
+import { useAgentNames, useDataSource } from "../../data/source";
 import { UNNAMED_FILE, diffFiles, parseDiff } from "../../lib/diff";
 import { sameValue } from "../../lib/equal";
 import { usePollMs } from "../../lib/polling";
@@ -16,6 +16,7 @@ import { splitRuns } from "../../lib/runs";
 import { safeHttpUrl, shortSha } from "../../lib/url";
 import { useAsync } from "../../lib/useAsync";
 import { FindingsPanel } from "./FindingsPanel";
+import { PendingAgents } from "./PendingAgents";
 import { RetryReview } from "./RetryReview";
 
 const fileAnchor = (rowId: number) => `diff-file-${rowId}`;
@@ -26,6 +27,7 @@ const inProgress = (change: Change) =>
 
 export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
   const source = useDataSource();
+  const agentNames = useAgentNames();
   const state = useAsync(
     useCallback(() => source.change(id), [source, id]),
     {
@@ -71,6 +73,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                     {change.run !== undefined && <span className="muted">Run {change.run}</span>}
                   </p>
                 )}
+                <PendingAgents change={change} agentNames={agentNames} />
                 {inProgress(change) && (
                   <UpdatedAgo updatedAt={state.updatedAt} failed={state.refreshFailed} />
                 )}

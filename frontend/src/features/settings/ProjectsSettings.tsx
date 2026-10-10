@@ -1,5 +1,6 @@
 import { type FormEvent, useId, useState } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
+import { Busy } from "../../components/Busy";
 import { Modal } from "../../components/Modal";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -111,7 +112,7 @@ function RemoveDialog({
             Cancelar
           </Button>
           <Button type="submit" variant="danger" disabled={sending}>
-            {sending ? "Quitando…" : "Quitar proyecto"}
+            {sending ? <Busy activity="connect" label="Quitando…" inline /> : "Quitar proyecto"}
           </Button>
         </div>
       </form>
@@ -148,9 +149,16 @@ function ProjectRow({
           <Button
             onClick={onSync}
             disabled={syncing}
-            aria-label={`Sincronizar PRs de ${project.name}`}
+            aria-busy={syncing}
+            // While it runs the visible text is the name ("Sincronizando…"): a fixed aria-label
+            // would hide it from assistive technology.
+            aria-label={syncing ? undefined : `Sincronizar PRs de ${project.name}`}
           >
-            {syncing ? "Sincronizando…" : "Sincronizar PRs"}
+            {syncing ? (
+              <Busy activity="connect" label="Sincronizando…" inline />
+            ) : (
+              "Sincronizar PRs"
+            )}
           </Button>
         )}
         <Button onClick={onRemove} aria-label={`Quitar proyecto ${project.name}`}>

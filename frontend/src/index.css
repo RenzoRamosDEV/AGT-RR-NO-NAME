@@ -276,12 +276,49 @@ pre {
   color: var(--fg-muted);
 }
 
+.busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted);
+}
+
+/* Fixed slot: showing or hiding the orb never moves the text around it. */
+.busy-orb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+}
+
+.busy-orb canvas {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.btn .busy {
+  color: inherit;
+}
+
 .thinking {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-top: 14px;
   color: var(--fg-muted);
+}
+
+.pending-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
 }
 
 table.stats {
