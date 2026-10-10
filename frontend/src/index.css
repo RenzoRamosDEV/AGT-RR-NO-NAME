@@ -2129,3 +2129,26 @@ dialog.modal h2 {
 .btn-metal:hover:not(:disabled) {
   color: var(--fg);
 }
+
+/* ---------- Update prompt (PWA) ---------- */
+
+/* Pinned above the drawer and scrim so the "new version" notice is never hidden behind them. */
+.update-prompt {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  box-shadow: var(--shadow);
+}
+
+.update-prompt p {
+  margin: 0 4px 0 0;
+}
