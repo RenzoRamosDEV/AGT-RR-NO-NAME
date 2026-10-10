@@ -50,6 +50,13 @@ class Change:
     # `stale` se mide desde aquí.
     run_started_at: datetime
     diff_summary: DiffSummary = EMPTY_DIFF_SUMMARY
+    # Solo los commits: cuándo dejó de ser alcanzable desde el repositorio local (`reset`, `amend`,
+    # `rebase`...), o `None` si lo sigue siendo. El estado se deduce con `commit_state_of`.
+    discarded_at: datetime | None = None
+    # Solo los commits: el SHA que este commit revierte (`This reverts commit <sha>` de un
+    # `git revert`), o `None`. Un commit está «revertido» mientras exista un commit de revert que
+    # sigue en la rama y apunta a su SHA: así no importa el orden de llegada ni los `amend`.
+    reverts_sha: str | None = None
 
     @classmethod
     def new(
@@ -66,6 +73,7 @@ class Change:
         diff_truncated: bool,
         created_at: datetime,
         id: UUID | None = None,
+        reverts_sha: str | None = None,
     ) -> Change:
         if not head_sha:
             raise ValueError("head_sha no puede estar vacío")
@@ -88,4 +96,5 @@ class Change:
             created_at=created_at,
             run_started_at=created_at,
             diff_summary=summarize_diff(diff),
+            reverts_sha=reverts_sha if kind is ChangeKind.COMMIT else None,
         )

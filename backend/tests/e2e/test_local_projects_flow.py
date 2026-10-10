@@ -52,7 +52,7 @@ def _free_port() -> int:
 
 @asynccontextmanager
 async def _server(
-    database_url: str, temporal_address: str, tmp_path: Path
+    database_url: str, temporal_address: str, tmp_path: Path, **overrides: object
 ) -> AsyncIterator[httpx.AsyncClient]:
     port = _free_port()
     settings = Settings(
@@ -62,6 +62,7 @@ async def _server(
         local_projects_enabled=True,
         ingest_url=f"http://127.0.0.1:{port}",
         hook_env_path=str(tmp_path / "credenciales de duelo" / "hook.env"),
+        **overrides,  # type: ignore[arg-type]
     )
     deps = build_api_dependencies(settings)
     server = uvicorn.Server(

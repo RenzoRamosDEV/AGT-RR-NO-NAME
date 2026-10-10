@@ -13,13 +13,16 @@ from uuid import UUID
 
 from fastapi import FastAPI
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from duelo.adapters.git.history import LocalGitHistory
 from duelo.adapters.git.hook_installer import FileHookInstaller
 from duelo.adapters.git.local_repository import LocalGitRepository
 from duelo.adapters.github.gh_cli import GhPrSource
 from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
 from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter
 from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
+from duelo.adapters.persistence.commit_marks import SqlAlchemyCommitMarks
 from duelo.adapters.persistence.db import create_engine, create_session_factory
 from duelo.adapters.persistence.event_repository import SqlAlchemyChangeEventRepository
 from duelo.adapters.persistence.project_repository import SqlAlchemyProjectRepository
@@ -34,6 +37,7 @@ from duelo.application.local_projects import (
     sync_all_pull_requests,
     sync_pull_requests,
 )
+from duelo.application.reachability import sweep_all
 from duelo.application.read_models import (
     AgentStats,
     ChangeCursor,
@@ -166,7 +170,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
     )
 
     local = (
-        _local_projects_wiring(settings, projects, ingest_pull_request)
+        _local_projects_wiring(settings, projects, ingest_pull_request, session_factory)
         if settings.local_projects_enabled
         else None
     )
@@ -204,6 +208,7 @@ def _local_projects_wiring(
     settings: Settings,
     projects: SqlAlchemyProjectRepository,
     ingest_pull_request: Callable[[ChangeSubmission], Awaitable[IngestResult]],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> _LocalProjects:
     git = LocalGitRepository()
     hooks = FileHookInstaller(
@@ -227,10 +232,19 @@ def _local_projects_wiring(
     async def sync_all() -> None:
         await sync_all_pull_requests(projects, sync)
 
+    history = LocalGitHistory()
+    marks = SqlAlchemyCommitMarks(session_factory)
+
+    async def sweep() -> None:
+        await sweep_all(projects, history, marks, window=settings.reachability_window_commits)
+
     jobs: list[Callable[[], Coroutine[Any, Any, None]]] = []
     if settings.pr_sync_interval_seconds > 0:
         interval = settings.pr_sync_interval_seconds
         jobs.append(lambda: periodic(interval, sync_all))
+    if settings.reachability_sweep_interval_seconds > 0:
+        sweep_interval = settings.reachability_sweep_interval_seconds
+        jobs.append(lambda: periodic(sweep_interval, sweep))
     return _LocalProjects(add=add, remove=remove, sync=sync, jobs=jobs)
 
 

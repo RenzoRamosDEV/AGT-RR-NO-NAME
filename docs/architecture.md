@@ -75,6 +75,31 @@ que ya está en el spec o en `openspec/specs/`.
   30 s). `changes.run_started_at` (migración `f6c4d8a2b915`, rellena desde `created_at`) lo fija la
   ingesta y lo refresca `advance_run`; `stale` se mide desde ahí, de modo que un reintento sobre
   un change antiguo no nace `stale`.
+- `commit-state` (change `mark-undone-commits`): un commit puede estar **deshecho** (su SHA ya no
+  es alcanzable desde ninguna referencia ni desde `HEAD` del repo local: `reset`, `amend`, `rebase`,
+  rama borrada) o **revertido** (otro commit lo invierte con `git revert`); el change y sus reviews
+  no se tocan, solo se marca. `GET /projects/{slug}/changes` y `GET /changes/{id}` añaden
+  `commit_state` (`active` | `discarded` | `reverted`) y `reverted_by` (`{id, head_sha}`); una PR
+  es siempre `active` y «deshecho» gana a «revertido». El **barrido de alcanzabilidad**
+  (`application/reachability.py`, tarea de fondo de `composition.py` solo con
+  `LOCAL_PROJECTS_ENABLED`) lee primero los changes del proyecto y después hace **una** llamada
+  `git log --all --max-count=N` (`adapters/git/history.py`, sin shell y con plazo); la decisión es
+  pura (`domain/commit_state.py::decide_reachability`): con el conjunto completo, un SHA ausente es
+  concluyente; con la ventana llena solo se evalúan los changes creados desde el commit más
+  antiguo de la ventana y cada candidato se confirma uno a uno (`git for-each-ref --contains` y
+  `merge-base --is-ancestor HEAD`) con el SHA validado como hexadecimal. Un fallo de git no marca
+  nada, y antes de cada consulta se revalida que la carpeta no es un enlace simbólico y es la raíz
+  de su propio repositorio (`lstat` + `rev-parse --show-toplevel --absolute-git-dir`), con git sin
+  configuración de sistema ni de usuario, `core.fsmonitor=false` y `core.hooksPath=/dev/null`. El
+  **revert** es un dato del propio commit: la ingesta guarda `changes.reverts_sha`, leído solo del
+  formato de `git revert` (título `Revert "…"`/`Reapply "…"` y línea exacta
+  `This reverts commit <sha40|sha64>.` en el `body` opcional que envía el hook; es lo que declara el
+  mensaje, no se valida el parche inverso), y un
+  commit está revertido mientras exista un revert **vivo** (no deshecho) que apunte a su SHA, calculado
+  al leer (`LATERAL` en el listado, sin consultas por fila). Así no importa el orden de llegada ni
+  que el revert se deshaga o se corrija con `--amend`. Eventos nuevos: `commit.discarded`,
+  `commit.restored` y `commit.reverted`. Límite: un SHA ingerido a mano que nunca existió en el repo
+  aparece como deshecho.
 - `local-projects` (change `add-local-projects-backend`, apagado por defecto con
   `LOCAL_PROJECTS_ENABLED`): `POST /projects` da de alta un repo desde su carpeta (el slug sale de
   `origin`, `owner/repo`, o del nombre de la carpeta) e instala los hooks `post-commit` y
@@ -201,6 +226,8 @@ que ya está en el spec o en `openspec/specs/`.
 | `INGEST_URL` | `http://127.0.0.1:8000` | A dónde mandan los hooks los commits; cámbiala si arrancas la API en otro puerto |
 | `HOOK_ENV_PATH` | `~/.config/duelo/hook.env` | Fichero (modo 0600) con `INGEST_URL` e `INGEST_TOKEN`; los hooks lo leen por la ruta que lleva su bloque y no hacen caso del entorno |
 | `PR_SYNC_INTERVAL_SECONDS` | `0` | Cada cuántos segundos se sincronizan las PRs de los proyectos locales con `gh`; `0` = nunca |
+| `REACHABILITY_SWEEP_INTERVAL_SECONDS` | `15` | Cada cuántos segundos el barrido comprueba qué commits de los proyectos locales siguen alcanzables en su repo y marca los que no (`discarded_at`); `0` = nunca. Solo con `LOCAL_PROJECTS_ENABLED` |
+| `REACHABILITY_WINDOW_COMMITS` | `5000` | Commits (los más recientes) que se piden a git en cada barrido; entre 1 y 100 000 |
 
 ## Calidad y tests
 

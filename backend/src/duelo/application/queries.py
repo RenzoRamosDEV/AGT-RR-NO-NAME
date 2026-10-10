@@ -23,6 +23,7 @@ from duelo.application.read_models import (
     StoredEvent,
 )
 from duelo.domain.change import ChangeKind
+from duelo.domain.commit_state import commit_state_of
 from duelo.domain.project import Project
 from duelo.domain.review import ReviewStatus
 from duelo.domain.review_status import (
@@ -98,12 +99,24 @@ async def get_change_detail(
         for f in r.findings
     )
     review_status = review_status_of_run(change.run, rows, expected_agents=expected_agents)
+    # Un commit está revertido mientras algún commit de revert siga en la rama: si el revert se
+    # deshace (`reset`, `amend`) deja de contar y el original vuelve a estar activo.
+    reverted_by = (
+        await changes.live_reverter(change.project_id, change.head_sha)
+        if change.kind is ChangeKind.COMMIT
+        else None
+    )
+    commit_state = commit_state_of(
+        kind=change.kind, discarded_at=change.discarded_at, reverted=reverted_by is not None
+    )
     return ChangeDetail(
         change=change,
         reviews=tuple(rows),
         review_status=review_status,
         findings_summary=findings,
         stale=is_stale(review_status, change.run_started_at, now=now, stale_after=stale_after),
+        commit_state=commit_state,
+        reverted_by=reverted_by,
     )
 
 
@@ -122,7 +135,15 @@ async def agent_stats(
 # Lista blanca de lo que la API muestra de un evento: lo que no esté aquí (el `error` de una
 # review fallida, campos futuros del payload) no sale nunca, aunque esté guardado.
 _EXPOSED_EVENT_TYPES = frozenset(
-    {"change.created", "review.completed", "review.failed", "review.reused"}
+    {
+        "change.created",
+        "review.completed",
+        "review.failed",
+        "review.reused",
+        "commit.discarded",
+        "commit.restored",
+        "commit.reverted",
+    }
 )
 
 

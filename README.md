@@ -160,6 +160,8 @@ Requisitos y garantías:
 | `INGEST_URL` | `http://127.0.0.1:8000` | Dónde envían los hooks los commits (ajústala si usas otro puerto) |
 | `HOOK_ENV_PATH` | `~/.config/duelo/hook.env` | Fichero 0600 con la URL y el token que leen los hooks |
 | `PR_SYNC_INTERVAL_SECONDS` | `0` | Sincronización periódica de PRs con `gh` (`0` = solo bajo demanda) |
+| `REACHABILITY_SWEEP_INTERVAL_SECONDS` | `15` | Cada cuántos segundos se comprueba qué commits de los proyectos locales siguen en su repo (los que dejan de estarlo se marcan «deshechos»); `0` lo apaga. Solo con `LOCAL_PROJECTS_ENABLED` |
+| `REACHABILITY_WINDOW_COMMITS` | `5000` | Cuántos commits recientes se piden a git en cada barrido (1 a 100 000) |
 
 ### Proyectos desde carpetas locales
 
@@ -194,6 +196,31 @@ true` cuando ocurre. `AGENT_NAMES` no admite nombres repetidos (tampoco si solo 
 mayúsculas): la API y el worker no arrancan y el error nombra el repetido. La migración que añade
 `reviews.reused_from_change_id` crea su índice parcial sin `CONCURRENTLY`; en una base grande conviene
 crearlo antes a mano con `CREATE INDEX CONCURRENTLY` (ver el `design.md` del change).
+
+**Commits deshechos y revertidos.** Si deshaces un commit, Duelo lo marca en amarillo y lo dice en
+el centro de su fila; no borra nada (el change y sus reviews se conservan). Hay dos estados, además
+del normal (`commit_state` = `active`, `discarded` o `reverted` en la API):
+
+- **COMMIT DESHECHO** («Ya no está en la rama»): su SHA ya no es alcanzable desde ninguna
+  referencia del repositorio (`git reset`, `git commit --amend`, un `rebase`, borrar la rama). Git
+  no avisa de eso, así que la API lo comprueba cada `REACHABILITY_SWEEP_INTERVAL_SECONDS` (15 s) con
+  **una** llamada a `git log --all` por proyecto. Si el commit vuelve (`git reset` de vuelta), se
+  desmarca solo. Tras un `git push` el commit sigue en `origin/<rama>` y no se marca hasta que se
+  fuerce el push.
+- **COMMIT REVERTIDO** («Revertido por `abc1234`»): otro commit lo invierte con `git revert`. El hook
+  envía ahora el cuerpo del mensaje (`body`, opcional) y Duelo solo reconoce el formato que escribe
+  `git revert`: título `Revert "…"` (o `Reapply "…"`) y una línea exacta
+  `This reverts commit <sha completo en minúsculas>.`; cualquier otra mención se ignora. Es lo que
+  declara el mensaje: no se comprueba que el parche sea de verdad el inverso. El original está revertido mientras ese revert siga en la rama: si lo deshaces (`reset`) vuelve a
+  estar activo, y si lo corriges con `--amend` pasa a estar revertido por el commit nuevo.
+
+Si el commit está deshecho **y** revertido, gana «deshecho». Una PR nunca está deshecha ni
+revertida. **Límites:** un commit ingerido con un SHA que nunca existió en ese repositorio (una
+prueba a mano con `POST /ingest/commit`) aparece como deshecho en un proyecto local; los proyectos
+sin carpeta local no se evalúan; si la carpeta registrada pasa a ser un enlace simbólico, una
+subcarpeta o apunta a otro repositorio, el barrido no marca nada (y git se ejecuta sin configuración
+de usuario ni ganchos); y con más de `REACHABILITY_WINDOW_COMMITS` commits solo se evalúan
+los changes recientes y cada candidato se confirma uno a uno antes de marcarlo.
 
 Cada respuesta lleva `X-Request-ID` (se propaga el entrante si es válido) y la API escribe un
 access log JSON por petición en stdout, sin query, cuerpo ni tokens.

@@ -26,6 +26,50 @@ class ChangeCreated:
 
 
 @dataclass(frozen=True, slots=True)
+class CommitDiscarded:
+    """El commit ya no es alcanzable desde ninguna referencia del repositorio local."""
+
+    change_id: UUID
+    project_id: UUID
+
+    type: str = "commit.discarded"
+
+    def to_payload(self) -> dict[str, Any]:
+        return {"change_id": str(self.change_id), "project_id": str(self.project_id)}
+
+
+@dataclass(frozen=True, slots=True)
+class CommitRestored:
+    """Un commit que estaba deshecho vuelve a ser alcanzable."""
+
+    change_id: UUID
+    project_id: UUID
+
+    type: str = "commit.restored"
+
+    def to_payload(self) -> dict[str, Any]:
+        return {"change_id": str(self.change_id), "project_id": str(self.project_id)}
+
+
+@dataclass(frozen=True, slots=True)
+class CommitReverted:
+    """Otro commit (`reverted_by_change_id`) revierte este con `git revert`."""
+
+    change_id: UUID
+    project_id: UUID
+    reverted_by_change_id: UUID
+
+    type: str = "commit.reverted"
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "change_id": str(self.change_id),
+            "project_id": str(self.project_id),
+            "reverted_by_change_id": str(self.reverted_by_change_id),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ReviewCompleted:
     review_id: UUID
     change_id: UUID

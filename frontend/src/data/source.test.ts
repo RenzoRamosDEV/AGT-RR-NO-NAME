@@ -7,6 +7,9 @@ describe("createMockSource", () => {
     const page = await createMockSource().changes("duelo");
     expect(page.items.map((c) => [c.id, c.reviewStatus])).toEqual([
       ["c1", "running"],
+      ["c3", "completed"],
+      ["c4", "completed"],
+      ["c5", "completed"],
       ["c2", "partial_failed"],
     ]);
   });
@@ -18,7 +21,7 @@ describe("createMockSource", () => {
     expect(await ids({ kind: "pr" })).toEqual(["c2"]);
     expect(await ids({ status: ["pending", "running"] })).toEqual(["c1"]);
     expect(await ids({ status: ["failed", "partial_failed"] })).toEqual(["c2"]);
-    expect(await ids({ status: ["completed"] })).toEqual([]);
+    expect(await ids({ status: ["completed"] })).toEqual(["c3", "c4", "c5"]);
     expect(await ids({ q: "  TOKEN " })).toEqual(["c1"]);
     expect(await ids({ q: "feat/ingest" })).toEqual(["c2"]);
     expect(await ids({ status: ["failed", "partial_failed"], q: "token" })).toEqual([]);
@@ -29,8 +32,21 @@ describe("createMockSource", () => {
     const first = await source.changes("duelo", { limit: 1 });
     expect(first.items.map((c) => c.id)).toEqual(["c1"]);
     const second = await source.changes("duelo", { limit: 1, cursor: first.nextCursor });
-    expect(second.items.map((c) => c.id)).toEqual(["c2"]);
-    expect(second.nextCursor).toBeNull();
+    expect(second.items.map((c) => c.id)).toEqual(["c3"]);
+    expect(second.nextCursor).not.toBeNull();
+    const last = await source.changes("duelo", { limit: 3, cursor: second.nextCursor });
+    expect(last.items.map((c) => c.id)).toEqual(["c4", "c5", "c2"]);
+    expect(last.nextCursor).toBeNull();
+  });
+
+  it("reports a discarded and a reverted commit, and the commit that reverts it", async () => {
+    const source = createMockSource();
+    expect(await source.change("c3")).toMatchObject({ commitState: "discarded" });
+    expect(await source.change("c4")).toMatchObject({
+      commitState: "reverted",
+      revertedBy: { id: "c5", sha: "d93f0b4" },
+    });
+    expect((await source.change("c5")).commitState).toBe("active");
   });
 
   it("restarts a failed change on retry without touching other sources", async () => {

@@ -24,6 +24,7 @@ async def ingest_change(
     diff_truncated: bool,
     change_id: UUID | None = None,
     agent_names: Sequence[str] = (),
+    reverts_sha: str | None = None,
 ) -> Change:
     """Persiste el change. `change_id` fija el id del candidato: si el repositorio devuelve un
     change con otro id, ya existía (la identidad natural es otra).
@@ -43,6 +44,7 @@ async def ingest_change(
         diff_truncated=diff_truncated,
         created_at=now,
         id=change_id,
+        reverts_sha=reverts_sha,
     )
     event = ChangeCreated(
         change_id=change.id,

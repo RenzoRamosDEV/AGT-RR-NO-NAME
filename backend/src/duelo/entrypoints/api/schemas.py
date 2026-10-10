@@ -14,9 +14,11 @@ from duelo.application.read_models import (
     ChangePage,
     ChangeSummary,
     RawOutput,
+    RevertRef,
     ReviewBrief,
 )
 from duelo.domain.change import MAX_HEAD_SHA, MAX_REF, MAX_URL, ChangeKind, ChangeStatus
+from duelo.domain.commit_state import CommitState
 from duelo.domain.diff import DiffSummary
 from duelo.domain.project import Project
 from duelo.domain.review import Finding, Review, ReviewStatus
@@ -25,6 +27,10 @@ from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
 # Sin NUL: Postgres no lo admite en texto. Al ir en el esquema, el contrato lo declara y el 422 es
 # el estándar de FastAPI (no un caso especial del handler).
 NO_NUL = r"^[^\x00]*$"
+
+# Cuerpo del mensaje de un commit: solo se lee para detectar `This reverts commit <sha>` y no se
+# guarda. El hook lo envía recortado a 4 000 caracteres; este es el tope que admite la API.
+MAX_BODY = 20_000
 
 
 class IngestCommitRequest(BaseModel):
@@ -37,6 +43,8 @@ class IngestCommitRequest(BaseModel):
     author: str = ""
     url: str = Field(default="", max_length=MAX_URL)
     diff: str = ""
+    # Opcional: los hooks anteriores a este campo no lo envían y todo sigue igual.
+    body: str = Field(default="", max_length=MAX_BODY)
 
     @field_validator("project")
     @classmethod
@@ -127,6 +135,17 @@ class DiffSummaryResponse(BaseModel):
         )
 
 
+class RevertedByResponse(BaseModel):
+    """El commit que revierte a otro (`git revert`): lo mínimo para nombrarlo y enlazarlo."""
+
+    id: UUID
+    head_sha: str
+
+    @classmethod
+    def from_domain(cls, ref: RevertRef) -> RevertedByResponse:
+        return cls(id=ref.id, head_sha=ref.head_sha)
+
+
 class ChangeSummaryResponse(BaseModel):
     id: UUID
     project_id: UUID
@@ -144,6 +163,12 @@ class ChangeSummaryResponse(BaseModel):
     diff_summary: DiffSummaryResponse
     # Diagnóstico: sigue `pending`/`running` más allá de `STALE_AFTER_SECONDS`.
     stale: bool
+    # `discarded`: el commit ya no es alcanzable desde ninguna referencia del repositorio local
+    # (`reset`, `amend`, `rebase`...); `reverted`: otro commit lo invierte con `git revert`. Una PR
+    # siempre es `active`. No cambia `review_status` ni borra nada.
+    commit_state: CommitState = CommitState.ACTIVE
+    # El commit que lo revierte, si `commit_state` es `reverted` y se conoce.
+    reverted_by: RevertedByResponse | None = None
 
     @classmethod
     def from_summary(cls, change: ChangeSummary) -> ChangeSummaryResponse:
@@ -163,6 +188,10 @@ class ChangeSummaryResponse(BaseModel):
             created_at=change.created_at,
             diff_summary=DiffSummaryResponse.from_domain(change.diff_summary),
             stale=change.stale,
+            commit_state=change.commit_state,
+            reverted_by=(
+                RevertedByResponse.from_domain(change.reverted_by) if change.reverted_by else None
+            ),
         )
 
 
@@ -317,6 +346,10 @@ class ChangeDetailResponse(ChangeSummaryResponse):
             created_at=change.created_at,
             diff_summary=DiffSummaryResponse.from_domain(change.diff_summary),
             stale=detail.stale,
+            commit_state=detail.commit_state,
+            reverted_by=(
+                RevertedByResponse.from_domain(detail.reverted_by) if detail.reverted_by else None
+            ),
             diff=change.diff,
             reviews=[ReviewResponse.from_domain(r) for r in detail.reviews],
             findings_summary=FindingsSummaryResponse.from_domain(detail.findings_summary),

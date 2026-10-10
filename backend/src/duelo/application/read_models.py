@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import UUID
 
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
+from duelo.domain.commit_state import CommitState
 from duelo.domain.diff import DiffSummary
 from duelo.domain.review import Review, ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
@@ -26,6 +27,14 @@ class ReviewBrief:
     run: int
     # Change del que se copió la review (PR con las de su commit idéntico), o `None` si es propia.
     reused_from: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RevertRef:
+    """El commit que revierte a otro: lo mínimo para enlazarlo y nombrarlo."""
+
+    id: UUID
+    head_sha: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +60,10 @@ class ChangeSummary:
     stale: bool = False
     # Solo las del `run` actual, por agente.
     reviews: tuple[ReviewBrief, ...] = ()
+    # Un commit puede estar deshecho o revertido; una PR siempre es `active`. No cambia
+    # `review_status` ni conserva más que la marca: el change y sus reviews siguen intactos.
+    commit_state: CommitState = CommitState.ACTIVE
+    reverted_by: RevertRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +87,8 @@ class ChangeDetail:
     review_status: ChangeReviewStatus
     findings_summary: FindingsSummary
     stale: bool = False
+    commit_state: CommitState = CommitState.ACTIVE
+    reverted_by: RevertRef | None = None
 
 
 @dataclass(frozen=True, slots=True)

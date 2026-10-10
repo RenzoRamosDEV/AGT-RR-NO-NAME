@@ -6,8 +6,15 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from duelo.application.read_models import AgentStats, ChangeCursor, ChangeSummary, StoredEvent
+from duelo.application.read_models import (
+    AgentStats,
+    ChangeCursor,
+    ChangeSummary,
+    RevertRef,
+    StoredEvent,
+)
 from duelo.domain.change import Change, ChangeKind
+from duelo.domain.commit_state import Reachability, TrackedCommit
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed, ReviewReused
 from duelo.domain.project import Project
 from duelo.domain.review import Review, ReviewResult
@@ -30,7 +37,8 @@ class ChangeRepository(Protocol):
         reused: Sequence[tuple[Review, ReviewReused]] = (),
     ) -> Change:
         """Persiste `change`, `event` y, en la MISMA transacción, las reviews `reused` (cada una
-        con su evento).
+        con su evento). Si `change` es un commit que revierte a otro que ya existe en el proyecto
+        (`reverts_sha`), añade también el evento `commit.reverted` del original.
 
         Si ya existía un `Change` con la misma identidad natural
         (project_id, kind, head_sha), lo devuelve sin crear un segundo evento ni copiar reviews; su
@@ -52,6 +60,14 @@ class ChangeRepository(Protocol):
 
     async def get(self, change_id: UUID) -> Change | None:
         """Devuelve el `Change` con ese id, o `None` si no existe."""
+        ...
+
+    async def live_reverter(self, project_id: UUID, head_sha: str) -> RevertRef | None:
+        """El commit de revert más reciente que sigue en la rama (no deshecho) y apunta a
+        `head_sha` (`Change.reverts_sha`) en ese proyecto, o `None` si no hay ninguno.
+
+        Un revert que se deshace (`reset`, `amend`) deja de contar: el original vuelve a estar
+        activo. Y como el dato vive en el commit de revert, no importa el orden de llegada."""
         ...
 
     async def list_for_project(
@@ -211,6 +227,43 @@ class GithubPrSource(Protocol):
     async def open_prs(self, root: str) -> list[PullRequestInfo]:
         """PRs abiertas del repo de `root` (con su diff). Lanza `GithubUnavailable` si no se
         pueden consultar."""
+        ...
+
+
+class HistoryUnavailable(Exception):
+    """No se pudo consultar el historial del repositorio (carpeta movida o borrada, git ausente o
+    sin respuesta...). Quien barre no debe marcar nada de ese proyecto."""
+
+
+class RepositoryHistory(Protocol):
+    async def reachable(self, path: str, *, limit: int) -> Reachability:
+        """Los commits alcanzables desde todas las referencias y desde `HEAD` del repo de `path`
+        (como mucho `limit`, los más recientes), con la fecha del más antiguo. Lanza
+        `HistoryUnavailable` si no se puede consultar."""
+        ...
+
+    async def contains(self, path: str, sha: str) -> bool:
+        """`True` si `sha` es alcanzable desde alguna referencia o desde `HEAD`. Un SHA que no sea
+        hexadecimal nunca llega a git y da `False`. Lanza `HistoryUnavailable`."""
+        ...
+
+
+class CommitMarks(Protocol):
+    async def tracked_commits(self, project_id: UUID) -> list[TrackedCommit]:
+        """Los changes de tipo `commit` del proyecto, con lo que el barrido necesita saber."""
+        ...
+
+    async def apply(
+        self,
+        project_id: UUID,
+        *,
+        discard: Sequence[UUID],
+        restore: Sequence[UUID],
+        at: datetime,
+    ) -> tuple[int, int]:
+        """Marca como deshechos los changes de `discard` (con `discarded_at = at`) y desmarca los
+        de `restore`, con su evento cada uno, en una transacción. Solo toca los que cambian de
+        estado, así que es idempotente. Devuelve cuántos se marcaron y cuántos se desmarcaron."""
         ...
 
 

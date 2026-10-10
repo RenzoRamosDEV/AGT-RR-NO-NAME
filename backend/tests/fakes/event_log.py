@@ -4,9 +4,23 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from duelo.application.read_models import StoredEvent
-from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from duelo.domain.events import (
+    ChangeCreated,
+    CommitDiscarded,
+    CommitRestored,
+    CommitReverted,
+    ReviewCompleted,
+    ReviewFailed,
+)
 
-Event = ChangeCreated | ReviewCompleted | ReviewFailed
+Event = (
+    ChangeCreated
+    | ReviewCompleted
+    | ReviewFailed
+    | CommitDiscarded
+    | CommitRestored
+    | CommitReverted
+)
 
 
 class FakeEventLog:
