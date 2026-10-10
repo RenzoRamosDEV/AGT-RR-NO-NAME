@@ -55,6 +55,13 @@ class WorkerSettings(BaseSettings):
     def _at_least_one_agent(cls, value: list[str]) -> list[str]:
         if not value:
             raise ValueError("AGENT_NAMES debe tener al menos un agente")
+        # Un nombre repetido (también si solo cambian las mayúsculas) es un error: el estado de un
+        # change espera `len(AGENT_NAMES)` reviews, pero cada agente solo da una por run.
+        seen: set[str] = set()
+        for name in value:
+            if name.casefold() in seen:
+                raise ValueError(f"AGENT_NAMES repite el agente '{name}': cada nombre solo una vez")
+            seen.add(name.casefold())
         return value
 
     @field_validator("claude_bin", "codex_bin", "claude_model", "codex_model", mode="before")

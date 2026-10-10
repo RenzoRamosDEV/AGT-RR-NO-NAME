@@ -190,7 +190,10 @@ diff que un commit que ya revisaron todos los agentes (`AGENT_NAMES`), la PR nac
 copiadas (la interfaz muestra «Reutilizada del commit abc1234») y no se arranca ningún workflow, así
 que no se gasta suscripción. Si el commit aún se está revisando, falta un agente o falló alguno, o la
 PR tiene varios commits (otro diff), se revisa con normalidad. `POST /ingest/pr` responde `reused:
-true` cuando ocurre.
+true` cuando ocurre. `AGENT_NAMES` no admite nombres repetidos (tampoco si solo cambian las
+mayúsculas): la API y el worker no arrancan y el error nombra el repetido. La migración que añade
+`reviews.reused_from_change_id` crea su índice parcial sin `CONCURRENTLY`; en una base grande conviene
+crearlo antes a mano con `CREATE INDEX CONCURRENTLY` (ver el `design.md` del change).
 
 Cada respuesta lleva `X-Request-ID` (se propaga el entrante si es válido) y la API escribe un
 access log JSON por petición en stdout, sin query, cuerpo ni tokens.

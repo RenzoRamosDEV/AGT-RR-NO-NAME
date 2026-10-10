@@ -59,6 +59,38 @@ def test_agent_names_cannot_be_empty(monkeypatch: pytest.MonkeyPatch) -> None:
         WorkerSettings()
 
 
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    ("value", "named"),
+    [
+        ("agent_1,agent_1", "agent_1"),
+        ("claude,Claude", "Claude"),  # solo difiere en mayúsculas
+        ("claude, codex ,CODEX", "CODEX"),
+        ("a,b,a,b", "a"),  # nombra el primer repetido
+    ],
+)
+def test_agent_names_cannot_repeat_a_name_even_in_another_case(
+    monkeypatch: pytest.MonkeyPatch, value: str, named: str
+) -> None:
+    """Origen: con `AGENT_NAMES=agent_1,agent_1` una sola review satisfacía «todos los agentes» al
+    reutilizar las de un commit, pero el estado se calcula contra `len(AGENT_NAMES)` = 2: la PR
+    quedaba `running` sin workflow."""
+    monkeypatch.setenv("AGENT_NAMES", value)
+    monkeypatch.setenv("INGEST_TOKEN", "t")  # que el único fallo posible sea el de los agentes
+
+    for settings_class in (Settings, WorkerSettings):
+        with pytest.raises(ValidationError, match=f"AGENT_NAMES repite el agente '{named}'"):
+            settings_class()  # type: ignore[call-arg]
+
+
+def test_agent_names_keep_their_order_and_spelling_when_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENT_NAMES", "Codex, claude ,agent_1")
+
+    assert WorkerSettings().agent_names == ["Codex", "claude", "agent_1"]
+
+
 def test_worker_settings_do_not_require_the_ingest_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("INGEST_TOKEN", raising=False)
 

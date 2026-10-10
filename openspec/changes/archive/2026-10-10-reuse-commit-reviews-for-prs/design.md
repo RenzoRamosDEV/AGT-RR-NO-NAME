@@ -54,3 +54,13 @@ a `ReviewStarter.start`. La PR y el commit con el mismo SHA son changes distinto
 - Una PR de varios commits nunca reutiliza (su diff es el de toda la rama).
 - Los textos copiados ya fueron saneados al guardarse; no se reprocesan.
 - Los ids de workflow, la guarda del starter y el flujo de reintento no cambian.
+- La migración `g7d5e9b3c126` crea el índice parcial `ix_reviews_reused_from_change_id` **sin
+  `CONCURRENTLY`** (aceptado tras la revisión: el índice solo contiene las reviews copiadas, casi
+  vacío; el programa es local y con pocas filas, y la migración anterior de índices tampoco lo usó).
+  En una base grande conviene crearlo a mano antes de migrar con
+  `CREATE INDEX CONCURRENTLY ix_reviews_reused_from_change_id ON reviews (reused_from_change_id)
+  WHERE reused_from_change_id IS NOT NULL;` (fuera de una transacción) y dejar que la migración
+  falle o saltarla con `alembic stamp`.
+- `AGENT_NAMES` no admite nombres repetidos (change `reject-duplicate-agent-names`): el estado de un
+  change espera `len(AGENT_NAMES)` reviews y la decisión de reutilizar no puede tratar la lista como
+  un conjunto.

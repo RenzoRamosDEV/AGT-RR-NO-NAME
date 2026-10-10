@@ -174,6 +174,19 @@ def test_nothing_is_reused_when_no_agent_is_expected() -> None:
     assert reviews_to_reuse(pr, commit, [], agent_names=(), now=LATER) == ()
 
 
+@pytest.mark.regression
+@pytest.mark.parametrize("agents", [("claude", "claude"), ("claude", "codex", "claude")])
+def test_a_list_with_a_repeated_agent_never_reuses_even_if_every_name_has_a_review(
+    agents: tuple[str, ...],
+) -> None:
+    """Origen: la lista se comparaba como un `set`, así que `claude,claude` quedaba satisfecha con
+    una sola review y la PR nacía sin workflow cuando el estado esperaba `len(lista)` reviews."""
+    commit, pr = _change(ChangeKind.COMMIT), _change(ChangeKind.PR)
+    reviews = [_done(commit, "claude"), _done(commit, "codex")]
+
+    assert reviews_to_reuse(pr, commit, reviews, agent_names=agents, now=LATER) == ()
+
+
 def test_a_failed_review_cannot_be_copied() -> None:
     commit = _change(ChangeKind.COMMIT)
 

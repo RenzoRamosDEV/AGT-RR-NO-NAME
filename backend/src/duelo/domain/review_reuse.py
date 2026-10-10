@@ -28,9 +28,13 @@ def reviews_to_reuse(
     completada de su `run` actual de cada agente de `agent_names`. Si falta uno, o falló, la PR se
     revisa con normalidad: reutilizar solo una parte dejaría la PR en `running` sin workflow.
     El diff se compara tal cual; uno con NUL (que el repositorio sanea al guardar) no coincide y
-    se revisa con normalidad, que es el lado seguro."""
-    expected = set(agent_names)
-    if not expected or source is None:
+    se revisa con normalidad, que es el lado seguro.
+
+    El estado de un change espera `len(agent_names)` reviews, así que la lista se usa tal cual y no
+    como un conjunto: con un nombre repetido (que la configuración ya rechaza) una sola review
+    «satisfaría» a todos, la PR copiaría menos reviews de las esperadas y quedaría `running` sin
+    workflow. Con repetidos no se reutiliza nada."""
+    if not agent_names or source is None or len(set(agent_names)) != len(agent_names):
         return ()
     if change.kind is not ChangeKind.PR or source.kind is not ChangeKind.COMMIT:
         return ()
@@ -43,9 +47,9 @@ def reviews_to_reuse(
     for review in source_reviews:
         if review.run == source.run and review.status is ReviewStatus.COMPLETED:
             by_agent[review.agent] = review
-    if not expected <= by_agent.keys():
+    if any(name not in by_agent for name in agent_names):
         return ()
     return tuple(
         Review.reused_from(by_agent[name], change_id=change.id, created_at=now)
-        for name in sorted(expected)
+        for name in agent_names
     )
