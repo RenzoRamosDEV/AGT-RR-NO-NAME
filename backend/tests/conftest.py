@@ -31,6 +31,11 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "integration: Postgres real y/o Temporal de test")
     config.addinivalue_line("markers", "e2e: flujo completo por HTTP con Postgres y Temporal")
     config.addinivalue_line("markers", "regression: fija un defecto ya corregido")
+    config.addinivalue_line(
+        "markers",
+        "cli_agents: usa los CLI REALES de claude/codex (consume suscripción); solo con "
+        "RUN_CLI_AGENT_TESTS=1",
+    )
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

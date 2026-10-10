@@ -7,6 +7,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 
+from duelo.application.review_timeouts import RUN_REVIEW_START_TO_CLOSE
 from duelo.workflows.dto import ReviewChangeInput, RunReviewInput, RunReviewResult
 
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1))
@@ -55,7 +56,7 @@ class ReviewChangeWorkflow:
                 run_input,
                 task_queue="agents",
                 result_type=RunReviewResult,
-                start_to_close_timeout=timedelta(minutes=5),
+                start_to_close_timeout=RUN_REVIEW_START_TO_CLOSE,
                 heartbeat_timeout=timedelta(seconds=30),
                 retry_policy=RETRY,
             )

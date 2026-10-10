@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from duelo.config import Settings, WorkerSettings
+from duelo.config import MAX_AGENT_TIMEOUT_SECONDS, Settings, WorkerSettings
 
 
 def test_defaults_for_everything_but_the_token(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -63,6 +63,111 @@ def test_worker_settings_do_not_require_the_ingest_token(monkeypatch: pytest.Mon
     monkeypatch.delenv("INGEST_TOKEN", raising=False)
 
     assert WorkerSettings().agent_names
+
+
+_AGENT_VARIABLES = (
+    "AGENT_TIMEOUT_SECONDS",
+    "AGENT_MAX_CONCURRENCY",
+    "CLAUDE_BIN",
+    "CODEX_BIN",
+    "CLAUDE_MODEL",
+    "CODEX_MODEL",
+    "CLAUDE_MAX_BUDGET_USD",
+)
+
+
+def test_cli_agent_defaults_need_no_configuration_and_no_api_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in _AGENT_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
+    settings = WorkerSettings()
+
+    assert settings.agent_timeout_seconds == 240
+    assert settings.agent_max_concurrency == 2
+    assert (settings.claude_bin, settings.codex_bin) == (None, None)
+    assert (settings.claude_model, settings.codex_model) == (None, None)
+    assert settings.claude_max_budget_usd == 2.0
+    assert not any("api_key" in field for field in WorkerSettings.model_fields)
+
+
+def test_cli_agent_settings_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "90.5")
+    monkeypatch.setenv("AGENT_MAX_CONCURRENCY", "4")
+    monkeypatch.setenv("CLAUDE_BIN", "/opt/claude")
+    monkeypatch.setenv("CODEX_BIN", "/opt/codex")
+    monkeypatch.setenv("CLAUDE_MODEL", "opus")
+    monkeypatch.setenv("CODEX_MODEL", "gpt-x")
+    monkeypatch.setenv("CLAUDE_MAX_BUDGET_USD", "0.75")
+
+    settings = WorkerSettings()
+
+    assert settings.agent_timeout_seconds == 90.5
+    assert settings.agent_max_concurrency == 4
+    assert (settings.claude_bin, settings.codex_bin) == ("/opt/claude", "/opt/codex")
+    assert (settings.claude_model, settings.codex_model) == ("opus", "gpt-x")
+    assert settings.claude_max_budget_usd == 0.75
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_binary_or_model_means_not_configured(
+    monkeypatch: pytest.MonkeyPatch, blank: str
+) -> None:
+    for name in ("CLAUDE_BIN", "CODEX_BIN", "CLAUDE_MODEL", "CODEX_MODEL"):
+        monkeypatch.setenv(name, blank)
+
+    settings = WorkerSettings()
+
+    assert (settings.claude_bin, settings.codex_bin) == (None, None)
+    assert (settings.claude_model, settings.codex_model) == (None, None)
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("value", ["0", "-1", "270.1", "299.9", "300", "301"])
+def test_the_agent_timeout_must_leave_a_margin_below_the_activity_timeout(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """Origen: se admitía hasta 299,9 s con una activity de 300 s: al vencer el CLI no quedaba
+    tiempo para limpiar y persistir la `Review(failed)`."""
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", value)
+
+    with pytest.raises(ValidationError):
+        WorkerSettings()
+
+
+@pytest.mark.parametrize("value", ["1", "240", "269.9", "270"])
+def test_timeouts_up_to_the_ceiling_are_accepted(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", value)
+
+    assert WorkerSettings().agent_timeout_seconds == float(value)
+
+
+def test_the_workflow_and_the_configuration_use_the_same_timeout_constants() -> None:
+    """Si alguien cambia el plazo de la activity en un sitio y no en el otro, esto lo detecta."""
+    from duelo import config
+    from duelo.application import review_timeouts
+    from duelo.workflows import review_change
+
+    assert review_change.RUN_REVIEW_START_TO_CLOSE is review_timeouts.RUN_REVIEW_START_TO_CLOSE
+    assert config.MAX_AGENT_TIMEOUT_SECONDS == review_timeouts.MAX_AGENT_TIMEOUT_SECONDS
+
+
+def test_the_default_timeout_leaves_the_margin() -> None:
+    assert WorkerSettings.model_fields["agent_timeout_seconds"].default <= MAX_AGENT_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize("name", ["AGENT_MAX_CONCURRENCY", "CLAUDE_MAX_BUDGET_USD"])
+@pytest.mark.parametrize("value", ["0", "-2"])
+def test_concurrency_and_budget_must_be_positive(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        WorkerSettings()
 
 
 _OPERATOR = "o" * 16

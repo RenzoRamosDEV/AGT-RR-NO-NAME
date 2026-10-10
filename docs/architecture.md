@@ -104,6 +104,36 @@ que ya está en el spec o en `openspec/specs/`.
   añade `agent_names` (de `AGENT_NAMES`) para que la UI no suponga «Claude y Codex». El frontend
   pide el detalle completo al abrir «Ver respuestas» y muestra del detalle solo el run actual, con
   los anteriores colapsados.
+- [`cli-review-agents`](../openspec/specs/cli-review-agents/spec.md) (changes `add-cli-agents` y
+  `harden-cli-agents`): los agentes `claude` y `codex` de `AGENT_NAMES` revisan con los CLI de la
+  máquina del usuario (`ClaudeCliAgent`, `CodexCliAgent` en `adapters/agents/`), **sin claves de API**:
+  usan la sesión ya iniciada. Son adaptadores del puerto `ReviewAgent` y el resto de nombres siguen
+  siendo el `FakeAgent`, así que el valor por defecto y la CI no cambian. Se ejecutan como subproceso
+  asíncrono sin shell, **confinados y en solo lectura**: Claude con `Read`, `Grep` y `Glob` en modo
+  `--restricted` (herramientas de fichero confinadas a su directorio de trabajo), sin permisos
+  interactivos ni MCP/hooks/ajustes del usuario; Codex con el sandbox `read-only`, sin la
+  configuración ni las reglas del usuario y con 30 funciones desactivadas (todo lo que ejecuta
+  comandos, lee el disco o el workspace, lanza subagentes o usa red, plugins o MCP; cada función
+  habilitada de `codex features list` está clasificada en `codex_cli.py` y un test falla si una
+  versión nueva trae una sin clasificar): `-s read-only` solo impide escribir, y con él el modelo aún
+  podía leer con `cat`. Es una lista de denegación, acotada por el sandbox, el directorio vacío y el
+  entorno sin secretos. Sin shell Codex no lee ficheros, así que revisa solo el diff y trabaja siempre en un directorio
+  temporal vacío; Claude sí usa la carpeta del proyecto (el puerto `ProjectPaths` resuelve la ruta
+  sin tocar los DTOs de Temporal) o un directorio temporal vacío. El prompt va por la entrada estándar
+  (el diff se trata como dato no confiable, delimitado con una marca aleatoria y recortado a 60 000
+  caracteres) y la salida JSON se valida contra un esquema (`adapters/agents/review_payload.py`); una
+  salida truncada por el límite de lectura es un fallo, nunca se parsea como completa. El CLI no
+  recibe `INGEST_TOKEN`, `OPERATOR_TOKEN`, `DATABASE_URL` ni claves de API. Cada ejecución tiene
+  plazo propio (`AGENT_TIMEOUT_SECONDS`, como máximo el de la activity menos 30 s:
+  `application/review_timeouts.py`, compartido con el workflow); al vencer se mata el grupo de procesos
+  y la recolección de su salida tiene otro plazo corto (`run_command`), de modo que un descendiente
+  desasociado que retenga el pipe no cuelga la review. El worker limita los CLI simultáneos
+  (`AGENT_MAX_CONCURRENCY`, también como `max_concurrent_activities` de la queue `agents`: las
+  reviews sobrantes esperan en la cola de Temporal). Al cancelarse la llamada también se mata el
+  grupo y se recoge con el mismo plazo corto; un descendiente en otra sesión no se localiza ni se mata
+  (riesgo residual aceptado). Los errores (sin CLI, sin sesión, plazo, salida
+  inválida o truncada) usan mensajes fijos que nunca incluyen la salida del CLI y acaban en una
+  `Review(failed)`.
 
 ## Variables de entorno
 
@@ -111,7 +141,9 @@ que ya está en el spec o en `openspec/specs/`.
 | --- | --- | --- |
 | `INGEST_TOKEN` | (obligatoria) | Secreto de ingesta y de `POST /changes/{id}/retry` |
 | `OPERATOR_TOKEN` | sin configurar | Habilita `GET /reviews/{id}/raw-output` (distinto de `INGEST_TOKEN`, 16+ caracteres); sin él responde 404 |
-| `DATABASE_URL`, `TEMPORAL_ADDRESS`, `AGENT_NAMES`, `MAX_DIFF_CHARS` | ver `config.py` | Conexiones y límites base |
+| `DATABASE_URL`, `TEMPORAL_ADDRESS`, `AGENT_NAMES`, `MAX_DIFF_CHARS` | ver `config.py` | Conexiones y límites base. `AGENT_NAMES=claude,codex` activa los CLI reales y debe ser igual en la API y en el worker |
+| `AGENT_TIMEOUT_SECONDS` / `AGENT_MAX_CONCURRENCY` | `240` / `2` | Worker: plazo (máximo 270 s: activity de 300 − 30) y CLI simultáneos |
+| `CLAUDE_BIN`, `CODEX_BIN`, `CLAUDE_MODEL`, `CODEX_MODEL`, `CLAUDE_MAX_BUDGET_USD` | PATH / el del CLI / `2` | Worker: ruta de los ejecutables, modelo y tope de gasto de Claude Code |
 | `MAX_INGEST_BODY_BYTES` | `1500000` | Tamaño máximo del cuerpo de `POST /ingest/commit` y `/ingest/pr` (413 si lo supera); protege la memoria y es independiente de `MAX_DIFF_CHARS` |
 | `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes `esquema://host[:puerto]` separados por comas, p. ej. `http://localhost:5173`; no admite `*` |
 | `RATE_LIMIT_REQUESTS` | `300` | Peticiones por IP y ventana en ingesta y reintento; `0` lo desactiva |

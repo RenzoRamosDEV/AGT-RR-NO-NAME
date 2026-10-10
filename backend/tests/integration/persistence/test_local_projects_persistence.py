@@ -208,3 +208,17 @@ async def test_the_unique_constraint_on_path_allows_many_projects_without_folder
             )
         ).scalar_one()
     assert nulls >= 3
+
+
+async def test_path_of_returns_the_folder_of_a_local_project_and_none_otherwise(
+    session_factory: async_sessionmaker,
+) -> None:
+    """`ProjectPaths`: lo que usan los agentes de CLI para leer el repositorio del proyecto."""
+    repo = SqlAlchemyProjectRepository(session_factory)
+    slug = f"acme/{uuid4()}"
+    local = await repo.add_local(_local(slug, f"/home/u/{slug}"))
+    without_folder = await create_project(session_factory)
+
+    assert await repo.path_of(local.id) == f"/home/u/{slug}"
+    assert await repo.path_of(without_folder) is None  # existe, pero sin carpeta
+    assert await repo.path_of(uuid4()) is None  # no existe

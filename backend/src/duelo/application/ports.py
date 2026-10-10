@@ -63,6 +63,15 @@ class ReviewAgent(Protocol):
         ...
 
 
+class ProjectPaths(Protocol):
+    async def path_of(self, project_id: UUID) -> str | None:
+        """Devuelve la carpeta local del proyecto, o `None` si no existe o no tiene carpeta.
+
+        Es lo único que un agente necesita saber de un proyecto, y le permite leer el repositorio
+        sin que la ruta viaje por los DTOs de Temporal."""
+        ...
+
+
 class ReviewRepository(Protocol):
     async def add(self, review: Review, event: ReviewCompleted | ReviewFailed) -> Review:
         """Persiste `review` y `event` en una única transacción.

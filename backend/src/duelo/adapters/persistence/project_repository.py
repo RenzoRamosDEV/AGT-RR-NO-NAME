@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -35,6 +37,16 @@ class SqlAlchemyProjectRepository:
                 await session.execute(select(ProjectModel).where(ProjectModel.slug == slug))
             ).scalar_one_or_none()
         return _to_domain(row) if row is not None else None
+
+    async def path_of(self, project_id: UUID) -> str | None:
+        """Implementa `ProjectPaths`: la carpeta local del proyecto, o `None` si no existe el
+        proyecto o se creó sin carpeta."""
+        async with self._session_factory() as session:
+            return (
+                await session.execute(
+                    select(ProjectModel.path).where(ProjectModel.id == project_id)
+                )
+            ).scalar_one_or_none()
 
     async def list_all(self) -> list[Project]:
         async with self._session_factory() as session:
