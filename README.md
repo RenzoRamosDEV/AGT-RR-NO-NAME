@@ -36,7 +36,7 @@ just down             # para todo
 export INGEST_TOKEN=dev-ingest-token       # solo desarrollo local
 just dev                                  # infra + API (usa INGEST_TOKEN)
 just migrate                              # esquema de la base de datos
-just worker                               # worker con FakeAgent (otra terminal)
+just worker                               # worker con agentes de prueba (otra terminal)
 # un proyecto de prueba (la creación por API llega con el slice de Project):
 podman exec -i <contenedor-postgres> psql -U duelo -c \
   "insert into projects(id, slug) values (gen_random_uuid(), 'demo/repo')"
@@ -49,6 +49,45 @@ curl localhost:8000/ready                 # 200 solo si Postgres y Temporal resp
 ```
 
 El token es un secreto compartido (`INGEST_TOKEN`); la API escucha solo en `127.0.0.1`.
+
+### Revisar de verdad con Claude Code y Codex
+
+Por defecto `AGENT_NAMES=agent_1,agent_2`: son agentes de prueba (`FakeAgent`) que devuelven siempre
+la misma review. Para que revisen los CLI **reales** de tu terminal, **sin claves de API** (usan la
+sesión que ya tienes iniciada), arranca la API **y** el worker con la misma lista:
+
+```bash
+export AGENT_NAMES=claude,codex          # en la API y en el worker
+just worker                              # en TU máquina: ahí están los CLI con la sesión iniciada
+```
+
+Requisitos y garantías:
+
+- `claude` y `codex` instalados y con sesión iniciada (`claude` y `codex login`). Si no hay sesión o no
+  están en el `PATH`, la review queda `failed` con un mensaje claro y se puede reintentar.
+- **Solo lectura:** Claude Code recibe únicamente `Read`, `Grep` y `Glob` y no puede pedir permisos;
+  Codex corre con el sandbox `read-only`. Nada de Bash, Edit, Write ni red. No cargan tus MCP ni tus
+  hooks de Claude (los de Codex sí corren: no hay flag para quitarlos).
+- El diff (hasta 60 000 caracteres) viaja por la entrada estándar, no por argumentos, y se trata como
+  **dato no confiable**: el prompt ordena ignorar cualquier instrucción que contenga.
+- Si el proyecto se añadió desde una carpeta local, el agente la usa como directorio de trabajo para
+  leer el repositorio (solo lectura); si no, trabaja en un directorio temporal vacío.
+- Al proceso del CLI **no** llegan `INGEST_TOKEN`, `OPERATOR_TOKEN`, `DATABASE_URL` ni tus claves
+  `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` (si las tuvieras en el entorno, el CLI las usaría en lugar de tu
+  sesión).
+- **Consumo:** cada review gasta tu suscripción (una review de un diff diminuto: ≈ 0,03 USD de lista en
+  Claude y ≈ 13 000 tokens en Codex; más con diffs grandes). `AGENT_MAX_CONCURRENCY` (2) limita cuántos
+  CLI corren a la vez.
+- La calidad depende del modelo: la nota y los hallazgos no se verifican contra el código.
+
+| Variable (worker) | Por defecto | Qué hace |
+| --- | --- | --- |
+| `AGENT_NAMES` | `agent_1,agent_2` | `claude` y `codex` usan los CLI reales; cualquier otro nombre, el agente de prueba |
+| `AGENT_TIMEOUT_SECONDS` | `240` | Plazo de cada ejecución del CLI (menos de 300: la activity dura 5 minutos) |
+| `AGENT_MAX_CONCURRENCY` | `2` | CLI simultáneos en este worker; el resto espera en la cola de Temporal |
+| `CLAUDE_BIN` / `CODEX_BIN` | en el `PATH` | Ruta del ejecutable si no está en el `PATH` |
+| `CLAUDE_MODEL` / `CODEX_MODEL` | el del CLI | Modelo a usar |
+| `CLAUDE_MAX_BUDGET_USD` | `2` | Tope de gasto (USD de lista) de una ejecución de Claude Code |
 
 ### Variables de entorno de la API
 
@@ -99,7 +138,7 @@ access log JSON por petición en stdout, sin query, cuerpo ni tokens.
 | `just dev`        | Levanta infra (perfil `infra`) + API (perfil `app`)      |
 | `just down`       | Para y limpia los contenedores                           |
 | `just migrate`    | Aplica las migraciones de Alembic                        |
-| `just worker`     | Worker de desarrollo (`platform` + `agents`, FakeAgent)  |
+| `just worker`     | Worker de desarrollo (`platform` + `agents`; `AGENT_NAMES=claude,codex` usa los CLI) |
 | `just load`       | Carga ligera de `POST /ingest/commit` (bajo demanda)     |
 | `just openapi`    | Regenera el snapshot `docs/openapi.json`                 |
 | `just test`       | Tests de backend (`pytest`) y build de frontend          |
