@@ -50,7 +50,7 @@ function ShellLayout() {
           <MenuIcon />
         </Button>
         <Link to="/" className="brand">
-          <BrandLogo size={28} />
+          <BrandLogo size={40} />
           <span>Duelo</span>
         </Link>
         <div className="topbar-spacer" />
