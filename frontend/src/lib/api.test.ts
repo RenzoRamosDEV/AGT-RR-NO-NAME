@@ -252,9 +252,43 @@ describe("createHttpSource agent stats and health", () => {
         run: 2,
         score: null,
         durationMs: 7,
+        reusedFrom: null,
         partial: true,
       },
     ]);
+  });
+
+  it("keeps where a reused review was copied from, in the listing and in the detail", async () => {
+    // Origin: a PR identical to a reviewed commit reuses its reviews (`reused_from` = that change).
+    const brief = (reused_from?: string | null) => ({
+      agent: "claude",
+      status: "completed",
+      score: 9,
+      duration_ms: 5,
+      run: 1,
+      reused_from,
+    });
+    const listing = vi.fn(async () =>
+      jsonResponse({
+        items: [{ ...summary, reviews: [brief("commit-1"), brief(null), brief()] }],
+        next_cursor: null,
+      }),
+    );
+    const page = await createHttpSource("http://api.test", listing).changes("demo");
+    expect(page.items[0].reviews?.map((r) => r.reusedFrom)).toEqual(["commit-1", null, null]);
+
+    const detail = vi.fn(async () =>
+      jsonResponse({
+        ...summary,
+        diff: "d",
+        reviews: [
+          { id: "r1", agent: "claude", status: "completed", findings: [], reused_from: "commit-1" },
+          { id: "r2", agent: "codex", status: "completed", findings: [] },
+        ],
+      }),
+    );
+    const change = await createHttpSource("http://api.test", detail).change("c1");
+    expect(change.reviews?.map((r) => r.reusedFrom)).toEqual(["commit-1", null]);
   });
 
   it("does not treat the full reviews of the detail as partial", async () => {

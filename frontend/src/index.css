@@ -1056,6 +1056,16 @@ kbd,
   line-height: 16px;
 }
 
+.reused-pill {
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
 .review-section {
   margin-top: 12px;
 }

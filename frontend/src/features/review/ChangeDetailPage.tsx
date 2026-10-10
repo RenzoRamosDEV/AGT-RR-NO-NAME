@@ -151,7 +151,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                     )}
                     <div className="reviews">
                       {byAgent(reviews).map((r) => (
-                        <ReviewCard key={r.id} review={r} showFindings={false} />
+                        <ReviewCard key={r.id} review={r} showFindings={false} sha={change.sha} />
                       ))}
                     </div>
                     <FindingsPanel reviews={reviews} />
@@ -163,7 +163,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                         </summary>
                         <div className="reviews">
                           {byAgent(p.reviews).map((r) => (
-                            <ReviewCard key={r.id} review={r} />
+                            <ReviewCard key={r.id} review={r} sha={change.sha} />
                           ))}
                         </div>
                       </details>

@@ -25,6 +25,8 @@ export interface Review {
   score?: number | null;
   /** Failure reason as sent by the server; sanitize it before showing it. */
   error?: string | null;
+  /** Id of the change this review was copied from (a PR reusing its identical commit's). */
+  reusedFrom?: string | null;
   /** Light version from the channel listing: no summary, findings or error until the detail loads. */
   partial?: boolean;
 }
