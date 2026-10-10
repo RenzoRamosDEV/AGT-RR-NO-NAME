@@ -134,6 +134,22 @@ que ya está en el spec o en `openspec/specs/`.
   (riesgo residual aceptado). Los errores (sin CLI, sin sesión, plazo, salida
   inválida o truncada) usan mensajes fijos que nunca incluyen la salida del CLI y acaban en una
   `Review(failed)`.
+- `review-reuse` (change `reuse-commit-reviews-for-prs`): un commit y una PR con el mismo SHA son
+  changes distintos, pero cuando la PR tiene un solo commit su diff es el mismo y revisarla otra vez
+  gastaría la suscripción de los agentes sin aportar nada. `ingest_pr` busca el commit del mismo
+  proyecto y SHA (`ChangeRepository.find_commit_with_reviews`) y la función pura
+  `domain/review_reuse.py::reviews_to_reuse` decide: solo si el diff y `diff_truncated` coinciden
+  exactamente y el commit tiene una review `completed` de su `run` actual de **cada** agente de
+  `AGENT_NAMES`. Entonces la PR nace con esas reviews **copiadas** (`run` 1, sin `raw_output` ni
+  `error`) en la misma transacción que su `change.created`, cada una con un evento `review.reused`,
+  y **no se arranca el workflow** (`IngestResult.reused`, `reused` en `POST /ingest/pr`). La marca
+  de origen es `reviews.reused_from_change_id` (FK `ON DELETE SET NULL`, índice parcial), expuesta como
+  `reused_from` en las reviews del detalle y del canal; la interfaz muestra «Reutilizada del commit
+  abc1234». Es idempotente (reenviar la PR no copia ni arranca nada) y sin carreras
+  (`uq_reviews_natural_key` con `ON CONFLICT DO NOTHING`). Límites: si el commit aún se revisa, falta
+  un agente o falló alguno, la PR se revisa con normalidad; una PR de varios commits tiene otro diff y
+  nunca reutiliza; tras un reintento (`run` 2) vuelve a ser una PR normal; `/stats/agents` cuenta
+  también las reviews copiadas.
 - `workflow-observability` (change `temporal-readable-workflows`): lo que se ve en la interfaz de
   Temporal. **Nombres:** el padre es `{kind}-{repo}-{sha12}-{proyecto6}[-r{run}]` (`commit-…`, `pr-…`)
   y el hijo `review-{kind}-{repo}-{sha12}-{proyecto6}-r{run}`; las funciones puras están en
