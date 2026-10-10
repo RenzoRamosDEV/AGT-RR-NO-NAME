@@ -23,7 +23,9 @@ class SqlAlchemyChangeEventRepository:
                 # Coincide con el índice de expresión `ix_events_change_id`.
                 EventModel.payload["change_id"].astext == str(change_id),
             )
-            .order_by(EventModel.id)
+            # El instante manda; el id desempata. Ordenar solo por id cruzaría eventos escritos
+            # casi a la vez por reviews concurrentes.
+            .order_by(EventModel.created_at, EventModel.id)
         )
         return [
             StoredEvent(id=r.id, type=r.type, payload=r.payload, created_at=r.created_at)

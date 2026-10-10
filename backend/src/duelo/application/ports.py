@@ -86,8 +86,9 @@ class ReviewRepository(Protocol):
 
 class ChangeEventRepository(Protocol):
     async def list_for_change(self, project_id: UUID, change_id: UUID) -> list[StoredEvent]:
-        """Devuelve los eventos del outbox cuyo payload pertenece a `change_id`, en el orden en
-        que se escribieron. El payload es crudo: filtrarlo es cosa del caso de uso."""
+        """Devuelve los eventos del outbox cuyo payload pertenece a `change_id`, por orden
+        cronológico (`created_at`; el `id` desempata). El payload es crudo: filtrarlo es cosa del
+        caso de uso."""
         ...
 
 
