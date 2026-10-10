@@ -63,13 +63,14 @@ _AWAITING_STATUSES = frozenset({ChangeReviewStatus.PENDING, ChangeReviewStatus.R
 
 
 def is_stale(
-    status: ChangeReviewStatus, created_at: datetime, *, now: datetime, stale_after: timedelta
+    status: ChangeReviewStatus, run_started_at: datetime, *, now: datetime, stale_after: timedelta
 ) -> bool:
     """Diagnóstico: un change que sigue esperando reviews más allá del umbral probablemente
     perdió su ejecución. Los estados terminados nunca son `stale`, por antiguos que sean.
 
-    Mide desde la creación del change (no se guarda cuándo empezó el `run` actual)."""
-    return status in _AWAITING_STATUSES and now - created_at > stale_after
+    Mide desde el inicio del `run` actual: la creación del change para el primero y el
+    reintento para los siguientes, así un reintento sobre un change antiguo no nace `stale`."""
+    return status in _AWAITING_STATUSES and now - run_started_at > stale_after
 
 
 class Severity(StrEnum):

@@ -36,7 +36,11 @@ async def _run(
     activities = make_activities(session_factory, agents)
     async with (
         Worker(env.client, task_queue="platform", workflows=[ReviewChangeWorkflow]),
-        Worker(env.client, task_queue="agents", activities=[activities.run_review]),
+        Worker(
+            env.client,
+            task_queue="agents",
+            activities=[activities.run_review, activities.record_review_infrastructure_failure],
+        ),
     ):
         handle = await env.client.start_workflow(
             ReviewChangeWorkflow.run,

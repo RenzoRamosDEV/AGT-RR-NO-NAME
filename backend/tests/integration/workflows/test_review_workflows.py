@@ -41,7 +41,7 @@ async def _run_with_workers[T](
         Worker(
             env.client,
             task_queue="agents",
-            activities=[activities.run_review],
+            activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     ):
         return await body(env)

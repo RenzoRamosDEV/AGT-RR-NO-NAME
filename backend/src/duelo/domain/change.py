@@ -46,6 +46,9 @@ class Change:
     status: ChangeStatus
     run: int
     created_at: datetime
+    # Cuándo empezó el `run` actual: la creación para el primero y el reintento para los demás.
+    # `stale` se mide desde aquí.
+    run_started_at: datetime
     diff_summary: DiffSummary = EMPTY_DIFF_SUMMARY
 
     @classmethod
@@ -83,5 +86,6 @@ class Change:
             status=ChangeStatus.PENDING,
             run=1,
             created_at=created_at,
+            run_started_at=created_at,
             diff_summary=summarize_diff(diff),
         )

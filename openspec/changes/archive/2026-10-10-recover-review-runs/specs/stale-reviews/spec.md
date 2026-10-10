@@ -1,9 +1,4 @@
-# stale-reviews Specification
-
-## Purpose
-Distinguir una review lenta de una que probablemente se perdió, sin actuar sobre ella.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Marca de diagnóstico stale
 El listado `GET /projects/{slug}/changes` y el detalle `GET /changes/{id}` SHALL incluir `stale`

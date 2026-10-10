@@ -350,7 +350,7 @@ async def test_detail_reports_status_and_findings_of_the_current_run_only() -> N
     change = await _add(changes, "1" * 40, at=T0)
     await _persist_review(reviews, change, "a", fail=False, severities=("bug", "bug"))  # run 1
     await _persist_review(reviews, change, "b", fail=True)  # run 1
-    change = await changes.advance_run(change.id, from_run=1)  # type: ignore[assignment]
+    change = await changes.advance_run(change.id, from_run=1, started_at=T0)  # type: ignore[assignment]
     await _persist_review(reviews, change, "a", fail=False, run=2, severities=("Risk", "banana"))
     await _persist_review(reviews, change, "b", fail=True, run=2)
 

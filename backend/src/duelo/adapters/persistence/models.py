@@ -61,6 +61,10 @@ class ChangeModel(Base):
     status: Mapped[str] = mapped_column(String(20))
     run: Mapped[int] = mapped_column(Integer(), default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Inicio del `run` actual (= created_at en el primero); `stale` se mide desde aquí.
+    run_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     # Resumen del diff (archivos y líneas) calculado al ingerir: el canal lo lee sin cargar `diff`.
     diff_summary: Mapped[dict[str, object]] = mapped_column(
         JSONB(),

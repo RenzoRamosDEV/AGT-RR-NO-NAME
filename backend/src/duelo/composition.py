@@ -131,6 +131,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 starter,
                 change_id,
                 expected_agents=expected_agents,
+                now=datetime.now(UTC),
             )
 
     async def agent_stats(project: str | None) -> list[AgentStats]:
