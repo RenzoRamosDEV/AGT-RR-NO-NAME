@@ -245,7 +245,7 @@ async def test_the_channel_brings_light_reviews_of_the_current_run_in_one_extra_
     # Un reintento: el run 2 de `retried` no tiene reviews aún, y las del run 1 no deben salir.
     retried = changes[0]
     async with session_factory() as session:
-        await SqlAlchemyChangeRepository(session).advance_run(retried.id, from_run=1)
+        await SqlAlchemyChangeRepository(session).advance_run(retried.id, from_run=1, started_at=T0)
     statements: list[str] = []
 
     def capture(conn, cursor, statement, *args):  # type: ignore[no-untyped-def]

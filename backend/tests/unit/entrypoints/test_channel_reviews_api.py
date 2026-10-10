@@ -89,7 +89,7 @@ async def test_channel_reviews_only_include_the_current_run() -> None:
     api = build_fake_api()
     change = await _add_change(api, 1)
     await _review(api, change, "agent_1", run=1, fail=True)
-    advanced = await api.changes.advance_run(change.id, from_run=1)
+    advanced = await api.changes.advance_run(change.id, from_run=1, started_at=T0)
     assert advanced is not None and advanced.run == 2
     await _review(api, advanced, "agent_1", run=2)
 
