@@ -79,6 +79,13 @@ que ya está en el spec o en `openspec/specs/`.
   `DELETE`. **Seguridad:** quien tenga `INGEST_TOKEN` hace que la API escriba hooks en repos del
   usuario; solo debe activarse con la API en la máquina del usuario y nunca en un contenedor ni
   expuesta (ver su `design.md`).
+- `change-ingestion`, `local-projects` y `change-events` (change `harden-ingest-and-hooks`):
+  `POST /ingest/commit` y `/ingest/pr` responden 413 si el cuerpo supera `MAX_INGEST_BODY_BYTES`
+  (`entrypoints/api/body_limit.py`, ASGI puro: por `Content-Length` sin leer nada o contando el flujo;
+  responde antes que el limitador y el token y es el más interno de los tres middlewares, así que
+  lleva `X-Request-ID`); el truncado del diff a `MAX_DIFF_CHARS` sigue siendo el límite de negocio.
+  El hook no sigue redirecciones (un 3xx es un fallo silencioso), de modo que el token no sale del
+  host de la URL configurada. `GET /changes/{id}/events` ordena por `(created_at, id)`.
 
 ## Variables de entorno
 
@@ -87,6 +94,7 @@ que ya está en el spec o en `openspec/specs/`.
 | `INGEST_TOKEN` | (obligatoria) | Secreto de ingesta y de `POST /changes/{id}/retry` |
 | `OPERATOR_TOKEN` | sin configurar | Habilita `GET /reviews/{id}/raw-output` (distinto de `INGEST_TOKEN`, 16+ caracteres); sin él responde 404 |
 | `DATABASE_URL`, `TEMPORAL_ADDRESS`, `AGENT_NAMES`, `MAX_DIFF_CHARS` | ver `config.py` | Conexiones y límites base |
+| `MAX_INGEST_BODY_BYTES` | `1500000` | Tamaño máximo del cuerpo de `POST /ingest/commit` y `/ingest/pr` (413 si lo supera); protege la memoria y es independiente de `MAX_DIFF_CHARS` |
 | `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes `esquema://host[:puerto]` separados por comas, p. ej. `http://localhost:5173`; no admite `*` |
 | `RATE_LIMIT_REQUESTS` | `300` | Peticiones por IP y ventana en ingesta y reintento; `0` lo desactiva |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Ventana deslizante del límite |

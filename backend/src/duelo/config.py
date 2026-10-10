@@ -44,6 +44,10 @@ class Settings(WorkerSettings):
     # Obligatorio: sin él la API no arranca, en vez de quedar abierta por accidente.
     ingest_token: str = Field(min_length=1)
     max_diff_chars: int = Field(default=200_000, gt=0)
+    # Tamaño máximo del cuerpo HTTP de POST /ingest/commit y /ingest/pr (413 si lo supera). Protege
+    # la memoria y es independiente del truncado del diff: debe dejar holgura para `max_diff_chars`
+    # caracteres con escapes JSON y UTF-8, y para el 1 000 000 que ya recorta el hook.
+    max_ingest_body_bytes: int = Field(default=1_500_000, gt=0)
     # Opcional: sin él, `GET /reviews/{id}/raw-output` queda deshabilitado (404). Es un secreto
     # distinto del de ingesta: ese lo llevan los hooks de los repos y no debe abrir lecturas.
     operator_token: str | None = Field(default=None, min_length=MIN_OPERATOR_TOKEN)

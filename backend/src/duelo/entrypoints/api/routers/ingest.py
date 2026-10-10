@@ -27,6 +27,7 @@ _ERRORS: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse},
     401: {"model": ErrorResponse},
     404: {"model": ErrorResponse},
+    413: {"model": ErrorResponse},
     429: {"model": ErrorResponse},
     503: {"model": ErrorResponse},
 }

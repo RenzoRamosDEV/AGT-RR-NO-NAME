@@ -65,6 +65,7 @@ class FakeApi:
 def build_fake_api(
     *,
     max_diff_chars: int = 200_000,
+    max_ingest_body_bytes: int = 1_500_000,
     starter: FakeReviewStarter | None = None,
     operator_token: str | None = OPERATOR_TOKEN,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -79,6 +80,7 @@ def build_fake_api(
     settings = Settings(
         ingest_token=TOKEN,
         max_diff_chars=max_diff_chars,
+        max_ingest_body_bytes=max_ingest_body_bytes,
         operator_token=operator_token,
         stale_after_seconds=stale_after_seconds,
         allowed_origins=allowed_origins or [],
