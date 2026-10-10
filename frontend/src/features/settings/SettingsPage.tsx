@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { ThemeSwitch } from "../../components/ThemeSwitch";
-import { agentLabel } from "../../components/ui/AgentAvatar";
+import { AgentAvatar, agentLabel } from "../../components/ui/AgentAvatar";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import type { DependencyHealth, Health } from "../../data/mock";
@@ -17,9 +17,20 @@ const REASON_LABEL: Record<NonNullable<DependencyHealth["reason"]>, string> = {
 
 const dependencyLabel = (name: string) => DEPENDENCY_LABEL[name] ?? name;
 
-/** `Claude, Codex`; a server that does not report its agents shows a dash. */
-const agentNamesText = (names: readonly string[]) =>
-  names.length > 0 ? names.map(agentLabel).join(", ") : "—";
+/** The configured agents as chips with their avatar; a server that does not report them shows a dash. */
+function AgentChips({ names }: { names: readonly string[] }) {
+  if (names.length === 0) return <span className="muted">—</span>;
+  return (
+    <ul className="agent-chips" aria-label="Agentes activos">
+      {names.map((name) => (
+        <li key={name}>
+          <AgentAvatar agent={name} size={20} />
+          {agentLabel(name)}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function Diagnostics({ health }: { health: Health }) {
   return (
@@ -81,9 +92,11 @@ export function SettingsPage() {
         </div>
         <div className="setting">
           <span>Agentes activos</span>
-          <span className="muted">
-            {health.status === "ready" ? agentNamesText(health.data.agentNames) : "—"}
-          </span>
+          {health.status === "ready" ? (
+            <AgentChips names={health.data.agentNames} />
+          ) : (
+            <span className="muted">—</span>
+          )}
         </div>
       </section>
       <ProjectsSettings />

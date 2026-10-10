@@ -280,8 +280,8 @@ describe("change detail as a conversation", () => {
     const tone = (severity: string) =>
       screen
         .getByText(new RegExp(`m-${severity}`))
-        .closest("li")
-        ?.getAttribute("data-tone");
+        .closest("[data-level]")
+        ?.getAttribute("data-level");
     expect(tone("bug")).toBe("danger");
     expect(tone("risk")).toBe("warning");
     expect(tone("nit")).toBe("neutral");

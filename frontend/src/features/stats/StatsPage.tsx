@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { EmptyState } from "../../components/EmptyState";
-import { agentLabel } from "../../components/ui/AgentAvatar";
+import { AgentAvatar, agentLabel } from "../../components/ui/AgentAvatar";
 import type { AgentStat } from "../../data/mock";
 import { useDataSource } from "../../data/source";
 import { formatDuration, formatScore } from "../../lib/format";
@@ -61,7 +61,12 @@ function StatsTable({ stats }: { stats: AgentStat[] }) {
       <tbody>
         {rows.map((s) => (
           <tr key={s.agent}>
-            <th scope="row">{agentLabel(s.agent)}</th>
+            <th scope="row">
+              <span className="agent-cell">
+                <AgentAvatar agent={s.agent} size={20} />
+                {agentLabel(s.agent)}
+              </span>
+            </th>
             <td>{s.total}</td>
             <td>{s.completed}</td>
             <td>
