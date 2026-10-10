@@ -1,6 +1,6 @@
 import { type FormEvent, useId, useState } from "react";
 import { Busy } from "../../components/Busy";
-import { Button } from "../../components/ui/Button";
+import { MetalButton } from "../../components/fx/MetalButton";
 import { useDataSource } from "../../data/source";
 import { ApiError } from "../../lib/api";
 import { clearIngestToken, useIngestToken } from "../../lib/ingestToken";
@@ -74,9 +74,9 @@ export function RetryReview({ changeId, onSettled }: Props) {
         value={token}
         onChange={(e) => setToken(e.target.value)}
       />
-      <Button type="submit" disabled={sending}>
+      <MetalButton type="submit" disabled={sending}>
         {sending ? <Busy activity="retry" label="Reintentando…" inline /> : "Reintentar review"}
-      </Button>
+      </MetalButton>
       {error && (
         <p className="notice" role="alert">
           {error}

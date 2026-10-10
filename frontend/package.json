@@ -15,10 +15,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "border-beam": "^1.4.1",
+    "img-fx": "^0.5.1",
+    "liquid-gooey": "^0.2.2",
+    "metal-fx": "^2.0.11",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.4.0",
-    "thinking-orbs": "^0.3.2"
+    "thinking-orbs": "^0.3.2",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

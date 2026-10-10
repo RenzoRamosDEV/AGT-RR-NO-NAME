@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
+import heroReview from "../../assets/hero-review.png";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { Busy } from "../../components/Busy";
 import { CopyButton } from "../../components/CopyButton";
@@ -7,6 +8,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
 import { StatusIcon } from "../../components/StatusIcon";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
+import { Beam } from "../../components/fx/Beam";
 import { CommitIcon, PullRequestIcon, SearchIcon } from "../../components/icons";
 import { AgentAvatar, agentLabel } from "../../components/ui/AgentAvatar";
 import { Badge } from "../../components/ui/Badge";
@@ -18,6 +20,7 @@ import { ApiError } from "../../lib/api";
 import type { StateFilter } from "../../lib/channelQuery";
 import { ingestCommand } from "../../lib/ingestHint";
 import { useNow } from "../../lib/now";
+import { isWaiting } from "../../lib/pending";
 import { changePath } from "../../lib/projectPath";
 import { relativeTime } from "../../lib/relativeTime";
 import { AGGREGATE_LABEL, AGGREGATE_TONE } from "../../lib/reviewStatus";
@@ -154,48 +157,50 @@ function ChangeThread({
   const KindIcon = change.kind === "pr" ? PullRequestIcon : CommitIcon;
   return (
     <li className="change" data-status={change.reviewStatus}>
-      <div className="change-row">
-        <StatusIcon status={change.reviewStatus} />
-        <div className="change-main">
-          <div className="change-title">
-            <Link to={changePath(slug, change.id)}>
-              <strong>{change.title}</strong>
-            </Link>
-            <span className="kind-label" data-kind={change.kind}>
-              <KindIcon size={12} />
-              {change.kind === "pr" ? "PR" : "Commit"}
-            </span>
+      <Beam active={isWaiting(change.reviewStatus)}>
+        <div className="change-row">
+          <StatusIcon status={change.reviewStatus} />
+          <div className="change-main">
+            <div className="change-title">
+              <Link to={changePath(slug, change.id)}>
+                <strong>{change.title}</strong>
+              </Link>
+              <span className="kind-label" data-kind={change.kind}>
+                <KindIcon size={12} />
+                {change.kind === "pr" ? "PR" : "Commit"}
+              </span>
+            </div>
+            <p className="change-meta muted">
+              #<span className="mono">{shortSha(change.sha)}</span> · por {change.author}
+              {change.createdAt && (
+                <>
+                  {" · "}
+                  <Age iso={change.createdAt} />
+                </>
+              )}
+            </p>
+            <ul className="review-summary" aria-label="Resumen de reviews">
+              {summaryItems(change).map((item) => (
+                <li key={item.key}>
+                  <Badge tone={item.tone}>{item.text}</Badge>
+                </li>
+              ))}
+            </ul>
+            <PendingAgents change={change} agentNames={agentNames} />
           </div>
-          <p className="change-meta muted">
-            #<span className="mono">{shortSha(change.sha)}</span> · por {change.author}
-            {change.createdAt && (
-              <>
-                {" · "}
-                <Age iso={change.createdAt} />
-              </>
-            )}
-          </p>
-          <ul className="review-summary" aria-label="Resumen de reviews">
-            {summaryItems(change).map((item) => (
-              <li key={item.key}>
-                <Badge tone={item.tone}>{item.text}</Badge>
-              </li>
-            ))}
-          </ul>
-          <PendingAgents change={change} agentNames={agentNames} />
+          <div className="change-side">
+            <Checks reviews={change.reviews ?? []} />
+            <Button
+              size="sm"
+              aria-expanded={open}
+              aria-controls={panelId}
+              onClick={() => setOpen((o) => !o)}
+            >
+              {open ? "Ocultar respuestas" : "Ver respuestas"}
+            </Button>
+          </div>
         </div>
-        <div className="change-side">
-          <Checks reviews={change.reviews ?? []} />
-          <Button
-            size="sm"
-            aria-expanded={open}
-            aria-controls={panelId}
-            onClick={() => setOpen((o) => !o)}
-          >
-            {open ? "Ocultar respuestas" : "Ver respuestas"}
-          </Button>
-        </div>
-      </div>
+      </Beam>
       {open && (
         <div className="thread reviews" id={panelId}>
           {full.status === "loading" && <Busy activity="load" label="Cargando respuestas…" />}
@@ -223,6 +228,7 @@ function EmptyChannel({ slug, agents }: { slug: string; agents: string }) {
   const command = ingestCommand(slug, import.meta.env.VITE_API_URL);
   return (
     <EmptyState
+      hero={heroReview}
       title="Aún no hay cambios en este canal."
       className="empty"
       action={<CopyButton label="Copiar comando" value={command} />}

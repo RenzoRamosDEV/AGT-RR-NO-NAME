@@ -6,6 +6,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
 import { StatusIcon } from "../../components/StatusIcon";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
+import { Beam } from "../../components/fx/Beam";
 import { ExternalIcon, FileIcon } from "../../components/icons";
 import type { Change, Review } from "../../data/mock";
 import { useAgentNames, useDataSource } from "../../data/source";
@@ -139,35 +140,37 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
               />
             )}
             <div className="stack">
-              <section className="box" aria-labelledby="thread-title">
-                <h2 className="box-title" id="thread-title">
-                  Revisión de los agentes
-                </h2>
-                <div className="box-body">
-                  {reviews.length === 0 && !inProgress(change) && (
-                    <p className="muted">Aún no hay respuestas de los agentes.</p>
-                  )}
-                  <div className="reviews">
-                    {byAgent(reviews).map((r) => (
-                      <ReviewCard key={r.id} review={r} showFindings={false} />
+              <Beam active={inProgress(change)}>
+                <section className="box" aria-labelledby="thread-title">
+                  <h2 className="box-title" id="thread-title">
+                    Revisión de los agentes
+                  </h2>
+                  <div className="box-body">
+                    {reviews.length === 0 && !inProgress(change) && (
+                      <p className="muted">Aún no hay respuestas de los agentes.</p>
+                    )}
+                    <div className="reviews">
+                      {byAgent(reviews).map((r) => (
+                        <ReviewCard key={r.id} review={r} showFindings={false} />
+                      ))}
+                    </div>
+                    <FindingsPanel reviews={reviews} />
+                    {previous.map((p) => (
+                      <details key={p.run} className="previous-run">
+                        <summary>
+                          Run {p.run} (anterior) · {p.reviews.length}{" "}
+                          {p.reviews.length === 1 ? "review" : "reviews"}
+                        </summary>
+                        <div className="reviews">
+                          {byAgent(p.reviews).map((r) => (
+                            <ReviewCard key={r.id} review={r} />
+                          ))}
+                        </div>
+                      </details>
                     ))}
                   </div>
-                  <FindingsPanel reviews={reviews} />
-                  {previous.map((p) => (
-                    <details key={p.run} className="previous-run">
-                      <summary>
-                        Run {p.run} (anterior) · {p.reviews.length}{" "}
-                        {p.reviews.length === 1 ? "review" : "reviews"}
-                      </summary>
-                      <div className="reviews">
-                        {byAgent(p.reviews).map((r) => (
-                          <ReviewCard key={r.id} review={r} />
-                        ))}
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              </section>
+                </section>
+              </Beam>
               <section className="box" aria-labelledby="files-title">
                 <h2 className="box-title" id="files-title">
                   Archivos cambiados

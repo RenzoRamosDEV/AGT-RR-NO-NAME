@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HeroImage } from "./fx/HeroImage";
 
 /** Simple line illustration shared by the empty, error and not-found states. */
 function Illustration({ kind }: { kind: "empty" | "missing" | "error" }) {
@@ -48,6 +49,7 @@ function Illustration({ kind }: { kind: "empty" | "missing" | "error" }) {
 /** A framed message with an illustration, a title, an explanation and the main action. */
 export function EmptyState({
   kind = "empty",
+  hero,
   title,
   heading = false,
   children,
@@ -55,6 +57,8 @@ export function EmptyState({
   className = "",
 }: {
   kind?: "empty" | "missing" | "error";
+  /** Picture for the libraries.dev `img-fx` hero (loader that turns into the picture). Without it, the line illustration. */
+  hero?: string;
   title: ReactNode;
   /** The title is the page's `<h1>` (not-found pages) instead of a plain paragraph. */
   heading?: boolean;
@@ -65,7 +69,7 @@ export function EmptyState({
   const Title = heading ? "h1" : "p";
   return (
     <div className={`empty-state ${className}`.trim()}>
-      <Illustration kind={kind} />
+      {hero ? <HeroImage src={hero} /> : <Illustration kind={kind} />}
       <Title className="empty-title">{title}</Title>
       {children && <div className="empty-body">{children}</div>}
       {action && <div className="empty-action">{action}</div>}

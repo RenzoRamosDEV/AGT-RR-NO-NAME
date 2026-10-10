@@ -2,6 +2,7 @@ import { type FormEvent, useId, useState } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { Busy } from "../../components/Busy";
 import { Modal } from "../../components/Modal";
+import { MetalButton } from "../../components/fx/MetalButton";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { useDataSource } from "../../data/source";
@@ -221,9 +222,9 @@ export function ProjectsSettings() {
     <section className="box" aria-labelledby="settings-projects">
       <div className="box-title row">
         <h2 id="settings-projects">Proyectos vigilados</h2>
-        <Button size="sm" variant="primary" onClick={openAddProject}>
+        <MetalButton size="sm" variant="primary" onClick={openAddProject}>
           Añadir proyecto
-        </Button>
+        </MetalButton>
       </div>
       {notice && <output className="notice flat success">{notice}</output>}
       <AsyncBoundary state={projects} loadingLabel="Cargando proyectos…">

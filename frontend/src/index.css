@@ -1580,3 +1580,79 @@ dialog.modal h2 {
     transition: none !important;
   }
 }
+
+/* libraries.dev effects: border-beam (in progress), liquid-gooey (theme switch), metal-fx
+   (key buttons) and img-fx (empty-state hero). All decorative and off under reduced motion. */
+.beam {
+  display: block;
+}
+
+/* The glow hugs the wrapped element, so a box inside it hands its bottom margin to the wrapper. */
+.beam:has(> .box) {
+  margin-bottom: 16px;
+}
+
+.beam > .box {
+  margin-bottom: 0;
+}
+
+.theme-liquid {
+  display: inline-flex;
+  position: relative;
+}
+
+.theme-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* With the liquid indicator the pressed segment keeps its text color but not its own fill. */
+.theme-switch[data-fluid] .segment {
+  position: relative;
+  z-index: 1;
+}
+
+.theme-switch[data-fluid] .segment[aria-pressed="true"] {
+  background: transparent;
+}
+
+.theme-switch[data-fluid] .segment:hover:not([aria-pressed="true"]) {
+  background: transparent;
+  color: var(--fg);
+}
+
+.metal {
+  display: inline-flex;
+}
+
+.hero,
+.hero-img {
+  width: 240px;
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+}
+
+.hero-img {
+  height: auto;
+  border: 1px solid var(--border);
+}
+
+.hero-card {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+/* The metal ring supplies the surface (white / dark grey), so the label keeps the normal text color. */
+.btn-metal {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.btn-metal:hover:not(:disabled) {
+  color: var(--fg);
+}
