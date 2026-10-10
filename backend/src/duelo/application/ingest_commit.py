@@ -7,6 +7,7 @@ from uuid import uuid4
 from duelo.application.ingest_change import ingest_change
 from duelo.application.ports import ChangeRepository, ProjectRepository, ReviewStarter
 from duelo.domain.change import Change, ChangeKind
+from duelo.domain.commit_state import parse_reverted_sha
 
 
 class ProjectNotFound(Exception):
@@ -26,6 +27,9 @@ class ChangeSubmission:
     author: str
     url: str
     diff: str
+    # Cuerpo del mensaje del commit (lo que sigue a la primera línea): solo se lee para detectar
+    # `This reverts commit <sha>`; no se guarda. Vacío si el cliente no lo envía.
+    body: str = ""
 
 
 CommitSubmission = ChangeSubmission
@@ -39,6 +43,15 @@ class IngestResult:
     # `True` si es una PR con las reviews copiadas de su commit idéntico (su run 1): no se
     # revisa de nuevo, así que no tiene workflow.
     reused: bool = False
+
+
+def _reverted_sha(kind: ChangeKind, submission: ChangeSubmission) -> str | None:
+    """El SHA que revierte un commit de `git revert` (`This reverts commit <sha>` en su mensaje),
+    o `None`. Un commit que se nombrase a sí mismo no revierte nada, y una PR nunca revierte."""
+    if kind is not ChangeKind.COMMIT:
+        return None
+    reverted = parse_reverted_sha(submission.title, submission.body)
+    return None if reverted == submission.head_sha.lower() else reverted
 
 
 async def _ingest(
@@ -69,6 +82,7 @@ async def _ingest(
         diff_truncated=len(submission.diff) > max_diff_chars,
         change_id=candidate_id,
         agent_names=agent_names,
+        reverts_sha=_reverted_sha(kind, submission),
     )
     # Con las reviews ya copiadas no hay nada que revisar: arrancar el workflow gastaría la
     # suscripción de los agentes. Tras un reintento (`run` > 1) vuelve a ser una PR normal.

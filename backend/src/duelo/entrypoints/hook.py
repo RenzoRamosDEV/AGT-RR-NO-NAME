@@ -24,6 +24,9 @@ from urllib.parse import urlsplit
 MAX_TITLE = 500
 MAX_AUTHOR = 255
 MAX_REF = 255
+# Cuerpo del mensaje (lo que sigue a la primera línea): la API solo lo lee para detectar
+# `This reverts commit <sha>` y lo admite hasta 20 000 caracteres.
+MAX_BODY = 4_000
 MAX_DIFF_CHARS = 1_000_000
 MAX_PUSH_COMMITS = 20
 SEND_TIMEOUT = 5.0
@@ -80,7 +83,9 @@ def _git(*args: str) -> str:
 
 def build_payload(project: str, sha: str, ref: str) -> dict[str, str]:
     """El cuerpo de `POST /ingest/commit` para el commit `sha`."""
-    title, author = _git("show", "-s", "--format=%s%x00%an", sha).rstrip("\n").split("\x00", 1)
+    title, author, body = (
+        _git("show", "-s", "--format=%s%x00%an%x00%b", sha).rstrip("\n").split("\x00", 2)
+    )
     diff = _git("show", "--format=", "--patch", sha)
     return {
         "project": project,
@@ -89,6 +94,7 @@ def build_payload(project: str, sha: str, ref: str) -> dict[str, str]:
         "title": title[:MAX_TITLE],
         "author": author[:MAX_AUTHOR],
         "diff": diff[:MAX_DIFF_CHARS],
+        "body": body.strip()[:MAX_BODY],
     }
 
 

@@ -8,15 +8,17 @@ from uuid import UUID
 from sqlalchemy import ColumnElement, and_, func, insert, or_, select, true, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
 from duelo.adapters.persistence.review_repository import insert_review, review_from_row
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from duelo.application.ports import CommitWithReviews
-from duelo.application.read_models import ChangeCursor, ChangeSummary, ReviewBrief
+from duelo.application.read_models import ChangeCursor, ChangeSummary, RevertRef, ReviewBrief
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
+from duelo.domain.commit_state import commit_state_of
 from duelo.domain.diff import DiffSummary, FileDiff
-from duelo.domain.events import ChangeCreated, ReviewReused
+from duelo.domain.events import ChangeCreated, CommitReverted, ReviewReused
 from duelo.domain.review import Review, ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, review_status_from_counts
 
@@ -52,6 +54,7 @@ class SqlAlchemyChangeRepository:
                     created_at=change.created_at,
                     run_started_at=change.run_started_at,
                     diff_summary=_summary_to_json(change.diff_summary),
+                    reverts_sha=change.reverts_sha,
                 )
                 # La constraint UNIQUE (project_id, kind, head_sha) resuelve la
                 # idempotencia de forma atómica: si ya existía, no se inserta fila y
@@ -81,7 +84,39 @@ class SqlAlchemyChangeRepository:
             # Las reviews copiadas van en la misma transacción: o nace la PR con todas, o no nace.
             for review, review_event in reused:
                 await insert_review(self._session, review, review_event)
+            await self._record_revert(change)
             return change
+
+    async def _record_revert(self, change: Change) -> None:
+        """Si el commit recién creado revierte a otro que ya existe, anota `commit.reverted` en la
+        línea de tiempo del original. Solo al crearlo (una reingesta no llega aquí), así que el
+        evento sale una vez. El estado «revertido» no depende de él: se deduce de `reverts_sha`."""
+        if change.reverts_sha is None:
+            return
+        original_id = (
+            await self._session.execute(
+                select(ChangeModel.id).where(
+                    ChangeModel.project_id == change.project_id,
+                    ChangeModel.kind == ChangeKind.COMMIT.value,
+                    ChangeModel.head_sha == change.reverts_sha,
+                    ChangeModel.id != change.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if original_id is None:
+            return
+        event = CommitReverted(
+            change_id=original_id,
+            project_id=change.project_id,
+            reverted_by_change_id=change.id,
+        )
+        await self._session.execute(
+            insert(EventModel).values(
+                project_id=change.project_id,
+                type=event.type,
+                payload=sanitize_json(event.to_payload()),
+            )
+        )
 
     async def find_commit_with_reviews(
         self, project_id: UUID, head_sha: str
@@ -129,6 +164,24 @@ class SqlAlchemyChangeRepository:
         ).scalar_one_or_none()
         return _to_domain(row) if row is not None else None
 
+    async def live_reverter(self, project_id: UUID, head_sha: str) -> RevertRef | None:
+        row = (
+            await self._session.execute(
+                select(ChangeModel.id, ChangeModel.head_sha)
+                .where(
+                    ChangeModel.project_id == project_id,
+                    ChangeModel.kind == ChangeKind.COMMIT.value,
+                    ChangeModel.reverts_sha == head_sha,
+                    # Un revert deshecho (`reset`, `amend`) ya no revierte nada.
+                    ChangeModel.discarded_at.is_(None),
+                    ChangeModel.head_sha != head_sha,
+                )
+                .order_by(ChangeModel.created_at.desc(), ChangeModel.id.desc())
+                .limit(1)
+            )
+        ).one_or_none()
+        return RevertRef(id=row.id, head_sha=row.head_sha) if row is not None else None
+
     async def list_for_project(
         self,
         project_id: UUID,
@@ -158,6 +211,25 @@ class SqlAlchemyChangeRepository:
         )
         completed = counts.c.completed
         failed = counts.c.failed
+        # El revert más reciente que sigue en la rama de CADA commit, también como LATERAL (con el
+        # índice parcial `ix_changes_project_reverts_sha`): da el SHA del revert sin una consulta
+        # por fila. Un revert deshecho (`discarded_at`) ya no cuenta.
+        reverter = aliased(ChangeModel)
+        live_reverter = (
+            select(reverter.id.label("id"), reverter.head_sha.label("head_sha"))
+            .where(
+                ChangeModel.kind == ChangeKind.COMMIT.value,
+                reverter.project_id == ChangeModel.project_id,
+                reverter.kind == ChangeKind.COMMIT.value,
+                reverter.reverts_sha == ChangeModel.head_sha,
+                reverter.discarded_at.is_(None),
+                reverter.head_sha != ChangeModel.head_sha,
+            )
+            .order_by(reverter.created_at.desc(), reverter.id.desc())
+            .limit(1)
+            .correlate(ChangeModel)
+            .lateral("live_reverter")
+        )
 
         # Se seleccionan columnas concretas (sin `diff`): un canal no debe mover diffs enteros.
         stmt = (
@@ -176,10 +248,17 @@ class SqlAlchemyChangeRepository:
                 ChangeModel.created_at,
                 ChangeModel.run_started_at,
                 ChangeModel.diff_summary,
+                ChangeModel.discarded_at,
+                live_reverter.c.id.label("reverted_by_id"),
+                live_reverter.c.head_sha.label("reverted_by_sha"),
                 completed.label("completed_reviews"),
                 failed.label("failed_reviews"),
             )
+            # `select_from` fija el lado izquierdo: con dos LATERAL hay varias fuentes y SQLAlchemy
+            # no sabría desde cuál unir.
+            .select_from(ChangeModel)
             .join(counts, true())
+            .outerjoin(live_reverter, true())
             .where(ChangeModel.project_id == project_id)
             .order_by(ChangeModel.created_at.desc(), ChangeModel.id.desc())
             .limit(limit)
@@ -228,6 +307,16 @@ class SqlAlchemyChangeRepository:
                 run_started_at=r.run_started_at,
                 diff_summary=_summary_from_json(r.diff_summary),
                 reviews=briefs.get(r.id, ()),
+                commit_state=commit_state_of(
+                    kind=ChangeKind(r.kind),
+                    discarded_at=r.discarded_at,
+                    reverted=r.reverted_by_id is not None,
+                ),
+                reverted_by=(
+                    RevertRef(id=r.reverted_by_id, head_sha=r.reverted_by_sha)
+                    if r.reverted_by_id is not None
+                    else None
+                ),
             )
             for r in rows
         ]
@@ -325,6 +414,8 @@ def _to_domain(row: ChangeModel) -> Change:
         created_at=row.created_at,
         run_started_at=row.run_started_at,
         diff_summary=_summary_from_json(row.diff_summary),
+        discarded_at=row.discarded_at,
+        reverts_sha=row.reverts_sha,
     )
 
 

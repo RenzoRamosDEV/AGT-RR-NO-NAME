@@ -44,6 +44,14 @@ class ChangeModel(Base):
         # Canal: orden (created_at, id) por proyecto, con y sin filtro por tipo.
         Index("ix_changes_project_created_at_id", "project_id", "created_at", "id"),
         Index("ix_changes_project_kind_created_at_id", "project_id", "kind", "created_at", "id"),
+        # «¿Hay un revert vivo de este commit?»: el canal lo pregunta por cada fila. Solo los
+        # commits de revert (muy pocos) entran en este índice parcial.
+        Index(
+            "ix_changes_project_reverts_sha",
+            "project_id",
+            "reverts_sha",
+            postgresql_where=text("reverts_sha IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -72,6 +80,12 @@ class ChangeModel(Base):
             """'{"files_changed": 0, "additions": 0, "deletions": 0, "files": []}'::jsonb"""
         ),
     )
+    # Solo commits. Cuándo el barrido de alcanzabilidad vio que el commit ya no estaba en el repo
+    # local (`NULL` = alcanzable o sin evaluar); no se borra nada, solo se marca.
+    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Solo commits. El SHA que este commit revierte con `git revert` (`This reverts commit <sha>`),
+    # o `NULL`. Un commit está revertido mientras algún commit vivo (no deshecho) apunte a su SHA.
+    reverts_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class EventModel(Base):

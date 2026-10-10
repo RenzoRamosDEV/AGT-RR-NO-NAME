@@ -398,3 +398,48 @@ def test_a_negative_sync_interval_is_rejected_and_a_blank_hook_env_path_means_un
     monkeypatch.setenv("PR_SYNC_INTERVAL_SECONDS", "-1")
     with pytest.raises(ValidationError):
         Settings()  # type: ignore[call-arg]
+
+
+def test_the_reachability_sweep_runs_every_15_seconds_over_5000_commits_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("REACHABILITY_SWEEP_INTERVAL_SECONDS", "REACHABILITY_WINDOW_COMMITS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.reachability_sweep_interval_seconds == 15
+    assert settings.reachability_window_commits == 5000
+
+
+def test_the_reachability_sweep_can_be_tuned_or_turned_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("REACHABILITY_SWEEP_INTERVAL_SECONDS", "0")
+    monkeypatch.setenv("REACHABILITY_WINDOW_COMMITS", "200")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.reachability_sweep_interval_seconds == 0  # 0 = apagado
+    assert settings.reachability_window_commits == 200
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("REACHABILITY_SWEEP_INTERVAL_SECONDS", "-1"),
+        ("REACHABILITY_WINDOW_COMMITS", "0"),
+        # Más de 100 000 commits ya no cabe en la salida acotada de git.
+        ("REACHABILITY_WINDOW_COMMITS", "100001"),
+    ],
+)
+def test_the_reachability_settings_reject_values_out_of_range(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings()  # type: ignore[call-arg]

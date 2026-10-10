@@ -103,6 +103,13 @@ class Settings(WorkerSettings):
     hook_env_path: str | None = None
     # Cada cuántos segundos se sincronizan las PRs de los proyectos locales con `gh`; 0 = nunca.
     pr_sync_interval_seconds: int = Field(default=0, ge=0)
+    # Cada cuántos segundos se comprueba qué commits de los proyectos locales siguen siendo
+    # alcanzables en su repositorio (los que dejan de serlo se marcan como «deshechos»); 0 = nunca.
+    # Solo corre con LOCAL_PROJECTS_ENABLED.
+    reachability_sweep_interval_seconds: int = Field(default=15, ge=0)
+    # Cuántos commits (los más recientes) se piden a git en cada barrido. Con un repositorio más
+    # grande solo se evalúan los changes recientes y se confirma cada candidato uno a uno.
+    reachability_window_commits: int = Field(default=5000, ge=1, le=100_000)
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
