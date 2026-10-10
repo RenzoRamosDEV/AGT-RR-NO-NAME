@@ -701,6 +701,11 @@
           "diff_truncated": {
             "title": "Diff Truncated",
             "type": "boolean"
+          },
+          "reused": {
+            "default": false,
+            "title": "Reused",
+            "type": "boolean"
           }
         },
         "required": [
@@ -808,6 +813,18 @@
             ],
             "title": "Duration Ms"
           },
+          "reused_from": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From"
+          },
           "run": {
             "title": "Run",
             "type": "integer"
@@ -882,6 +899,18 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "reused_from": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From"
           },
           "run": {
             "title": "Run",

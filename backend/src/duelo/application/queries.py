@@ -121,7 +121,9 @@ async def agent_stats(
 
 # Lista blanca de lo que la API muestra de un evento: lo que no esté aquí (el `error` de una
 # review fallida, campos futuros del payload) no sale nunca, aunque esté guardado.
-_EXPOSED_EVENT_TYPES = frozenset({"change.created", "review.completed", "review.failed"})
+_EXPOSED_EVENT_TYPES = frozenset(
+    {"change.created", "review.completed", "review.failed", "review.reused"}
+)
 
 
 def _as_uuid(value: object) -> UUID | None:

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
 from uuid import UUID
 
+from duelo.application.ports import CommitWithReviews
 from duelo.application.read_models import ChangeCursor, ChangeSummary, ReviewBrief
 from duelo.domain.change import Change, ChangeKind
-from duelo.domain.events import ChangeCreated
+from duelo.domain.events import ChangeCreated, ReviewReused
+from duelo.domain.review import Review
 from duelo.domain.review_status import ChangeReviewStatus, review_status_of_run
 from tests.fakes.event_log import FakeEventLog
 from tests.fakes.review_repository import FakeReviewRepository
@@ -24,7 +27,12 @@ class FakeChangeRepository:
         self._by_id: dict[UUID, Change] = {}
         self.persisted_events: list[ChangeCreated] = []
 
-    async def add(self, change: Change, event: ChangeCreated) -> Change:
+    async def add(
+        self,
+        change: Change,
+        event: ChangeCreated,
+        reused: Sequence[tuple[Review, ReviewReused]] = (),
+    ) -> Change:
         key = (str(change.project_id), change.kind.value, change.head_sha)
         existing = self._by_natural_key.get(key)
         if existing is not None:
@@ -36,7 +44,22 @@ class FakeChangeRepository:
         self._reviews.register_change(change.id, change.project_id)
         if self._events is not None:
             self._events.append(event, project_id=change.project_id)
+        for review, review_event in reused:
+            await self._reviews.add(review, review_event)
         return change
+
+    async def find_commit_with_reviews(
+        self, project_id: UUID, head_sha: str
+    ) -> CommitWithReviews | None:
+        commit = self._by_natural_key.get((str(project_id), ChangeKind.COMMIT.value, head_sha))
+        if commit is None:
+            return None
+        stored = await self._reviews.list_for_change(commit.id)
+        return CommitWithReviews(commit, tuple(r for r in stored if r.run == commit.run))
+
+    async def has_reused_reviews(self, change_id: UUID) -> bool:
+        stored = await self._reviews.list_for_change(change_id)
+        return any(r.run == 1 and r.reused_from_change_id is not None for r in stored)
 
     async def get(self, change_id: UUID) -> Change | None:
         return self._by_id.get(change_id)
@@ -105,6 +128,7 @@ class FakeChangeRepository:
                             score=r.score,
                             duration_ms=r.duration_ms,
                             run=r.run,
+                            reused_from=r.reused_from_change_id,
                         )
                         for r in sorted(stored, key=lambda r: r.agent)
                         if r.run == c.run
