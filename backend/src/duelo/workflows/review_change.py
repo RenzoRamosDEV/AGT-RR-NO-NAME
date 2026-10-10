@@ -11,6 +11,9 @@ from duelo.workflows.dto import ReviewChangeInput, RunReviewInput, RunReviewResu
 
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1))
 
+# Plazo de una activity `run_review`. `AGENT_TIMEOUT_SECONDS` (config.py) debe quedar por debajo.
+RUN_REVIEW_START_TO_CLOSE = timedelta(minutes=5)
+
 # Marca del historial: las ejecuciones que ya estaban en vuelo antes de existir la compensación
 # se reproducen sin ella (no tienen el marcador), así que su replay no se rompe.
 COMPENSATE_PATCH = "compensate-infra-failure"
@@ -55,7 +58,7 @@ class ReviewChangeWorkflow:
                 run_input,
                 task_queue="agents",
                 result_type=RunReviewResult,
-                start_to_close_timeout=timedelta(minutes=5),
+                start_to_close_timeout=RUN_REVIEW_START_TO_CLOSE,
                 heartbeat_timeout=timedelta(seconds=30),
                 retry_policy=RETRY,
             )

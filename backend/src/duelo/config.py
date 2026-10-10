@@ -9,6 +9,8 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_OPERATOR_TOKEN = 16
+# El `start_to_close_timeout` de la activity `run_review` son 5 minutos: el CLI debe acabar antes.
+MAX_AGENT_TIMEOUT_SECONDS = 300
 
 
 def _split_csv(value: object) -> object:
@@ -27,6 +29,21 @@ class WorkerSettings(BaseSettings):
     # Lista separada por comas en el entorno: AGENT_NAMES=agent_1,agent_2
     agent_names: Annotated[list[str], NoDecode] = ["agent_1", "agent_2"]
 
+    # Agentes reales: `claude` y `codex` en AGENT_NAMES usan los CLI de la máquina (con la sesión
+    # que el usuario ya tiene iniciada, sin claves de API); otro nombre es el agente de prueba.
+    # Plazo de cada ejecución: debe quedar por debajo de los 5 minutos de la activity.
+    agent_timeout_seconds: float = Field(default=240.0, gt=0, lt=MAX_AGENT_TIMEOUT_SECONDS)
+    # Cuántos CLI pueden ejecutarse a la vez en este worker.
+    agent_max_concurrency: int = Field(default=2, ge=1)
+    # Ruta del ejecutable si no está en el PATH; vacío = buscarlo en el PATH.
+    claude_bin: str | None = None
+    codex_bin: str | None = None
+    # Modelo opcional; vacío = el que use el CLI por defecto.
+    claude_model: str | None = None
+    codex_model: str | None = None
+    # Tope de gasto (en USD de lista) de una sola ejecución de Claude Code.
+    claude_max_budget_usd: float = Field(default=2.0, gt=0)
+
     @field_validator("agent_names", mode="before")
     @classmethod
     def _split_agent_names(cls, value: object) -> object:
@@ -38,6 +55,12 @@ class WorkerSettings(BaseSettings):
         if not value:
             raise ValueError("AGENT_NAMES debe tener al menos un agente")
         return value
+
+    @field_validator("claude_bin", "codex_bin", "claude_model", "codex_model", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        # `CLAUDE_BIN=` en un .env significa «no configurado», no la ruta vacía.
+        return None if isinstance(value, str) and not value.strip() else value
 
 
 class Settings(WorkerSettings):
