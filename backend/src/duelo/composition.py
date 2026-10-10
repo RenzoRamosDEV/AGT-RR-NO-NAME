@@ -58,9 +58,9 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
     engine = create_engine(settings.database_url)
     session_factory = create_session_factory(engine)
     temporal = LazyTemporalClient(settings.temporal_address)
-    starter = TemporalReviewStarter(temporal, settings.agent_names)
 
     projects = SqlAlchemyProjectRepository(session_factory)
+    starter = TemporalReviewStarter(temporal, settings.agent_names, projects)
 
     async def ingest(submission: ChangeSubmission) -> IngestResult:
         async with session_factory() as session:

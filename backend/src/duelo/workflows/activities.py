@@ -12,7 +12,7 @@ from temporalio.exceptions import ApplicationError
 
 from duelo.application.ports import ChangeRepository, ReviewAgent, ReviewRepository
 from duelo.application.record_review import record_review_failure, record_review_success
-from duelo.workflows.dto import RunReviewInput, RunReviewResult
+from duelo.workflows.dto import RunReviewInput, RunReviewResult, result_from_review
 
 # Un tercio del `heartbeat_timeout` (30 s) del workflow: aguanta que se pierda algún latido.
 HEARTBEAT_INTERVAL_SECONDS = 10.0
@@ -99,7 +99,7 @@ class ReviewActivities:
                     error=str(exc),
                     duration_ms=duration_ms,
                 )
-            return RunReviewResult(status=review.status.value, review_id=str(review.id))
+            return result_from_review(review)
         finally:
             beat.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -116,7 +116,7 @@ class ReviewActivities:
                 raw_output=None,
                 duration_ms=duration_ms,
             )
-        return RunReviewResult(status=review.status.value, review_id=str(review.id))
+        return result_from_review(review)
 
     @activity.defn
     async def record_review_infrastructure_failure(
@@ -139,4 +139,4 @@ class ReviewActivities:
                 run=review_input.run,
                 error=INFRASTRUCTURE_FAILURE_MESSAGE,
             )
-        return RunReviewResult(status=review.status.value, review_id=str(review.id))
+        return result_from_review(review)

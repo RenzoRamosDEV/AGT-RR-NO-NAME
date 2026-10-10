@@ -29,8 +29,10 @@ context: |
   - Single Python monolith package with three processes: API, worker `platform`
     (Dockerized), worker `agents` (runs on the user's own machine, where Claude Code and
     Codex CLIs are logged in - never containerize this worker).
-  - Temporal workflows/activities receive IDs only, never raw diffs; diffs live in
-    Postgres. Activities must be idempotent (upsert on natural keys).
+  - Temporal workflows/activities receive IDs and primitives, never raw diffs or raw CLI
+    output; diffs live in Postgres. The only review content that travels is a bounded
+    excerpt of the reviewer's answer (summary, score, findings, sanitized error) so it can
+    be read in the Temporal UI. Activities must be idempotent (upsert on natural keys).
   - Outbox pattern: every state change writes its row to the `events` table in the same
     transaction; a trigger does NOTIFY; the API serves SSE from it with Last-Event-ID
     replay.

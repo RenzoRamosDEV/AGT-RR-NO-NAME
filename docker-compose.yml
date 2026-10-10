@@ -17,7 +17,9 @@ services:
       retries: 10
 
   temporal:
-    image: docker.io/temporalio/auto-setup:1.24.2
+    # Los resúmenes y detalles de usuario de los workflows exigen un servidor nuevo: el 1.24.2 los
+    # descarta. Validado con 1.26.2, incluida la actualización sobre una base de datos del 1.24.
+    image: docker.io/temporalio/auto-setup:1.26.2
     profiles: ["infra"]
     depends_on:
       postgres:
@@ -32,7 +34,9 @@ services:
       - "7233:7233"
 
   temporal-ui:
-    image: docker.io/temporalio/ui:2.31.2
+    # «Summary & Details», «Current Details» y el resumen de cada actividad se ven con la 2.36.1;
+    # la 2.31.2 no los pinta (sí los nombres y los resultados).
+    image: docker.io/temporalio/ui:2.36.1
     profiles: ["infra"]
     depends_on:
       - temporal

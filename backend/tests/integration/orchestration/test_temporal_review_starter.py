@@ -11,12 +11,15 @@ from temporalio.worker import Worker
 
 from duelo.adapters.agents.fake import FakeAgent
 from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
-from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter
+from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter, workflow_id
 from duelo.application.ports import ReviewStartError
 from duelo.domain.change import Change, ChangeKind
 from duelo.workflows.review_change import ReviewChangeWorkflow
 from duelo.workflows.review_commit import ReviewCommitWorkflow
+from tests.fakes.project_slugs import FakeProjectSlugs
 from tests.integration.helpers import make_activities, persist_change, reviews_for
+
+SLUG = "acme/widgets"
 
 
 def _change(
@@ -38,7 +41,13 @@ def _change(
 
 def _starter(env: WorkflowEnvironment) -> TemporalReviewStarter:
     address = env.client.service_client.config.target_host
-    return TemporalReviewStarter(LazyTemporalClient(address), ["agent_1", "agent_2"])
+    return TemporalReviewStarter(
+        LazyTemporalClient(address), ["agent_1", "agent_2"], FakeProjectSlugs(default=SLUG)
+    )
+
+
+def _wid(change: Change) -> str:
+    return workflow_id(change, SLUG)
 
 
 async def test_starting_the_same_commit_twice_keeps_a_single_execution(
@@ -46,12 +55,12 @@ async def test_starting_the_same_commit_twice_keeps_a_single_execution(
 ) -> None:
     starter = _starter(temporal_env)
     change = _change()
-    workflow_id = f"commit-{change.project_id}-{change.head_sha}"
+    handle = temporal_env.client.get_workflow_handle(_wid(change))
 
     await starter.start(change)
-    first = await temporal_env.client.get_workflow_handle(workflow_id).describe()
+    first = await handle.describe()
     await starter.start(change)  # no lanza: WorkflowAlreadyStarted cuenta como éxito
-    second = await temporal_env.client.get_workflow_handle(workflow_id).describe()
+    second = await handle.describe()
 
     assert first.run_id == second.run_id
 
@@ -66,11 +75,7 @@ async def test_different_commits_start_different_workflows(
     await starter.start(two)
 
     ids = {
-        (
-            await temporal_env.client.get_workflow_handle(
-                f"commit-{c.project_id}-{c.head_sha}"
-            ).describe()
-        ).run_id
+        (await temporal_env.client.get_workflow_handle(_wid(c)).describe()).run_id
         for c in (one, two)
     }
     assert len(ids) == 2
@@ -87,15 +92,14 @@ async def test_a_pr_and_a_commit_with_the_same_sha_do_not_clash(
     await starter.start(commit)
     await starter.start(pr)
 
-    # El id del commit conserva su forma histórica; el del PR lleva su propio prefijo.
+    # Cada tipo lleva su propio prefijo en el id.
     runs = {
-        kind: (
-            await temporal_env.client.get_workflow_handle(
-                f"{kind}-{project_id}-{commit.head_sha}"
-            ).describe()
+        change.kind.value: (
+            await temporal_env.client.get_workflow_handle(_wid(change)).describe()
         ).run_id
-        for kind in ("commit", "pr")
+        for change in (commit, pr)
     }
+    assert set(runs) == {"commit", "pr"}
     assert runs["commit"] != runs["pr"]
 
 
@@ -130,11 +134,10 @@ async def test_a_completed_review_is_not_started_again(
 ) -> None:
     starter = _starter(temporal_env)
     change = await persist_change(session_factory, "c" * 40)
-    workflow_id = f"commit-{change.project_id}-{change.head_sha}"
+    handle = temporal_env.client.get_workflow_handle(_wid(change))
 
     async with _workers(temporal_env, session_factory):
         await starter.start(change)
-        handle = temporal_env.client.get_workflow_handle(workflow_id)
         await handle.result()
         first = (await handle.describe()).run_id
 
@@ -148,18 +151,17 @@ async def test_a_failed_review_can_be_started_again(
 ) -> None:
     starter = _starter(temporal_env)
     ghost = _change("d" * 40)  # no existe en la base de datos: el workflow termina en fallo
-    workflow_id = f"commit-{ghost.project_id}-{ghost.head_sha}"
+    handle = temporal_env.client.get_workflow_handle(_wid(ghost))
 
     async with _workers(temporal_env, session_factory):
         await starter.start(ghost)
-        handle = temporal_env.client.get_workflow_handle(workflow_id)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
         first = (await handle.describe()).run_id
 
         await starter.start(ghost)
 
-    assert (await temporal_env.client.get_workflow_handle(workflow_id).describe()).run_id != first
+    assert (await handle.describe()).run_id != first
 
 
 async def test_the_second_run_gets_its_own_workflow_id_and_its_reviews_carry_the_run(
@@ -167,7 +169,7 @@ async def test_the_second_run_gets_its_own_workflow_id_and_its_reviews_carry_the
 ) -> None:
     starter = _starter(temporal_env)
     change = await persist_change(session_factory, "d" * 40)
-    base_id = f"commit-{change.project_id}-{change.head_sha}"
+    base_id = _wid(change)
 
     async with _workers(temporal_env, session_factory):
         await starter.start(change)
@@ -176,7 +178,8 @@ async def test_the_second_run_gets_its_own_workflow_id_and_its_reviews_carry_the
 
         # Reintento: el id del run 1 (completado) no se reutiliza, el run 2 arranca otra ejecución.
         await starter.start(replace(change, run=2))
-        second = temporal_env.client.get_workflow_handle(f"{base_id}-r2")
+        second = temporal_env.client.get_workflow_handle(_wid(replace(change, run=2)))
+        assert _wid(replace(change, run=2)) == f"{base_id}-r2"
         await second.result()
         await starter.start(replace(change, run=2))  # idempotente: misma ejecución
 

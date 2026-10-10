@@ -48,6 +48,15 @@ class SqlAlchemyProjectRepository:
                 )
             ).scalar_one_or_none()
 
+    async def slug_of(self, project_id: UUID) -> str | None:
+        """Implementa `ProjectSlugs`: el nombre del proyecto, o `None` si no existe."""
+        async with self._session_factory() as session:
+            return (
+                await session.execute(
+                    select(ProjectModel.slug).where(ProjectModel.id == project_id)
+                )
+            ).scalar_one_or_none()
+
     async def list_all(self) -> list[Project]:
         async with self._session_factory() as session:
             rows = (
