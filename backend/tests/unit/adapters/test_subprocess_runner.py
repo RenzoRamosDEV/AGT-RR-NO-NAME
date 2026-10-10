@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -144,6 +145,85 @@ async def test_a_running_command_does_not_block_the_event_loop() -> None:
         beat.cancel()
 
     assert ticks >= 10  # ~25 latidos de 20 ms en medio segundo; un bucle bloqueado daría 1
+
+
+@pytest.mark.regression
+async def test_a_detached_grandchild_holding_the_pipes_does_not_hang_the_timeout() -> None:
+    """Origen: tras vencer el plazo se hacía `killpg` y luego `await communicate()` sin otro plazo;
+    un nieto con `start_new_session=True` que heredó el stdout sigue vivo fuera del grupo que se
+    mata, mantiene el pipe abierto y la llamada esperaba a que él terminara (aquí, 8 s)."""
+    code = (
+        "import subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(8)'],"
+        " start_new_session=True)\n"
+        "time.sleep(30)\n"
+    )
+    started = time.monotonic()
+
+    with pytest.raises(CommandTimeout):
+        await asyncio.wait_for(run_command([sys.executable, "-c", code], timeout=0.3), timeout=7)
+
+    assert time.monotonic() - started < 5  # plazo (0,3 s) + recolección acotada (2 s), no 8 s
+
+
+async def test_cancelling_the_call_kills_the_program_instead_of_leaving_it_orphaned(
+    tmp_path: Path,
+) -> None:
+    pid_file = tmp_path / "pid"
+    code = f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); time.sleep(30)"
+    call = asyncio.create_task(run_command([sys.executable, "-c", code], timeout=30))
+    for _ in range(100):  # espera a que el programa haya arrancado
+        if pid_file.exists() and pid_file.read_text():
+            break
+        await asyncio.sleep(0.05)
+    pid = int(pid_file.read_text())
+
+    call.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await call
+
+    for _ in range(100):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        await asyncio.sleep(0.05)
+    pytest.fail("el programa seguía vivo tras cancelar la llamada")
+
+
+async def test_a_command_that_exits_normally_is_not_delayed_by_the_bounded_collection() -> None:
+    started = time.monotonic()
+
+    result = await run_command([sys.executable, "-c", "print('hecho')"], timeout=5)
+
+    assert result.stdout == "hecho\n"
+    assert time.monotonic() - started < 2
+
+
+async def test_output_over_the_limit_is_flagged_as_truncated() -> None:
+    result = await run_command(
+        [sys.executable, "-c", "import sys; sys.stdout.write('a' * 11)"], max_output_bytes=10
+    )
+
+    assert result.stdout == "a" * 10
+    assert result.truncated is True
+
+
+async def test_stderr_over_the_limit_is_flagged_as_truncated_too() -> None:
+    result = await run_command(
+        [sys.executable, "-c", "import sys; sys.stderr.write('e' * 11)"], max_output_bytes=10
+    )
+
+    assert result.stderr == "e" * 10 and result.truncated is True
+
+
+async def test_output_exactly_at_the_limit_is_not_truncated() -> None:
+    result = await run_command(
+        [sys.executable, "-c", "import sys; sys.stdout.write('a' * 10)"], max_output_bytes=10
+    )
+
+    assert result.stdout == "a" * 10
+    assert result.truncated is False
 
 
 async def test_the_output_limit_can_be_lowered_per_call() -> None:
