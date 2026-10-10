@@ -104,7 +104,12 @@ def build_fake_api(
 
     async def ingest_pull_request(submission: ChangeSubmission) -> IngestResult:
         return await ingest_pr(
-            projects, changes, starter, submission, max_diff_chars=settings.max_diff_chars
+            projects,
+            changes,
+            starter,
+            submission,
+            max_diff_chars=settings.max_diff_chars,
+            agent_names=settings.agent_names,
         )
 
     async def list_changes(

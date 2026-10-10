@@ -75,4 +75,5 @@ async def ingest_pr(body: IngestPrRequest, request: Request) -> IngestPrResponse
         change_id=result.change.id,
         diff_truncated=result.change.diff_truncated,
         created=result.created,
+        reused=result.reused,
     )

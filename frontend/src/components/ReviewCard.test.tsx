@@ -14,6 +14,34 @@ describe("ReviewCard", () => {
     expect(container.querySelector(".avatar img")).toHaveAttribute("src", agentLogo("codex"));
   });
 
+  describe("a review reused from the commit", () => {
+    it("says which commit it was copied from, with the short SHA", () => {
+      render(
+        <ReviewCard
+          review={makeReview({ reusedFrom: "origin-change-id" })}
+          sha="3f2a9c1b7d4e5a6b8c9d0e1f2a3b4c5d6e7f8a9b"
+        />,
+      );
+      const pill = screen.getByText("Reutilizada del commit 3f2a9c1");
+      expect(pill).toHaveAttribute("title", expect.stringContaining("commit 3f2a9c1"));
+      expect(pill).toHaveAttribute("title", expect.stringContaining("no se volvió a pedir"));
+    });
+
+    it("still says it is reused when the SHA is not known", () => {
+      render(<ReviewCard review={makeReview({ reusedFrom: "origin-change-id" })} />);
+      expect(screen.getByText("Reutilizada del commit")).toBeInTheDocument();
+    });
+
+    it("shows no pill on a review the agent made itself", () => {
+      const { rerender } = render(
+        <ReviewCard review={makeReview({ reusedFrom: null })} sha="3f2a9c1b7d" />,
+      );
+      expect(screen.queryByText(/Reutilizada/)).toBeNull();
+      rerender(<ReviewCard review={makeReview()} sha="3f2a9c1b7d" />);
+      expect(screen.queryByText(/Reutilizada/)).toBeNull();
+    });
+  });
+
   it("puts the author, the APP tag, the status and the data on the header line", () => {
     render(
       <ReviewCard

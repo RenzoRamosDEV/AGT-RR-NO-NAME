@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -7,20 +8,46 @@ from uuid import UUID
 
 from duelo.application.read_models import AgentStats, ChangeCursor, ChangeSummary, StoredEvent
 from duelo.domain.change import Change, ChangeKind
-from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed, ReviewReused
 from duelo.domain.project import Project
 from duelo.domain.review import Review, ReviewResult
 from duelo.domain.review_status import ChangeReviewStatus
 
 
+@dataclass(frozen=True, slots=True)
+class CommitWithReviews:
+    """Un commit y las reviews de su `run` actual: lo que una PR idéntica puede aprovechar."""
+
+    change: Change
+    reviews: tuple[Review, ...]
+
+
 class ChangeRepository(Protocol):
-    async def add(self, change: Change, event: ChangeCreated) -> Change:
-        """Persiste `change` y `event` en una única transacción.
+    async def add(
+        self,
+        change: Change,
+        event: ChangeCreated,
+        reused: Sequence[tuple[Review, ReviewReused]] = (),
+    ) -> Change:
+        """Persiste `change`, `event` y, en la MISMA transacción, las reviews `reused` (cada una
+        con su evento).
 
         Si ya existía un `Change` con la misma identidad natural
-        (project_id, kind, head_sha), lo devuelve sin crear un segundo evento; su `id` es el del
-        existente, distinto del de `change`, y así se distingue una reingesta.
+        (project_id, kind, head_sha), lo devuelve sin crear un segundo evento ni copiar reviews; su
+        `id` es el del existente, distinto del de `change`, y así se distingue una reingesta.
+        Una review que ya existiera (mismo change, agente y run) no se duplica ni repite su evento.
         """
+        ...
+
+    async def find_commit_with_reviews(
+        self, project_id: UUID, head_sha: str
+    ) -> CommitWithReviews | None:
+        """El change de tipo `commit` de ese proyecto y SHA con las reviews de su `run` actual, o
+        `None` si no existe."""
+        ...
+
+    async def has_reused_reviews(self, change_id: UUID) -> bool:
+        """`True` si el change tiene alguna review de su `run` 1 copiada de otro change."""
         ...
 
     async def get(self, change_id: UUID) -> Change | None:

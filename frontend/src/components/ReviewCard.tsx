@@ -2,6 +2,7 @@ import type { Review, ReviewStatus } from "../data/mock";
 import { findingFile, findingLine, severityRank } from "../lib/findings";
 import { formatDuration, formatScore } from "../lib/format";
 import { sanitizeError } from "../lib/sanitize";
+import { shortSha } from "../lib/url";
 import { AgentThinking } from "./AgentThinking";
 import { Collapsible, SUMMARY_LIMIT, isLong } from "./Collapsible";
 import { FindingCard } from "./FindingCard";
@@ -83,7 +84,27 @@ function Completed({ review, showFindings }: { review: Review; showFindings: boo
   );
 }
 
-function Body({ review, showFindings }: { review: Review; showFindings: boolean }) {
+/**
+ * A PR identical to an already reviewed commit reuses its reviews instead of asking the agents
+ * again. The commit has the same SHA as the change, so the change's own SHA names the origin.
+ */
+function ReusedPill({ sha }: { sha?: string }) {
+  const origin = sha ? `commit ${shortSha(sha)}` : "commit";
+  return (
+    <span
+      className="reused-pill"
+      title={`Esta review se copió de la del ${origin} (mismo código): no se volvió a pedir a los agentes.`}
+    >
+      Reutilizada del {origin}
+    </span>
+  );
+}
+
+function Body({
+  review,
+  showFindings,
+  sha,
+}: { review: Review; showFindings: boolean; sha?: string }) {
   const { text, tone } = STATUS[review.status];
   const name = agentLabel(review.agent);
   const reason = review.status === "failed" ? sanitizeError(review.error) : null;
@@ -96,6 +117,7 @@ function Body({ review, showFindings }: { review: Review; showFindings: boolean 
           <span className="app-tag">APP</span>
           <Badge tone={tone}>{text}</Badge>
           <Meta review={review} />
+          {review.reusedFrom && <ReusedPill sha={sha} />}
         </div>
         {review.status === "running" && <AgentThinking label={`${name} está revisando…`} />}
         {review.status === "failed" && (
@@ -115,14 +137,17 @@ function Body({ review, showFindings }: { review: Review; showFindings: boolean 
 /**
  * A review rendered like a Slack message from an app: avatar, author with an APP tag, status and
  * data on the header line, then the summary and the findings as cards. `showFindings` is off where
- * a grouped findings panel already lists them (the change detail).
+ * a grouped findings panel already lists them (the change detail). `sha` is the change's SHA, which
+ * names the commit a reused review was copied from.
  */
 export function ReviewCard({
   review,
   showFindings = true,
+  sha,
 }: {
   review: Review;
   showFindings?: boolean;
+  sha?: string;
 }) {
   return (
     <article
@@ -130,7 +155,7 @@ export function ReviewCard({
       data-status={review.status}
       style={{ "--avatar-hue": agentHue(review.agent) } as React.CSSProperties}
     >
-      <Body review={review} showFindings={showFindings} />
+      <Body review={review} showFindings={showFindings} sha={sha} />
     </article>
   );
 }

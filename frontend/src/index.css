@@ -150,6 +150,13 @@ ul {
   text-decoration: none;
 }
 
+/* The emblem keeps its proportions inside the box that was reserved with width/height. */
+.brand-logo {
+  display: block;
+  flex: none;
+  object-fit: contain;
+}
+
 .menu-toggle {
   display: none;
 }
@@ -1054,6 +1061,16 @@ kbd,
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 16px;
+}
+
+.reused-pill {
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
 .review-section {

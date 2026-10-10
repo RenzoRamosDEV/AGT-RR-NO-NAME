@@ -9,8 +9,67 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
 from duelo.application.read_models import AgentStats
-from duelo.domain.events import ReviewCompleted, ReviewFailed
+from duelo.domain.events import ReviewCompleted, ReviewFailed, ReviewReused
 from duelo.domain.review import Finding, Review, ReviewStatus
+
+ReviewEvent = ReviewCompleted | ReviewFailed | ReviewReused
+
+
+async def insert_review(session: AsyncSession, review: Review, event: ReviewEvent) -> Review:
+    """Inserta la review y su evento en la transacción en curso, de forma idempotente.
+
+    La constraint UNIQUE (change_id, agent, run) resuelve la idempotencia de forma atómica: si ya
+    existía, devuelve la fila existente sin crear un segundo evento. Lo comparten este repositorio y
+    el de changes (que copia las reviews de un commit en el alta de su PR)."""
+    insert_stmt = (
+        pg_insert(ReviewModel)
+        .values(
+            id=review.id,
+            change_id=review.change_id,
+            agent=review.agent,
+            run=review.run,
+            status=review.status.value,
+            summary=sanitize_text(review.summary),
+            score=review.score,
+            findings=sanitize_json(
+                [
+                    {
+                        "severity": f.severity,
+                        "file": f.file,
+                        "line": f.line,
+                        "message": f.message,
+                    }
+                    for f in review.findings
+                ]
+            ),
+            raw_output=sanitize_text(review.raw_output),
+            duration_ms=review.duration_ms,
+            error=sanitize_text(review.error),
+            created_at=review.created_at,
+            reused_from_change_id=review.reused_from_change_id,
+        )
+        .on_conflict_do_nothing(constraint="uq_reviews_natural_key")
+        .returning(ReviewModel.id)
+    )
+    inserted_id = (await session.execute(insert_stmt)).scalar_one_or_none()
+
+    if inserted_id is None:
+        existing_stmt = select(ReviewModel).where(
+            ReviewModel.change_id == review.change_id,
+            ReviewModel.agent == review.agent,
+            ReviewModel.run == review.run,
+        )
+        row = (await session.execute(existing_stmt)).scalar_one()
+        return review_from_row(row)
+
+    await session.execute(
+        insert(EventModel).values(
+            project_id=event.project_id,
+            type=event.type,
+            payload=sanitize_json(event.to_payload()),
+        )
+    )
+    return review
 
 
 class SqlAlchemyReviewRepository:
@@ -19,58 +78,9 @@ class SqlAlchemyReviewRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(self, review: Review, event: ReviewCompleted | ReviewFailed) -> Review:
+    async def add(self, review: Review, event: ReviewEvent) -> Review:
         async with self._session.begin():
-            insert_stmt = (
-                pg_insert(ReviewModel)
-                .values(
-                    id=review.id,
-                    change_id=review.change_id,
-                    agent=review.agent,
-                    run=review.run,
-                    status=review.status.value,
-                    summary=sanitize_text(review.summary),
-                    score=review.score,
-                    findings=sanitize_json(
-                        [
-                            {
-                                "severity": f.severity,
-                                "file": f.file,
-                                "line": f.line,
-                                "message": f.message,
-                            }
-                            for f in review.findings
-                        ]
-                    ),
-                    raw_output=sanitize_text(review.raw_output),
-                    duration_ms=review.duration_ms,
-                    error=sanitize_text(review.error),
-                    created_at=review.created_at,
-                )
-                # Mismo patrón que SqlAlchemyChangeRepository: la constraint UNIQUE
-                # (change_id, agent, run) resuelve la idempotencia de forma atómica.
-                .on_conflict_do_nothing(constraint="uq_reviews_natural_key")
-                .returning(ReviewModel.id)
-            )
-            inserted_id = (await self._session.execute(insert_stmt)).scalar_one_or_none()
-
-            if inserted_id is None:
-                existing_stmt = select(ReviewModel).where(
-                    ReviewModel.change_id == review.change_id,
-                    ReviewModel.agent == review.agent,
-                    ReviewModel.run == review.run,
-                )
-                row = (await self._session.execute(existing_stmt)).scalar_one()
-                return _to_domain(row)
-
-            await self._session.execute(
-                insert(EventModel).values(
-                    project_id=event.project_id,
-                    type=event.type,
-                    payload=sanitize_json(event.to_payload()),
-                )
-            )
-            return review
+            return await insert_review(self._session, review, event)
 
     async def list_for_change(self, change_id: UUID) -> list[Review]:
         rows = await self._session.execute(
@@ -78,13 +88,13 @@ class SqlAlchemyReviewRepository:
             .where(ReviewModel.change_id == change_id)
             .order_by(ReviewModel.created_at, ReviewModel.agent, ReviewModel.run)
         )
-        return [_to_domain(row) for row in rows.scalars()]
+        return [review_from_row(row) for row in rows.scalars()]
 
     async def get(self, review_id: UUID) -> Review | None:
         row = (
             await self._session.execute(select(ReviewModel).where(ReviewModel.id == review_id))
         ).scalar_one_or_none()
-        return _to_domain(row) if row is not None else None
+        return review_from_row(row) if row is not None else None
 
     async def agent_stats(self, *, project_id: UUID | None) -> list[AgentStats]:
         completed = ReviewStatus.COMPLETED.value
@@ -119,7 +129,7 @@ class SqlAlchemyReviewRepository:
         ]
 
 
-def _to_domain(row: ReviewModel) -> Review:
+def review_from_row(row: ReviewModel) -> Review:
     return Review(
         id=row.id,
         change_id=row.change_id,
@@ -141,4 +151,5 @@ def _to_domain(row: ReviewModel) -> Review:
         duration_ms=row.duration_ms,
         error=row.error,
         created_at=row.created_at,
+        reused_from_change_id=row.reused_from_change_id,
     )

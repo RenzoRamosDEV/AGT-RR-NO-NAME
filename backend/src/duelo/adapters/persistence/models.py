@@ -96,6 +96,12 @@ class ReviewModel(Base):
         UniqueConstraint("change_id", "agent", "run", name="uq_reviews_natural_key"),
         # Contadores por change y run (index-only) y lecturas por change.
         Index("ix_reviews_change_run_status", "change_id", "run", "status"),
+        # Borrar un change anula `reused_from_change_id` en las reviews que copiaron de él.
+        Index(
+            "ix_reviews_reused_from_change_id",
+            "reused_from_change_id",
+            postgresql_where=text("reused_from_change_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -112,3 +118,7 @@ class ReviewModel(Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Change del que se copió la review (PR con las de su commit idéntico); `NULL` si es propia.
+    reused_from_change_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("changes.id", ondelete="SET NULL"), nullable=True
+    )

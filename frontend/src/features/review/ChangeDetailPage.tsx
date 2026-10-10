@@ -6,6 +6,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
 import { StatusIcon } from "../../components/StatusIcon";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
+import { HERO } from "../../components/brand";
 import { Beam } from "../../components/fx/Beam";
 import { ExternalIcon, FileIcon } from "../../components/icons";
 import type { Change, Review } from "../../data/mock";
@@ -69,7 +70,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
       loadingLabel="Cargando change…"
       notFound={
         <div className="page">
-          <EmptyState kind="missing" heading title="Change no encontrado">
+          <EmptyState kind="missing" hero={HERO} heading title="Change no encontrado">
             <p className="muted">Este change no existe o se eliminó junto con su proyecto.</p>
           </EmptyState>
         </div>
@@ -151,7 +152,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                     )}
                     <div className="reviews">
                       {byAgent(reviews).map((r) => (
-                        <ReviewCard key={r.id} review={r} showFindings={false} />
+                        <ReviewCard key={r.id} review={r} showFindings={false} sha={change.sha} />
                       ))}
                     </div>
                     <FindingsPanel reviews={reviews} />
@@ -163,7 +164,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                         </summary>
                         <div className="reviews">
                           {byAgent(p.reviews).map((r) => (
-                            <ReviewCard key={r.id} review={r} />
+                            <ReviewCard key={r.id} review={r} sha={change.sha} />
                           ))}
                         </div>
                       </details>

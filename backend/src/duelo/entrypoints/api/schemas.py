@@ -63,7 +63,9 @@ class IngestPrRequest(IngestCommitRequest):
 
 
 class IngestPrResponse(IngestCommitResponse):
-    pass
+    # `True` si la PR nació con las reviews copiadas de su commit idéntico (mismo SHA y diff, ya
+    # revisado por todos los agentes): no se arranca ninguna revisión nueva.
+    reused: bool = False
 
 
 class ProjectResponse(BaseModel):
@@ -173,6 +175,8 @@ class ReviewBriefResponse(BaseModel):
     score: int | None
     duration_ms: int | None
     run: int
+    # Change del que se copió la review (PR con las de su commit idéntico); `null` si es propia.
+    reused_from: UUID | None = None
 
     @classmethod
     def from_domain(cls, brief: ReviewBrief) -> ReviewBriefResponse:
@@ -182,6 +186,7 @@ class ReviewBriefResponse(BaseModel):
             score=brief.score,
             duration_ms=brief.duration_ms,
             run=brief.run,
+            reused_from=brief.reused_from,
         )
 
 
@@ -240,6 +245,8 @@ class ReviewResponse(BaseModel):
     duration_ms: int | None
     error: str | None
     created_at: datetime
+    # Change del que se copió la review (PR con las de su commit idéntico); `null` si es propia.
+    reused_from: UUID | None = None
 
     @classmethod
     def from_domain(cls, review: Review) -> ReviewResponse:
@@ -254,6 +261,7 @@ class ReviewResponse(BaseModel):
             duration_ms=review.duration_ms,
             error=review.error,
             created_at=review.created_at,
+            reused_from=review.reused_from_change_id,
         )
 
 

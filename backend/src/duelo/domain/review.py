@@ -50,6 +50,33 @@ class Review:
     duration_ms: int | None
     error: str | None
     created_at: datetime
+    # Change del que se copió esta review (la PR reutiliza las de su commit idéntico); `None` en
+    # las que hizo un agente.
+    reused_from_change_id: UUID | None = None
+
+    @classmethod
+    def reused_from(cls, source: Review, *, change_id: UUID, created_at: datetime) -> Review:
+        """Copia de una review completada de otro change para `change_id` (siempre `run` 1).
+
+        Lleva el resultado (resumen, nota, hallazgos, duración) pero no la salida cruda ni el
+        error: la copia no es una ejecución, solo el veredicto."""
+        if source.status is not ReviewStatus.COMPLETED:
+            raise ValueError("solo se reutilizan reviews completadas")
+        return cls(
+            id=uuid4(),
+            change_id=change_id,
+            agent=source.agent,
+            run=1,
+            status=ReviewStatus.COMPLETED,
+            summary=source.summary,
+            score=source.score,
+            findings=source.findings,
+            raw_output=None,
+            duration_ms=source.duration_ms,
+            error=None,
+            created_at=created_at,
+            reused_from_change_id=source.change_id,
+        )
 
     @classmethod
     def succeeded(

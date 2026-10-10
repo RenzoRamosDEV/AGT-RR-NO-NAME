@@ -268,6 +268,7 @@ async def test_valid_pr_returns_202_and_is_stored_as_a_pr() -> None:
         "change_id": str(change.id),
         "diff_truncated": False,
         "created": True,
+        "reused": False,
     }
     assert change.kind.value == "pr" and change.ref == "refs/pull/7/head"
     assert api.starter.calls == 1
