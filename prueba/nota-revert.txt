@@ -1,1 +1,0 @@
-Nota de prueba para comprobar el estado «commit revertido» en Duelo.
