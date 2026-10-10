@@ -65,13 +65,24 @@ Requisitos y garantías:
 
 - `claude` y `codex` instalados y con sesión iniciada (`claude` y `codex login`). Si no hay sesión o no
   están en el `PATH`, la review queda `failed` con un mensaje claro y se puede reintentar.
-- **Solo lectura:** Claude Code recibe únicamente `Read`, `Grep` y `Glob` y no puede pedir permisos;
-  Codex corre con el sandbox `read-only`. Nada de Bash, Edit, Write ni red. No cargan tus MCP ni tus
-  hooks de Claude (los de Codex sí corren: no hay flag para quitarlos).
+- **Solo lectura y confinados:** Claude Code recibe únicamente `Read`, `Grep` y `Glob`, en modo
+  `--restricted` (sus herramientas de fichero quedan confinadas a su directorio de trabajo) y sin poder
+  pedir permisos. Codex corre con el sandbox `read-only`, sin tu configuración ni tus reglas y con las
+  herramientas de shell, navegador, aplicaciones, plugins e imágenes **desactivadas** (con solo
+  `read-only` un prompt «ejecuta `cat /etc/hostname`» sí devolvía el contenido; con esto no). Ninguno
+  carga tus MCP ni tus hooks. Nada de Bash, Edit, Write ni red.
 - El diff (hasta 60 000 caracteres) viaja por la entrada estándar, no por argumentos, y se trata como
   **dato no confiable**: el prompt ordena ignorar cualquier instrucción que contenga.
-- Si el proyecto se añadió desde una carpeta local, el agente la usa como directorio de trabajo para
-  leer el repositorio (solo lectura); si no, trabaja en un directorio temporal vacío.
+- **Claude** lee la carpeta del proyecto (si se añadió desde una carpeta local; si no, un directorio
+  temporal vacío) para dar contexto, solo lectura. **Codex revisa solo el diff**: sin herramienta de
+  shell no puede leer ficheros, así que trabaja siempre en un directorio temporal vacío y no se le
+  expone tu repositorio.
+- **Riesgo residual de Codex:** la lista de funciones desactivadas es de denegación; una versión
+  futura de Codex con una herramienta nueva que leyera el disco no estaría desactivada. Lo acotan el
+  sandbox `read-only` (sin escritura ni red), el directorio temporal vacío, el entorno sin secretos
+  y los tests opcionales con el CLI real (`RUN_CLI_AGENT_TESTS=1`), que comprueban que no puede
+  ejecutar ni leer fuera. Tras un fallo de plazo, un proceso que el CLI hubiera desasociado puede
+  seguir vivo (se abandona su espera, pero no se le mata).
 - Al proceso del CLI **no** llegan `INGEST_TOKEN`, `OPERATOR_TOKEN`, `DATABASE_URL` ni tus claves
   `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` (si las tuvieras en el entorno, el CLI las usaría en lugar de tu
   sesión).
@@ -83,7 +94,7 @@ Requisitos y garantías:
 | Variable (worker) | Por defecto | Qué hace |
 | --- | --- | --- |
 | `AGENT_NAMES` | `agent_1,agent_2` | `claude` y `codex` usan los CLI reales; cualquier otro nombre, el agente de prueba |
-| `AGENT_TIMEOUT_SECONDS` | `240` | Plazo de cada ejecución del CLI (menos de 300: la activity dura 5 minutos) |
+| `AGENT_TIMEOUT_SECONDS` | `240` | Plazo de cada ejecución del CLI. Máximo 270: la activity dura 5 minutos y se reservan 30 s para limpiar y guardar la review fallida |
 | `AGENT_MAX_CONCURRENCY` | `2` | CLI simultáneos en este worker; el resto espera en la cola de Temporal |
 | `CLAUDE_BIN` / `CODEX_BIN` | en el `PATH` | Ruta del ejecutable si no está en el `PATH` |
 | `CLAUDE_MODEL` / `CODEX_MODEL` | el del CLI | Modelo a usar |
