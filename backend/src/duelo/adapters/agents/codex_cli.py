@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from duelo.adapters.agents.cli_common import (
@@ -23,27 +24,90 @@ from duelo.domain.review import ReviewResult
 
 MAX_LAST_MESSAGE_BYTES = 1_000_000
 
-# Funciones de Codex que se desactivan (`--disable <nombre>` equivale a
-# `-c features.<nombre>=false`; los nombres son los de `codex features list`). Sin
-# `shell_tool`/`unified_exec` el modelo no puede ejecutar comandos ni leer ficheros: `-s read-only`
-# solo impide ESCRIBIR, y se comprobó que con él un prompt «ejecuta cat /etc/hostname» devolvía el
-# contenido. El resto cierra otras vías de salir del directorio de trabajo (visor de imágenes,
-# navegador, aplicaciones, plugins) y `hooks` impide que corran los hooks del usuario dentro de la
-# review.
+# Todas las funciones HABILITADAS de `codex features list` (salvo las `removed`, que no hacen nada)
+# están clasificadas en una de estas dos listas; un test falla si el CLI muestra una habilitada que
+# no esté en ninguna (`unreviewed_features`), de modo que una versión nueva de Codex no incorpore
+# herramientas sin que alguien las revise. Es una lista de DENEGACIÓN: la defensa no descansa solo
+# en ella (sandbox `read-only`, directorio de trabajo temporal vacío, entorno sin secretos).
+#
+# Se desactivan (`--disable <nombre>` equivale a `-c features.<nombre>=false`): lo que ejecuta
+# código o comandos, lee el disco o el workspace, lanza subagentes o amplía las herramientas del
+# modelo, o usa red, plugins o MCP. `-s read-only` solo impide ESCRIBIR: con él un prompt «ejecuta
+# cat /etc/hostname» devolvía el contenido, y sin `shell_tool`/`unified_exec` ya no. `hooks` además
+# impide que corran los hooks del usuario dentro de la review. Ante la duda se desactiva: apagar una
+# función benigna no cuesta nada y dejar una dudosa abierta sí.
 DISABLED_FEATURES = (
-    "shell_tool",
-    "unified_exec",
-    "hooks",
-    "view_image",
     "apps",
-    "plugins",
+    "browser_annotation_api",
     "browser_use",
     "browser_use_external",
     "browser_use_full_cdp_access",
+    "code_mode_host",
     "computer_use",
-    "in_app_browser",
+    "daemon_auto_start",
+    "goals",
+    "hooks",
     "image_generation",
+    "in_app_browser",
+    "in_app_local_automation",
+    "mentions_v2",
+    "multi_agent",
+    "plugin_sharing",
+    "plugins",
+    "realtime_conversation",
+    "remote_plugin",
+    "shell_snapshot",
+    "shell_tool",
+    "skill_mcp_dependency_install",
+    "skill_search",
+    "tool_call_mcp_elicitation",
+    "tool_suggest",
+    "unified_exec",
+    "unified_exec_tty",
+    "view_image",
+    "workspace_dependencies",
+    "worktrees",
 )
+
+# Revisadas y permitidas: interfaz, telemetría, transporte y compatibilidad, sin acceso al disco, a
+# comandos, a red de herramientas ni a subagentes. El motivo de cada una queda aquí.
+REVIEWED_ALLOWED_FEATURES: dict[str, str] = {
+    "api_key_model_discovery": "descubrimiento de modelos con la credencial; no es una herramienta",
+    "auth_elicitation": "petición de autenticación del propio CLI",
+    "compaction_image_budget": "presupuesto de imágenes al compactar el contexto",
+    "content_item_kinds": "formato de los elementos del protocolo",
+    "enable_request_compression": "compresión de las peticiones a la API",
+    "fast_mode": "modo de servicio rápido del modelo",
+    "guardian_approval": "revisor de seguridad de aprobaciones de Codex: conviene mantenerlo",
+    "guardian_reuse_parent_compaction": "optimización del revisor de seguridad",
+    "in_app_chat": "interfaz de la app de escritorio; no aplica a `codex exec`",
+    "in_app_dictation": "interfaz de la app de escritorio; no aplica a `codex exec`",
+    "in_app_updates": "interfaz de la app de escritorio; no aplica a `codex exec`",
+    "in_app_voice": "interfaz de la app de escritorio; no aplica a `codex exec`",
+    "instant_interrupt": "interrupción inmediata de un turno (experiencia de uso)",
+    "sleep_tool": "espera sin efectos sobre el disco, la red ni los procesos",
+    "system_proxy_fallback": "respaldo de proxy del sistema para la conexión con la API",
+    "ultrafast_mode": "modo de servicio de menor latencia",
+    "unbounded_connection_retries": "reintentos de conexión con la API (los acota el plazo)",
+    "write_stdin_approval": "aprobación de escribir en stdin de una ejecución (inerte sin shell)",
+}
+
+_FEATURE_LINE = re.compile(r"^(?P<name>\S+)\s+(?P<stage>.+?)\s+(?P<enabled>true|false)\s*$")
+
+
+def unreviewed_features(listing: str) -> list[str]:
+    """Funciones habilitadas en `listing` (la salida de `codex features list`: `nombre etapa
+    habilitada`) que no están ni desactivadas ni revisadas y permitidas. Ignora las `removed` y las
+    deshabilitadas. Una lista no vacía significa que una versión de Codex trae algo sin revisar."""
+    classified = set(DISABLED_FEATURES) | set(REVIEWED_ALLOWED_FEATURES)
+    found: set[str] = set()
+    for line in listing.splitlines():
+        match = _FEATURE_LINE.match(line.strip())
+        if match is None or match["enabled"] != "true" or match["stage"] == "removed":
+            continue
+        if match["name"] not in classified:
+            found.add(match["name"])
+    return sorted(found)
 
 
 class CodexCliAgent(CliAgent):

@@ -67,22 +67,25 @@ Requisitos y garantías:
   están en el `PATH`, la review queda `failed` con un mensaje claro y se puede reintentar.
 - **Solo lectura y confinados:** Claude Code recibe únicamente `Read`, `Grep` y `Glob`, en modo
   `--restricted` (sus herramientas de fichero quedan confinadas a su directorio de trabajo) y sin poder
-  pedir permisos. Codex corre con el sandbox `read-only`, sin tu configuración ni tus reglas y con las
-  herramientas de shell, navegador, aplicaciones, plugins e imágenes **desactivadas** (con solo
-  `read-only` un prompt «ejecuta `cat /etc/hostname`» sí devolvía el contenido; con esto no). Ninguno
-  carga tus MCP ni tus hooks. Nada de Bash, Edit, Write ni red.
+  pedir permisos. Codex corre con el sandbox `read-only`, sin tu configuración ni tus reglas y con
+  **30 funciones desactivadas**: todo lo que ejecuta comandos, lee el disco o el workspace, lanza
+  subagentes o usa red, plugins o MCP (con solo `read-only` un prompt «ejecuta `cat /etc/hostname`» sí
+  devolvía el contenido; con esto no). Ninguno carga tus MCP ni tus hooks. Nada de Bash, Edit, Write ni
+  red.
 - El diff (hasta 60 000 caracteres) viaja por la entrada estándar, no por argumentos, y se trata como
   **dato no confiable**: el prompt ordena ignorar cualquier instrucción que contenga.
 - **Claude** lee la carpeta del proyecto (si se añadió desde una carpeta local; si no, un directorio
   temporal vacío) para dar contexto, solo lectura. **Codex revisa solo el diff**: sin herramienta de
   shell no puede leer ficheros, así que trabaja siempre en un directorio temporal vacío y no se le
   expone tu repositorio.
-- **Riesgo residual de Codex:** la lista de funciones desactivadas es de denegación; una versión
-  futura de Codex con una herramienta nueva que leyera el disco no estaría desactivada. Lo acotan el
-  sandbox `read-only` (sin escritura ni red), el directorio temporal vacío, el entorno sin secretos
-  y los tests opcionales con el CLI real (`RUN_CLI_AGENT_TESTS=1`), que comprueban que no puede
-  ejecutar ni leer fuera. Tras un fallo de plazo, un proceso que el CLI hubiera desasociado puede
-  seguir vivo (se abandona su espera, pero no se le mata).
+- **Riesgo residual de Codex:** la defensa es una **lista de denegación** más el sandbox `read-only`
+  (sin escritura ni red), el directorio de trabajo temporal vacío y el entorno sin secretos. Cada
+  función habilitada de `codex features list` está clasificada en el código (desactivada, o revisada y
+  permitida con su motivo) y un test falla, nombrándola, si una versión nueva trae una sin clasificar
+  (`tests/integration/agents/test_codex_features.py`; se salta si no tienes `codex`). Una herramienta
+  nueva que no aparezca en esa lista no estaría desactivada. Además, tras vencer el plazo o
+  cancelarse una review, un proceso que el CLI hubiera dejado en otra sesión **no se localiza ni se
+  mata** y puede seguir vivo: solo se deja de esperarlo y se liberan los pipes.
 - Al proceso del CLI **no** llegan `INGEST_TOKEN`, `OPERATOR_TOKEN`, `DATABASE_URL` ni tus claves
   `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` (si las tuvieras en el entorno, el CLI las usaría en lugar de tu
   sesión).

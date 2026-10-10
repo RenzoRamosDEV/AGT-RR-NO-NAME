@@ -5,9 +5,11 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from duelo.adapters import subprocess_runner
 from duelo.adapters.subprocess_runner import CommandNotFound, CommandTimeout, run_command
 
 
@@ -189,6 +191,78 @@ async def test_cancelling_the_call_kills_the_program_instead_of_leaving_it_orpha
             return
         await asyncio.sleep(0.05)
     pytest.fail("el programa seguía vivo tras cancelar la llamada")
+
+
+@pytest.mark.regression
+async def test_cancelling_with_a_detached_grandchild_kills_the_child_and_closes_the_transport(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Origen: al cancelar se hacía `killpg` y `communicate.cancel()`, pero con un descendiente en
+    otra sesión sujetando los pipes el transporte del proceso quedaba abierto y no se recogía con
+    el plazo corto que sí usa la rama de plazo vencido."""
+    created: list[Any] = []
+    real = asyncio.create_subprocess_exec
+
+    async def spy(*args: Any, **kwargs: Any) -> Any:
+        process = await real(*args, **kwargs)
+        created.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spy)
+    pid_file = tmp_path / "pid"
+    code = (
+        "import os, subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(8)'],"
+        " start_new_session=True)\n"
+        f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"  # después de lanzar al nieto
+        "time.sleep(30)\n"
+    )
+    call = asyncio.create_task(run_command([sys.executable, "-c", code], timeout=30))
+    for _ in range(200):
+        if pid_file.exists() and pid_file.read_text():
+            break
+        await asyncio.sleep(0.05)
+    child = int(pid_file.read_text())
+    started = time.monotonic()
+
+    call.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await call
+
+    assert time.monotonic() - started < 5  # recolección acotada, no los 8 s del nieto
+    for _ in range(100):
+        try:
+            os.kill(child, 0)
+        except ProcessLookupError:
+            break
+        await asyncio.sleep(0.05)
+    else:
+        pytest.fail("el proceso directo seguía vivo tras cancelar")
+    assert created[0]._transport.is_closing()  # los pipes se liberaron aunque el nieto siga vivo
+
+
+async def test_a_second_cancellation_during_the_collection_still_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subprocess_runner, "KILL_GRACE_SECONDS", 0.4)
+    code = (
+        "import subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(6)'],"
+        " start_new_session=True)\n"
+        "time.sleep(30)\n"
+    )
+    call = asyncio.create_task(run_command([sys.executable, "-c", code], timeout=30))
+    await asyncio.sleep(0.5)
+
+    call.cancel()
+    await asyncio.sleep(0.1)  # ya está recogiendo la salida tras el kill
+    call.cancel()  # segunda cancelación
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(call, timeout=6)
+    # La recolección protegida termina sola (plazo de gracia 0,4 s): se espera para no dejarla viva
+    # cuando se cierre el bucle del test.
+    await asyncio.sleep(1.5)
 
 
 async def test_a_command_that_exits_normally_is_not_delayed_by_the_bounded_collection() -> None:

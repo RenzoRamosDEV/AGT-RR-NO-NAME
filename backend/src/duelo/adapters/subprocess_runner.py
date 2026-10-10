@@ -109,9 +109,12 @@ async def run_command(
         await _reap_after_kill(process, communicate)
         raise CommandTimeout(argv[0]) from exc
     except asyncio.CancelledError:
-        # Quien llamó canceló (p. ej. la activity): no se deja el programa corriendo huérfano.
+        # Quien llamó canceló (p. ej. la activity): no se deja el programa corriendo huérfano y se
+        # recoge igual que al vencer el plazo (espera acotada y pipes liberados). `shield`: una
+        # segunda cancelación no corta la recolección a medias; la cancelación se propaga igual.
         _kill_group(process)
-        communicate.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.shield(_reap_after_kill(process, communicate))
         raise
     return CommandResult(
         returncode=process.returncode if process.returncode is not None else -1,

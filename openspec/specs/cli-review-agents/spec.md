@@ -42,8 +42,11 @@ trabajo y quita las que ejecutan código), sin responder a peticiones de permiso
 (`--permission-mode dontAsk` y `--permission-prompts none`) y sin servidores MCP, comandos de usuario
 ni ajustes de usuario. Codex SHALL lanzarse con el sandbox `read-only`, sin persistir la sesión, sin
 la configuración ni las reglas del usuario (`--ignore-user-config`, `--ignore-rules`) y con
-desactivadas las funciones que ejecutan comandos o salen del directorio (`shell_tool`,
-`unified_exec`, `hooks` y las de navegador, aplicaciones, plugins e imágenes). Los argumentos NO SHALL
+desactivadas todas las funciones que ejecutan código o comandos, leen el disco o el workspace,
+lanzan subagentes o amplían las herramientas, o usan red, plugins o MCP. Cada función habilitada de
+`codex features list` (salvo las `removed`) SHALL estar clasificada explícitamente en el código como
+desactivada o como revisada y permitida (interfaz, telemetría, transporte o compatibilidad), y un test
+SHALL fallar si el CLI muestra una función habilitada sin clasificar. Los argumentos NO SHALL
 habilitar herramientas de escritura, de ejecución de comandos ni de red.
 
 #### Scenario: Diff con una instrucción maliciosa
@@ -58,6 +61,11 @@ habilitar herramientas de escritura, de ejecución de comandos ni de red.
 #### Scenario: Codex no ejecuta comandos
 - **WHEN** el modelo intenta ejecutar un comando de shell
 - **THEN** no dispone de ninguna herramienta para hacerlo
+
+#### Scenario: Una versión nueva de Codex trae una función sin revisar
+- **WHEN** `codex features list` muestra una función habilitada que no está ni desactivada ni
+  revisada y permitida
+- **THEN** el test que vigila la lista falla y nombra la función, hasta que se clasifique
 
 ### Requirement: Entrada delimitada y no confiable
 El prompt SHALL indicar al modelo que el título, el autor, la rama y el diff son datos no confiables
@@ -177,10 +185,12 @@ resultado (correcto o tipo de fallo), sin incluir el diff ni la salida del CLI.
 - **THEN** se registra el nombre del agente, la duración y `ok`, sin contenido del change
 
 ### Requirement: Espera acotada tras el plazo
-Al vencer el plazo de un CLI, el sistema SHALL matar su grupo de procesos y recoger su salida con un
-segundo plazo corto. Si la salida no se cierra (un descendiente desasociado conserva el pipe), el
-sistema SHALL liberar los pipes y abandonar la espera en lugar de colgar la review. Un resultado cuya
-salida se recortó por superar el límite SHALL indicarlo (`truncated`).
+Al vencer el plazo de un CLI, o al cancelarse la llamada, el sistema SHALL matar su grupo de procesos
+y recoger su salida con un segundo plazo corto, protegido frente a una segunda cancelación. Si la
+salida no se cierra (un descendiente desasociado conserva el pipe), el sistema SHALL liberar los
+pipes y abandonar la espera en lugar de colgar la review. Un resultado cuya salida se recortó por
+superar el límite SHALL indicarlo (`truncated`). Un descendiente en otra sesión no se localiza ni se
+mata: puede sobrevivir, y eso es un riesgo residual aceptado y documentado.
 
 #### Scenario: Descendiente desasociado
 - **WHEN** vence el plazo y un proceso hijo en otra sesión sigue sujetando el stdout
@@ -189,3 +199,8 @@ salida se recortó por superar el límite SHALL indicarlo (`truncated`).
 #### Scenario: Salida recortada
 - **WHEN** el programa escribe más que el límite de lectura
 - **THEN** el resultado lleva `truncated` verdadero y solo el máximo permitido
+
+#### Scenario: Cancelación con un descendiente que retiene los pipes
+- **WHEN** se cancela la llamada mientras un descendiente en otra sesión sujeta los pipes
+- **THEN** el proceso directo queda muerto, el transporte queda cerrado y la cancelación se
+  propaga en pocos segundos

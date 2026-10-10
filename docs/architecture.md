@@ -112,10 +112,12 @@ que ya está en el spec o en `openspec/specs/`.
   asíncrono sin shell, **confinados y en solo lectura**: Claude con `Read`, `Grep` y `Glob` en modo
   `--restricted` (herramientas de fichero confinadas a su directorio de trabajo), sin permisos
   interactivos ni MCP/hooks/ajustes del usuario; Codex con el sandbox `read-only`, sin la
-  configuración ni las reglas del usuario y con desactivadas las funciones que ejecutan comandos o
-  salen del directorio (`shell_tool`, `unified_exec`, `hooks`, navegador, aplicaciones, plugins,
-  imágenes): `-s read-only` solo impide escribir, y con él el modelo aún podía leer con `cat`. Sin
-  shell Codex no lee ficheros, así que revisa solo el diff y trabaja siempre en un directorio
+  configuración ni las reglas del usuario y con 30 funciones desactivadas (todo lo que ejecuta
+  comandos, lee el disco o el workspace, lanza subagentes o usa red, plugins o MCP; cada función
+  habilitada de `codex features list` está clasificada en `codex_cli.py` y un test falla si una
+  versión nueva trae una sin clasificar): `-s read-only` solo impide escribir, y con él el modelo aún
+  podía leer con `cat`. Es una lista de denegación, acotada por el sandbox, el directorio vacío y el
+  entorno sin secretos. Sin shell Codex no lee ficheros, así que revisa solo el diff y trabaja siempre en un directorio
   temporal vacío; Claude sí usa la carpeta del proyecto (el puerto `ProjectPaths` resuelve la ruta
   sin tocar los DTOs de Temporal) o un directorio temporal vacío. El prompt va por la entrada estándar
   (el diff se trata como dato no confiable, delimitado con una marca aleatoria y recortado a 60 000
@@ -127,7 +129,9 @@ que ya está en el spec o en `openspec/specs/`.
   y la recolección de su salida tiene otro plazo corto (`run_command`), de modo que un descendiente
   desasociado que retenga el pipe no cuelga la review. El worker limita los CLI simultáneos
   (`AGENT_MAX_CONCURRENCY`, también como `max_concurrent_activities` de la queue `agents`: las
-  reviews sobrantes esperan en la cola de Temporal). Los errores (sin CLI, sin sesión, plazo, salida
+  reviews sobrantes esperan en la cola de Temporal). Al cancelarse la llamada también se mata el
+  grupo y se recoge con el mismo plazo corto; un descendiente en otra sesión no se localiza ni se mata
+  (riesgo residual aceptado). Los errores (sin CLI, sin sesión, plazo, salida
   inválida o truncada) usan mensajes fijos que nunca incluyen la salida del CLI y acaban en una
   `Review(failed)`.
 
