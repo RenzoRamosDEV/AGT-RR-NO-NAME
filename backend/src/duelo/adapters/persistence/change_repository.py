@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
-from duelo.application.read_models import ChangeCursor, ChangeSummary
+from duelo.application.read_models import ChangeCursor, ChangeSummary, ReviewBrief
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
 from duelo.domain.diff import DiffSummary, FileDiff
 from duelo.domain.events import ChangeCreated
@@ -41,6 +42,7 @@ class SqlAlchemyChangeRepository:
                     status=change.status.value,
                     run=change.run,
                     created_at=change.created_at,
+                    run_started_at=change.run_started_at,
                     diff_summary=_summary_to_json(change.diff_summary),
                 )
                 # La constraint UNIQUE (project_id, kind, head_sha) resuelve la
@@ -121,6 +123,7 @@ class SqlAlchemyChangeRepository:
                 ChangeModel.status,
                 ChangeModel.run,
                 ChangeModel.created_at,
+                ChangeModel.run_started_at,
                 ChangeModel.diff_summary,
                 completed.label("completed_reviews"),
                 failed.label("failed_reviews"),
@@ -151,6 +154,7 @@ class SqlAlchemyChangeRepository:
                 tuple_(ChangeModel.created_at, ChangeModel.id) < tuple_(after.created_at, after.id)
             )
         rows = (await self._session.execute(stmt)).all()
+        briefs = await self._briefs_for([r.id for r in rows])
         return [
             ChangeSummary(
                 id=r.id,
@@ -170,17 +174,54 @@ class SqlAlchemyChangeRepository:
                 ),
                 run=r.run,
                 created_at=r.created_at,
+                run_started_at=r.run_started_at,
                 diff_summary=_summary_from_json(r.diff_summary),
+                reviews=briefs.get(r.id, ()),
             )
             for r in rows
         ]
 
-    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+    async def _briefs_for(self, change_ids: list[UUID]) -> dict[UUID, tuple[ReviewBrief, ...]]:
+        """Reviews del `run` actual de los changes de la página, en UNA consulta (sin N+1) y solo
+        con las columnas ligeras: ni `summary`, ni `findings`, ni `error`, ni `raw_output`."""
+        if not change_ids:
+            return {}
+        rows = (
+            await self._session.execute(
+                select(
+                    ReviewModel.change_id,
+                    ReviewModel.agent,
+                    ReviewModel.status,
+                    ReviewModel.score,
+                    ReviewModel.duration_ms,
+                    ReviewModel.run,
+                )
+                .join(ChangeModel, ChangeModel.id == ReviewModel.change_id)
+                .where(ChangeModel.id.in_(change_ids), ReviewModel.run == ChangeModel.run)
+                .order_by(ReviewModel.change_id, ReviewModel.agent)
+            )
+        ).all()
+        grouped: dict[UUID, list[ReviewBrief]] = {}
+        for r in rows:
+            grouped.setdefault(r.change_id, []).append(
+                ReviewBrief(
+                    agent=r.agent,
+                    status=ReviewStatus(r.status),
+                    score=r.score,
+                    duration_ms=r.duration_ms,
+                    run=r.run,
+                )
+            )
+        return {change_id: tuple(items) for change_id, items in grouped.items()}
+
+    async def advance_run(
+        self, change_id: UUID, *, from_run: int, started_at: datetime
+    ) -> Change | None:
         row = (
             await self._session.execute(
                 update(ChangeModel)
                 .where(ChangeModel.id == change_id, ChangeModel.run == from_run)
-                .values(run=from_run + 1)
+                .values(run=from_run + 1, run_started_at=started_at)
                 .returning(ChangeModel)
             )
         ).scalar_one_or_none()
@@ -229,6 +270,7 @@ def _to_domain(row: ChangeModel) -> Change:
         status=ChangeStatus(row.status),
         run=row.run,
         created_at=row.created_at,
+        run_started_at=row.run_started_at,
         diff_summary=_summary_from_json(row.diff_summary),
     )
 

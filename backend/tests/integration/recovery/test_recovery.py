@@ -92,7 +92,11 @@ async def _run_review_workflow(
 ) -> Any:
     async with (
         Worker(env.client, task_queue="platform", workflows=[ReviewChangeWorkflow]),
-        Worker(env.client, task_queue="agents", activities=[activities.run_review]),
+        Worker(
+            env.client,
+            task_queue="agents",
+            activities=[activities.run_review, activities.record_review_infrastructure_failure],
+        ),
     ):
         return await env.client.execute_workflow(
             ReviewChangeWorkflow.run,
@@ -123,7 +127,9 @@ async def test_workflow_waits_for_a_missing_agents_worker_and_finishes_when_it_a
         assert await reviews_for(session_factory, change) == []
 
         async with Worker(
-            temporal_env.client, task_queue="agents", activities=[activities.run_review]
+            temporal_env.client,
+            task_queue="agents",
+            activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ):
             results = await handle.result()
 
@@ -168,6 +174,10 @@ async def test_lost_ack_after_commit_does_not_duplicate_the_review_or_its_event(
 async def test_a_permanent_failure_exhausts_the_bounded_retries_and_fails_visibly(
     temporal_env: WorkflowEnvironment, session_factory: async_sessionmaker
 ) -> None:
+    """Caso residual: la base de datos falla también para la compensación (el repositorio falla
+    siempre), así que no se puede guardar ninguna review y el workflow falla visiblemente. Con
+    una base de datos que solo falla al guardar el resultado, la compensación sí registra la
+    review (`integration/workflows/test_infrastructure_failure.py`)."""
     change = await persist_change(session_factory, "d" * 40)
     flakiness = Flakiness(fail_times=10_000)
     activities = make_activities(
@@ -178,5 +188,6 @@ async def test_a_permanent_failure_exhausts_the_bounded_retries_and_fails_visibl
         await _run_review_workflow(temporal_env, activities, str(change.id), ["agent_1"])
 
     assert isinstance(failure.value.cause, ActivityError)
-    assert flakiness.calls == 3  # RetryPolicy(maximum_attempts=3) del workflow
+    # RetryPolicy(maximum_attempts=3) para `run_review` y otros 3 intentos de la compensación.
+    assert flakiness.calls == 6
     assert await reviews_for(session_factory, change) == []

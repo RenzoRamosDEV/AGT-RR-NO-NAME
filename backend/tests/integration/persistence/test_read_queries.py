@@ -234,6 +234,49 @@ async def test_list_for_change_of_a_change_without_reviews_is_empty(
         assert await SqlAlchemyReviewRepository(session).list_for_change(uuid4()) == []
 
 
+async def test_the_channel_brings_light_reviews_of_the_current_run_in_one_extra_query(
+    session_factory: async_sessionmaker, engine: AsyncEngine
+) -> None:
+    project = await create_project(session_factory)
+    changes = [await _add_change(session_factory, project, i, at=T0) for i in range(1, 6)]
+    for change in changes:
+        await _persist_review(session_factory, change, _ok(change, "agent_b", score=9, ms=5, at=T0))
+        await _persist_review(session_factory, change, _ko(change, "agent_a", ms=7, at=T0))
+    # Un reintento: el run 2 de `retried` no tiene reviews aún, y las del run 1 no deben salir.
+    retried = changes[0]
+    async with session_factory() as session:
+        await SqlAlchemyChangeRepository(session).advance_run(retried.id, from_run=1, started_at=T0)
+    statements: list[str] = []
+
+    def capture(conn, cursor, statement, *args):  # type: ignore[no-untyped-def]
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        async with session_factory() as session:
+            rows = await SqlAlchemyChangeRepository(session).list_for_project(
+                project, kind=None, limit=10, after=None, **NO_FILTER
+            )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+
+    by_id = {row.id: row for row in rows}
+    assert by_id[retried.id].reviews == ()
+    for change in changes[1:]:
+        briefs = by_id[change.id].reviews
+        assert [(b.agent, b.status.value, b.score, b.duration_ms, b.run) for b in briefs] == [
+            ("agent_a", "failed", None, 7, 1),
+            ("agent_b", "completed", 9, 5, 1),
+        ]
+    # Sin N+1: dos consultas con 5 changes (canal + reviews de toda la página)...
+    assert len(statements) == 2
+    # ...y la segunda no toca las columnas pesadas.
+    reviews_sql = statements[1]
+    assert "FROM reviews" in reviews_sql
+    for heavy in ("reviews.summary", "reviews.findings", "reviews.raw_output", "reviews.error"):
+        assert heavy not in reviews_sql
+
+
 # --- Estadísticas ----------------------------------------------------------------------
 
 

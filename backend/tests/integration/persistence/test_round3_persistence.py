@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from duelo.adapters.persistence.change_repository import SqlAlchemyChangeRepository
 from duelo.adapters.persistence.event_repository import SqlAlchemyChangeEventRepository
+from duelo.adapters.persistence.models import EventModel
 from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
 from duelo.application.queries import change_events
 from duelo.domain.change import Change, ChangeKind
@@ -204,3 +205,33 @@ async def test_raw_events_of_another_project_with_the_same_change_id_are_not_ret
 
     assert [e.type for e in mine] == ["change.created"]
     assert theirs == []
+
+
+async def test_events_are_ordered_by_creation_time_not_by_id(
+    session_factory: async_sessionmaker,
+) -> None:
+    """Origen: se ordenaba por `id`, así que con reviews concurrentes un evento escrito antes
+    (id menor) podía llevar un `created_at` posterior y la línea de tiempo salía cruzada."""
+    project = await create_project(session_factory)
+    change = await _add(session_factory, project, 1, DIFF)
+    payload = {"change_id": str(change.id), "project_id": str(project)}
+    later = T0 + timedelta(seconds=30)
+    earlier = T0 + timedelta(seconds=10)
+    async with session_factory() as session, session.begin():
+        # Ids crecientes pero fechas cruzadas: `a` tiene el id menor y la fecha más tardía; `b` y
+        # `c` comparten fecha y deben desempatar por id.
+        for agent, created_at in (("a", later), ("b", earlier), ("c", earlier)):
+            session.add(
+                EventModel(
+                    project_id=project,
+                    type="review.completed",
+                    payload={**payload, "agent": agent, "review_id": str(uuid4())},
+                    created_at=created_at,
+                )
+            )
+
+    async with session_factory() as session:
+        rows = await SqlAlchemyChangeEventRepository(session).list_for_change(project, change.id)
+
+    reviews = [r for r in rows if r.type == "review.completed"]
+    assert [r.payload["agent"] for r in reviews] == ["b", "c", "a"]

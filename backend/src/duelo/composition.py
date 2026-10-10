@@ -131,6 +131,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
                 starter,
                 change_id,
                 expected_agents=expected_agents,
+                now=datetime.now(UTC),
             )
 
     async def agent_stats(project: str | None) -> list[AgentStats]:
@@ -184,6 +185,7 @@ def build_api_dependencies(settings: Settings) -> ApiDependencies:
         list_change_events=list_change_events,
         get_review_raw_output=get_review_raw_output,
         readiness_checks={"postgres": check_postgres, "temporal": temporal.check_health},
+        agent_names=tuple(settings.agent_names),
         close=engine.dispose,
         rate_limiter=rate_limiter,
     )

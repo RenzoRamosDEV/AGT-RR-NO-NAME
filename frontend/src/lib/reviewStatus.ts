@@ -1,16 +1,11 @@
 import type { Review, ReviewAggregate } from "../data/mock";
 
-/** Agents that review every change (`agent_names` in the backend configuration). */
-export const EXPECTED_AGENTS = 2;
-
 /**
- * Mirrors the backend's `review_status` for the sample data. A review still `running` has no
- * counterpart in the API (only finished reviews are stored), so it makes the change `running`.
+ * Mirrors the backend's `review_status` for the sample data. `expected` is the number of
+ * configured agents (`agent_names`). A review still `running` has no counterpart in the API
+ * (only finished reviews are stored), so it makes the change `running`.
  */
-export function aggregateStatus(
-  reviews: readonly Review[],
-  expected: number = EXPECTED_AGENTS,
-): ReviewAggregate {
+export function aggregateStatus(reviews: readonly Review[], expected: number): ReviewAggregate {
   if (reviews.some((r) => r.status === "running")) return "running";
   const failed = reviews.filter((r) => r.status === "failed").length;
   const total = reviews.length;

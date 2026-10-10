@@ -64,6 +64,17 @@ que ya está en el spec o en `openspec/specs/`.
   `STALE_AFTER_SECONDS`. La migración `d4a8e1b5c602` reemplaza los índices del canal y la
   consulta del canal cuenta las reviews con un `LEFT JOIN LATERAL` (EXPLAIN con 60 000 changes:
   de ~58 ms a <1 ms).
+- `change-review`, `review-retry` y `stale-reviews` (change `recover-review-runs`): si una
+  activity `run_review` agota sus 3 intentos por un fallo de infraestructura, el workflow
+  ejecuta la activity compensatoria `record_review_infrastructure_failure` y guarda una review
+  `failed` con un mensaje fijo (nunca el texto de la excepción), idempotente por
+  `(change, agent, run)`; así el change pasa a `failed`/`partial_failed` y es reintentable. Un
+  error de configuración no reintentable (agente desconocido) sigue sin registrar nada. El cambio
+  va bajo `workflow.patched("compensate-infra-failure")` para no romper ejecuciones en vuelo.
+  `run_review` emite latidos cada 10 s mientras el agente trabaja (el `heartbeat_timeout` es de
+  30 s). `changes.run_started_at` (migración `f6c4d8a2b915`, rellena desde `created_at`) lo fija la
+  ingesta y lo refresca `advance_run`; `stale` se mide desde ahí, de modo que un reintento sobre
+  un change antiguo no nace `stale`.
 - `local-projects` (change `add-local-projects-backend`, apagado por defecto con
   `LOCAL_PROJECTS_ENABLED`): `POST /projects` da de alta un repo desde su carpeta (el slug sale de
   `origin`, `owner/repo`, o del nombre de la carpeta) e instala los hooks `post-commit` y
@@ -79,6 +90,20 @@ que ya está en el spec o en `openspec/specs/`.
   `DELETE`. **Seguridad:** quien tenga `INGEST_TOKEN` hace que la API escriba hooks en repos del
   usuario; solo debe activarse con la API en la máquina del usuario y nunca en un contenedor ni
   expuesta (ver su `design.md`).
+- `change-ingestion`, `local-projects` y `change-events` (change `harden-ingest-and-hooks`):
+  `POST /ingest/commit` y `/ingest/pr` responden 413 si el cuerpo supera `MAX_INGEST_BODY_BYTES`
+  (`entrypoints/api/body_limit.py`, ASGI puro: por `Content-Length` sin leer nada o contando el flujo;
+  responde antes que el limitador y el token y es el más interno de los tres middlewares, así que
+  lleva `X-Request-ID`); el truncado del diff a `MAX_DIFF_CHARS` sigue siendo el límite de negocio.
+  El hook no sigue redirecciones (un 3xx es un fallo silencioso), de modo que el token no sale del
+  host de la URL configurada. `GET /changes/{id}/events` ordena por `(created_at, id)`.
+- `change-queries` / `service-health` (change `dynamic-agents-and-review-summaries`): cada
+  elemento del canal lleva `reviews`, una lista ligera (`agent`, `status`, `score`, `duration_ms`,
+  `run`) solo del `run` actual, obtenida con **una** consulta adicional por página y sin las
+  columnas pesadas (`ReviewBrief` en `application/read_models.py`); `GET /health/dependencies`
+  añade `agent_names` (de `AGENT_NAMES`) para que la UI no suponga «Claude y Codex». El frontend
+  pide el detalle completo al abrir «Ver respuestas» y muestra del detalle solo el run actual, con
+  los anteriores colapsados.
 
 ## Variables de entorno
 
@@ -87,6 +112,7 @@ que ya está en el spec o en `openspec/specs/`.
 | `INGEST_TOKEN` | (obligatoria) | Secreto de ingesta y de `POST /changes/{id}/retry` |
 | `OPERATOR_TOKEN` | sin configurar | Habilita `GET /reviews/{id}/raw-output` (distinto de `INGEST_TOKEN`, 16+ caracteres); sin él responde 404 |
 | `DATABASE_URL`, `TEMPORAL_ADDRESS`, `AGENT_NAMES`, `MAX_DIFF_CHARS` | ver `config.py` | Conexiones y límites base |
+| `MAX_INGEST_BODY_BYTES` | `1500000` | Tamaño máximo del cuerpo de `POST /ingest/commit` y `/ingest/pr` (413 si lo supera); protege la memoria y es independiente de `MAX_DIFF_CHARS` |
 | `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes `esquema://host[:puerto]` separados por comas, p. ej. `http://localhost:5173`; no admite `*` |
 | `RATE_LIMIT_REQUESTS` | `300` | Peticiones por IP y ventana en ingesta y reintento; `0` lo desactiva |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Ventana deslizante del límite |

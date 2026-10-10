@@ -56,9 +56,10 @@ El token es un secreto compartido (`INGEST_TOKEN`); la API escucha solo en `127.
 | --- | --- | --- |
 | `INGEST_TOKEN` | (obligatoria) | Token de ingesta y de reintento de reviews |
 | `OPERATOR_TOKEN` | sin configurar | Descarga de la salida cruda de una review (`X-Operator-Token`); distinto de `INGEST_TOKEN`, 16+ caracteres |
+| `MAX_INGEST_BODY_BYTES` | `1500000` | Tamaño máximo del cuerpo de `POST /ingest/commit` y `/ingest/pr` (413 si lo supera); el diff además se trunca a `MAX_DIFF_CHARS` |
 | `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes del navegador permitidos, separados por comas (`http://localhost:5173`); no admite `*` |
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `300` / `60` | Límite por IP de `POST /ingest/*` y `/changes/{id}/retry` (429 con `Retry-After`); `0` lo desactiva. Es en memoria de un proceso |
-| `STALE_AFTER_SECONDS` | `1800` | Un change `pending`/`running` más antiguo se marca `stale` (solo diagnóstico) |
+| `STALE_AFTER_SECONDS` | `1800` | Un change `pending`/`running` cuyo `run` actual empezó hace más se marca `stale` (solo diagnóstico) |
 | `LOCAL_PROJECTS_ENABLED` | `false` | Habilita añadir proyectos desde carpetas locales (instala hooks de git). Solo con la API en tu máquina, no en contenedor; apagado, esos endpoints dan 404 |
 | `INGEST_URL` | `http://127.0.0.1:8000` | Dónde envían los hooks los commits (ajústala si usas otro puerto) |
 | `HOOK_ENV_PATH` | `~/.config/duelo/hook.env` | Fichero 0600 con la URL y el token que leen los hooks |

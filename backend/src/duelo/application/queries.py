@@ -68,7 +68,7 @@ async def list_changes(
     page = [
         replace(
             row,
-            stale=is_stale(row.review_status, row.created_at, now=now, stale_after=stale_after),
+            stale=is_stale(row.review_status, row.run_started_at, now=now, stale_after=stale_after),
         )
         for row in rows[:limit]
     ]
@@ -103,7 +103,7 @@ async def get_change_detail(
         reviews=tuple(rows),
         review_status=review_status,
         findings_summary=findings,
-        stale=is_stale(review_status, change.created_at, now=now, stale_after=stale_after),
+        stale=is_stale(review_status, change.run_started_at, now=now, stale_after=stale_after),
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 from uuid import UUID
 
 from duelo.application.ports import ChangeRepository, ReviewRepository, ReviewStarter
@@ -33,12 +34,14 @@ async def retry_review(
     change_id: UUID,
     *,
     expected_agents: int,
+    now: datetime,
 ) -> Change:
     """Lanza una nueva ejecución (`run + 1`) para un change cuya review actual terminó con fallos.
 
-    Se arranca primero y se avanza `run` después: el id del workflow es determinista por run, así
-    que dos reintentos simultáneos arrancan una sola ejecución, y si el arranque falla `run` no
-    cambia y se puede volver a intentar (al revés, el change quedaría en un run sin reviews)."""
+    `now` es el inicio del nuevo `run` (reinicia el reloj de `stale`). Se arranca primero y se
+    avanza `run` después: el id del workflow es determinista por run, así que dos reintentos
+    simultáneos arrancan una sola ejecución, y si el arranque falla `run` no cambia y se puede
+    volver a intentar (al revés, el change quedaría en un run sin reviews)."""
     change = await changes.get(change_id)
     if change is None:
         raise ChangeNotFound(change_id)
@@ -50,7 +53,7 @@ async def retry_review(
 
     await starter.start(replace(change, run=change.run + 1))
 
-    advanced = await changes.advance_run(change_id, from_run=change.run)
+    advanced = await changes.advance_run(change_id, from_run=change.run, started_at=now)
     if advanced is not None:
         return advanced
     # Otro reintento avanzó `run` antes: la ejecución ya está arrancada; se devuelve el actual.

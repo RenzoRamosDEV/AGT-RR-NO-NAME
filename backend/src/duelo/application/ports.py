@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -44,10 +45,12 @@ class ChangeRepository(Protocol):
         ref; sus comodines son texto literal) cuando se indican. No incluye el diff."""
         ...
 
-    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
-        """Compare-and-swap: pasa `run` de `from_run` a `from_run + 1` y devuelve el change
-        actualizado, o `None` si `run` ya no era `from_run` (otro reintento llegó antes) o el
-        change no existe."""
+    async def advance_run(
+        self, change_id: UUID, *, from_run: int, started_at: datetime
+    ) -> Change | None:
+        """Compare-and-swap: pasa `run` de `from_run` a `from_run + 1`, guarda `started_at` como
+        inicio del nuevo `run` y devuelve el change actualizado, o `None` si `run` ya no era
+        `from_run` (otro reintento llegó antes) o el change no existe."""
         ...
 
 
@@ -86,8 +89,9 @@ class ReviewRepository(Protocol):
 
 class ChangeEventRepository(Protocol):
     async def list_for_change(self, project_id: UUID, change_id: UUID) -> list[StoredEvent]:
-        """Devuelve los eventos del outbox cuyo payload pertenece a `change_id`, en el orden en
-        que se escribieron. El payload es crudo: filtrarlo es cosa del caso de uso."""
+        """Devuelve los eventos del outbox cuyo payload pertenece a `change_id`, por orden
+        cronológico (`created_at`; el `id` desempata). El payload es crudo: filtrarlo es cosa del
+        caso de uso."""
         ...
 
 

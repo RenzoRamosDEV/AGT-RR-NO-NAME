@@ -213,6 +213,7 @@ describe("createHttpSource agent stats and health", () => {
           temporal: { status: "unavailable", latency_ms: 2000, reason: "timeout" },
           postgres: { status: "ok", latency_ms: 4, reason: null },
         },
+        agent_names: ["agent_1", "agent_2"],
       }),
     );
     const health = await createHttpSource("http://api.test", fetchMock).health();
@@ -226,7 +227,47 @@ describe("createHttpSource agent stats and health", () => {
         { name: "postgres", status: "ok", latencyMs: 4, reason: undefined },
         { name: "temporal", status: "unavailable", latencyMs: 2000, reason: "timeout" },
       ],
+      agentNames: ["agent_1", "agent_2"],
     });
+  });
+
+  it("treats a server that does not report agent_names as having none", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ status: "ok", dependencies: {} }));
+    const health = await createHttpSource("http://api.test", fetchMock).health();
+    expect(health.agentNames).toEqual([]);
+  });
+
+  it("maps the light reviews of the channel listing, keeping the real agent names", async () => {
+    // Origin: with the real API «Ver respuestas» was empty and `agent_1` was shown as Claude.
+    const brief = { agent: "agent_1", status: "failed", score: null, duration_ms: 7, run: 2 };
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ items: [{ ...summary, reviews: [brief] }], next_cursor: null }),
+    );
+    const page = await createHttpSource("http://api.test", fetchMock).changes("demo");
+    expect(page.items[0].reviews).toEqual([
+      {
+        id: `${summary.id}:agent_1:2`,
+        agent: "agent_1",
+        status: "failed",
+        run: 2,
+        score: null,
+        durationMs: 7,
+        partial: true,
+      },
+    ]);
+  });
+
+  it("does not treat the full reviews of the detail as partial", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        ...summary,
+        diff: "d",
+        reviews: [{ id: "r1", agent: "agent_1", status: "completed", summary: "ok", findings: [] }],
+      }),
+    );
+    const change = await createHttpSource("http://api.test", fetchMock).change("c1");
+    expect(change.reviews?.[0]?.partial).toBeUndefined();
+    expect(change.reviews?.[0]?.summary).toBe("ok");
   });
 });
 

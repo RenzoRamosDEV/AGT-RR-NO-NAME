@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 from uuid import UUID
 
-from duelo.application.read_models import ChangeCursor, ChangeSummary
+from duelo.application.read_models import ChangeCursor, ChangeSummary, ReviewBrief
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated
 from duelo.domain.review_status import ChangeReviewStatus, review_status_of_run
@@ -40,11 +41,13 @@ class FakeChangeRepository:
     async def get(self, change_id: UUID) -> Change | None:
         return self._by_id.get(change_id)
 
-    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+    async def advance_run(
+        self, change_id: UUID, *, from_run: int, started_at: datetime
+    ) -> Change | None:
         change = self._by_id.get(change_id)
         if change is None or change.run != from_run:
             return None
-        advanced = replace(change, run=from_run + 1)
+        advanced = replace(change, run=from_run + 1, run_started_at=started_at)
         self._by_id[change_id] = advanced
         self._by_natural_key[(str(change.project_id), change.kind.value, change.head_sha)] = (
             advanced
@@ -74,9 +77,8 @@ class FakeChangeRepository:
             rows = [c for c in rows if (c.created_at, c.id) < (after.created_at, after.id)]
         summaries: list[ChangeSummary] = []
         for c in rows:
-            review_status = review_status_of_run(
-                c.run, await self._reviews.list_for_change(c.id), expected_agents=expected_agents
-            )
+            stored = await self._reviews.list_for_change(c.id)
+            review_status = review_status_of_run(c.run, stored, expected_agents=expected_agents)
             if status and review_status not in status:
                 continue
             summaries.append(
@@ -94,7 +96,19 @@ class FakeChangeRepository:
                     review_status=review_status,
                     run=c.run,
                     created_at=c.created_at,
+                    run_started_at=c.run_started_at,
                     diff_summary=c.diff_summary,
+                    reviews=tuple(
+                        ReviewBrief(
+                            agent=r.agent,
+                            status=r.status,
+                            score=r.score,
+                            duration_ms=r.duration_ms,
+                            run=r.run,
+                        )
+                        for r in sorted(stored, key=lambda r: r.agent)
+                        if r.run == c.run
+                    ),
                 )
             )
         return summaries[:limit]

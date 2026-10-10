@@ -65,6 +65,7 @@ class FakeApi:
 def build_fake_api(
     *,
     max_diff_chars: int = 200_000,
+    max_ingest_body_bytes: int = 1_500_000,
     starter: FakeReviewStarter | None = None,
     operator_token: str | None = OPERATOR_TOKEN,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -75,14 +76,17 @@ def build_fake_api(
     git: FakeGitRepository | None = None,
     hooks: FakeHookInstaller | None = None,
     github: FakeGithubPrSource | None = None,
+    agent_names: list[str] | None = None,
 ) -> FakeApi:
     settings = Settings(
         ingest_token=TOKEN,
         max_diff_chars=max_diff_chars,
+        max_ingest_body_bytes=max_ingest_body_bytes,
         operator_token=operator_token,
         stale_after_seconds=stale_after_seconds,
         allowed_origins=allowed_origins or [],
         local_projects_enabled=local_projects,
+        **({"agent_names": agent_names} if agent_names else {}),
     )
     stale_after = timedelta(seconds=settings.stale_after_seconds)
     project = Project(id=uuid4(), slug=PROJECT_SLUG)
@@ -137,7 +141,7 @@ def build_fake_api(
 
     async def retry(change_id: UUID) -> Change:
         return await retry_review(
-            changes, reviews, starter, change_id, expected_agents=EXPECTED_AGENTS
+            changes, reviews, starter, change_id, expected_agents=EXPECTED_AGENTS, now=clock()
         )
 
     async def agent_stats(project_slug: str | None) -> list[AgentStats]:
@@ -176,6 +180,7 @@ def build_fake_api(
         list_change_events=list_change_events,
         get_review_raw_output=get_review_raw_output,
         readiness_checks=checks,
+        agent_names=settings.agent_names,
         rate_limiter=rate_limiter,
     )
     return FakeApi(

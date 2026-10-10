@@ -38,8 +38,9 @@ class FakeChangeEventRepository:
         self._log = log
 
     async def list_for_change(self, project_id: UUID, change_id: UUID) -> list[StoredEvent]:
-        return [
+        mine = [
             stored
             for owner, stored in self._log._rows
             if owner == project_id and stored.payload.get("change_id") == str(change_id)
         ]
+        return sorted(mine, key=lambda stored: (stored.created_at, stored.id))

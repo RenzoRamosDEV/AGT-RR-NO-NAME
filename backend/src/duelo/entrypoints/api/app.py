@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from duelo.config import Settings
+from duelo.entrypoints.api.body_limit import BodyLimitMiddleware
 from duelo.entrypoints.api.dependencies import ApiDependencies
 from duelo.entrypoints.api.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from duelo.entrypoints.api.routers.changes import router as changes_router
@@ -47,6 +48,10 @@ def create_app(
     app = FastAPI(title="Duelo API", lifespan=lifespan)
     app.state.settings = settings
     app.state.dependencies = dependencies
+    if settings is not None:
+        # El más interno de los tres: ve la petición ya con `X-Request-ID` y CORS, y responde 413
+        # antes de que lleguen el limitador y el token (dependencias de la ruta).
+        app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_ingest_body_bytes)
     if settings is not None and settings.allowed_origins:
         # Orígenes explícitos y sin credenciales: la autenticación va en cabeceras, no en cookies.
         app.add_middleware(

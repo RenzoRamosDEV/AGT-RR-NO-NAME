@@ -7,7 +7,7 @@ import httpx
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
 from duelo.domain.review import Review, ReviewResult
-from tests.fakes.api import FakeApi, build_fake_api
+from tests.fakes.api import TOKEN, FakeApi, build_fake_api
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 THRESHOLD = 1800
@@ -117,6 +117,27 @@ async def test_stale_follows_the_injected_clock() -> None:
         after = (await client.get(f"/changes/{change.id}")).json()["stale"]
 
     assert (before, after) == (False, True)
+
+
+async def test_a_retry_restarts_the_stale_clock_of_an_old_change() -> None:
+    """Regresión: `stale` se medía desde `created_at`, así que reintentar un change antiguo
+    daba un `run` nuevo ya `stale` aunque acabara de arrancar."""
+    clock = Clock(T0)
+    api = build_fake_api(clock=clock, stale_after_seconds=THRESHOLD)
+    change = await _change(api, "1", age=timedelta(days=7), clock=clock)
+    await _review(api, change, "a", fail=True)
+    await _review(api, change, "b", fail=True)
+
+    async with _client(api) as client:
+        retry = await client.post(f"/changes/{change.id}/retry", headers={"X-Ingest-Token": TOKEN})
+        right_after = (await client.get(f"/changes/{change.id}")).json()
+        clock.now += timedelta(seconds=THRESHOLD + 1)
+        later = (await client.get(f"/changes/{change.id}")).json()
+
+    assert retry.status_code == 202, retry.text
+    assert (right_after["run"], right_after["review_status"]) == (2, "pending")
+    assert right_after["stale"] is False  # empezó ahora, aunque el change tenga 7 días
+    assert later["stale"] is True  # y sigue siendo diagnosticable pasado el umbral
 
 
 async def test_stale_is_only_a_diagnostic_it_does_not_touch_the_change() -> None:
