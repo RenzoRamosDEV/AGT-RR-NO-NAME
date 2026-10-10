@@ -250,7 +250,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic-settings", specifier = ">=2.7" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "temporalio", specifier = ">=1.8" },
+    { name = "temporalio", specifier = ">=1.34" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 

@@ -21,6 +21,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Duelo</title>
     <meta name="color-scheme" content="dark light" />
+    <!-- Browser chrome colour per system scheme; the manifest link is injected by vite-plugin-pwa at build. -->
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <script>
       // Sets the theme before first paint so there is no flash of the other one.
       (function () {

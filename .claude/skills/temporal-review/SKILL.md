@@ -62,6 +62,24 @@ los errores se descubren tarde y en producción: revisa con más rigor que en c�
   (`ALLOW_DUPLICATE_FAILED_ONLY`: una ejecución completada no se relanza, una fallida sí).
 - El arranque desde la API ocurre **después** de persistir y es reintentable.
 
+## Operación, historial y constantes
+
+- **Task queues por constante:** `platform` y `agents` salen de `application/task_queues.py`;
+  un literal nuevo (`task_queue="agents"`) en `src/` es hallazgo: una errata deja tareas que
+  nadie recoge sin ningún error.
+- **Política de reintentos compartida:** los valores de `RetryPolicy` del workflow vienen de
+  `application/review_timeouts.py` (3 intentos, 1 s, coeficiente 2, máximo 1 min). Una
+  `RetryPolicy` nueva con valores sueltos, o sin `maximum_interval`, es hallazgo.
+- **Historial acotado:** un workflow nuevo con bucle, señales o timers repetidos debe tener
+  Continue-As-New guiado por `workflow.info().is_continue_as_new_suggested()` o justificar que
+  queda muy por debajo de 10 240 eventos; los de Duelo duran minutos y no lo necesitan.
+- **Versionado declarado:** cada `@workflow.defn` lleva `versioning_behavior=AUTO_UPGRADE`
+  (`docs/adr/0007`); un workflow nuevo sin él es hallazgo.
+- **Apagado y métricas:** el worker se para por `SIGTERM`/`SIGINT` con `graceful_shutdown_timeout`
+  (`WORKER_SHUTDOWN_GRACE_SECONDS`) y expone métricas con `TEMPORAL_METRICS_ADDRESS`; un cambio en
+  `worker.py` que vuelva a esperar sin señales, o que abra el puerto de métricas sin la variable,
+  es hallazgo. Las alertas mínimas están en `docs/temporal-buenas-practicas.md`.
+
 ## Tests esperados
 
 `tests/integration/workflows/` y `tests/integration/recovery/` con

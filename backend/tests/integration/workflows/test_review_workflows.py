@@ -17,6 +17,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from duelo.adapters.agents.fake import FakeAgent
+from duelo.application.task_queues import AGENTS_TASK_QUEUE, PLATFORM_TASK_QUEUE
 from duelo.workflows.dto import ReviewChangeInput, ReviewCommitInput
 from duelo.workflows.review_change import ReviewChangeWorkflow
 from duelo.workflows.review_commit import ReviewCommitWorkflow
@@ -35,12 +36,12 @@ async def _run_with_workers[T](
     async with (
         Worker(
             env.client,
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
             workflows=[ReviewChangeWorkflow, ReviewCommitWorkflow],
         ),
         Worker(
             env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     ):
@@ -59,7 +60,7 @@ async def test_two_agents_produce_two_reviews(
             ReviewChangeWorkflow.run,
             ReviewChangeInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=f"review-{change.id}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
 
     results = await _run_with_workers(temporal_env, session_factory, agents, _run)
@@ -89,7 +90,7 @@ async def test_partial_failure_does_not_lose_the_successful_review(
             ReviewChangeWorkflow.run,
             ReviewChangeInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=f"review-{change.id}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
 
     results = await _run_with_workers(temporal_env, session_factory, agents, _run)
@@ -114,7 +115,7 @@ async def test_review_commit_workflow_starts_the_child_and_returns_its_result(
             ReviewCommitWorkflow.run,
             ReviewCommitInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=f"commit-{change.id}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
 
     results = await _run_with_workers(temporal_env, session_factory, agents, _run)
@@ -136,12 +137,15 @@ async def test_starting_same_workflow_id_twice_while_running_is_rejected(
     async def _run(env: WorkflowEnvironment) -> bool:
         workflow_id = f"commit-{change.id}"
         await env.client.start_workflow(
-            ReviewCommitWorkflow.run, commit_input, id=workflow_id, task_queue="platform"
+            ReviewCommitWorkflow.run, commit_input, id=workflow_id, task_queue=PLATFORM_TASK_QUEUE
         )
 
         try:
             await env.client.start_workflow(
-                ReviewCommitWorkflow.run, commit_input, id=workflow_id, task_queue="platform"
+                ReviewCommitWorkflow.run,
+                commit_input,
+                id=workflow_id,
+                task_queue=PLATFORM_TASK_QUEUE,
             )
         except WorkflowAlreadyStartedError:
             return True
@@ -165,7 +169,7 @@ async def test_run_number_is_propagated_to_the_persisted_reviews(
             ReviewCommitWorkflow.run,
             ReviewCommitInput(change_id=str(change.id), agent_names=BOTH_AGENTS, run=2),
             id=f"commit-{change.id}-r2",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
 
     await _run_with_workers(temporal_env, session_factory, agents, _run)
@@ -189,7 +193,7 @@ async def test_unknown_agent_fails_without_retries_and_persists_nothing(
                 ReviewChangeWorkflow.run,
                 ReviewChangeInput(change_id=str(change.id), agent_names=["ghost"]),
                 id=f"review-{change.id}",
-                task_queue="platform",
+                task_queue=PLATFORM_TASK_QUEUE,
             )
         return exc_info.value
 

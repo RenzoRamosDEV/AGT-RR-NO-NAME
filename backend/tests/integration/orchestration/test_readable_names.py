@@ -19,6 +19,7 @@ from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
 from duelo.adapters.orchestration.temporal_review_starter import TemporalReviewStarter, workflow_id
 from duelo.application.ports import ReviewStartError
 from duelo.application.review_requests import ReviewCommitInput
+from duelo.application.task_queues import AGENTS_TASK_QUEUE, PLATFORM_TASK_QUEUE
 from duelo.application.workflow_naming import legacy_parent_workflow_id
 from duelo.domain.change import Change, ChangeKind
 from duelo.workflows.review_change import ReviewChangeWorkflow
@@ -73,12 +74,12 @@ async def _workers(env: WorkflowEnvironment, session_factory: async_sessionmaker
     async with (
         Worker(
             env.client,
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
             workflows=[ReviewChangeWorkflow, ReviewCommitWorkflow],
         ),
         Worker(
             env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     ):
@@ -161,7 +162,7 @@ async def _start_legacy(env: WorkflowEnvironment, change: Change) -> str:
         "ReviewCommitWorkflow",
         ReviewCommitInput(change_id=str(change.id), agent_names=AGENTS, run=change.run),
         id=legacy_id,
-        task_queue="platform",
+        task_queue=PLATFORM_TASK_QUEUE,
     )
     return legacy_id
 

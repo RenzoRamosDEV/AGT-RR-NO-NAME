@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from temporalio import workflow
+from temporalio.common import VersioningBehavior
 
 from duelo.application.workflow_naming import (
     child_workflow_id,
@@ -16,7 +17,8 @@ from duelo.workflows.dto import (
 from duelo.workflows.review_change import READABLE_PATCH, ReviewChangeWorkflow
 
 
-@workflow.defn
+# Auto-Upgrade, como el hijo: los cambios de comandos van bajo `workflow.patched` (docs/adr/0007).
+@workflow.defn(versioning_behavior=VersioningBehavior.AUTO_UPGRADE)
 class ReviewCommitWorkflow:
     """Padre: arranca `ReviewChangeWorkflow` como hijo una vez para un `change_id` dado.
 

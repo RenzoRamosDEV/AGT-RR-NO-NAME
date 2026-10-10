@@ -26,6 +26,14 @@ class WorkerSettings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://duelo:duelo@localhost:5432/duelo"
     temporal_address: str = "localhost:7233"
+    # Namespace de Temporal; la API y el worker de un mismo entorno deben usar el mismo.
+    temporal_namespace: str = "default"
+    # `host:puerto` donde el worker expone las métricas del SDK en formato Prometheus (`/metrics`);
+    # sin valor no abre ningún puerto.
+    temporal_metrics_address: str | None = None
+    # Al recibir SIGTERM/SIGINT, segundos que el worker espera a las activities en curso antes de
+    # cancelarlas.
+    worker_shutdown_grace_seconds: float = Field(default=30.0, ge=0)
     # Lista separada por comas en el entorno: AGENT_NAMES=agent_1,agent_2
     agent_names: Annotated[list[str], NoDecode] = ["agent_1", "agent_2"]
 

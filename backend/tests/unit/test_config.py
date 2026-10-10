@@ -443,3 +443,35 @@ def test_the_reachability_settings_reject_values_out_of_range(
 
     with pytest.raises(ValidationError):
         Settings()  # type: ignore[call-arg]
+
+
+def test_worker_operation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("TEMPORAL_NAMESPACE", "TEMPORAL_METRICS_ADDRESS", "WORKER_SHUTDOWN_GRACE_SECONDS"):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = WorkerSettings()
+
+    assert settings.temporal_namespace == "default"
+    assert settings.temporal_metrics_address is None
+    assert settings.worker_shutdown_grace_seconds == 30.0
+
+
+def test_worker_operation_values_are_read_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TEMPORAL_NAMESPACE", "staging")
+    monkeypatch.setenv("TEMPORAL_METRICS_ADDRESS", "127.0.0.1:9464")
+    monkeypatch.setenv("WORKER_SHUTDOWN_GRACE_SECONDS", "5")
+
+    settings = WorkerSettings()
+
+    assert settings.temporal_namespace == "staging"
+    assert settings.temporal_metrics_address == "127.0.0.1:9464"
+    assert settings.worker_shutdown_grace_seconds == 5.0
+
+
+def test_shutdown_grace_cannot_be_negative(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WORKER_SHUTDOWN_GRACE_SECONDS", "-1")
+
+    with pytest.raises(ValidationError):
+        WorkerSettings()

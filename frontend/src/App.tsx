@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useParams } from "react-router";
 import { AsyncBoundary } from "./components/AsyncBoundary";
 import { EmptyState } from "./components/EmptyState";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { HERO } from "./components/brand";
 import { MetalButton } from "./components/fx/MetalButton";
 import { ChannelPage } from "./features/channel/ChannelPage";
@@ -70,15 +71,19 @@ function ProjectRoute() {
 
 function App() {
   return (
-    <Routes>
-      <Route element={<Shell />}>
-        <Route index element={<FirstProject />} />
-        <Route path="p/*" element={<ProjectRoute />} />
-        <Route path="stats" element={<StatsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <>
+      <Routes>
+        <Route element={<Shell />}>
+          <Route index element={<FirstProject />} />
+          <Route path="p/*" element={<ProjectRoute />} />
+          <Route path="stats" element={<StatsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+      {/* The service worker only exists in the production build; dev and tests never register it. */}
+      {import.meta.env.PROD && <UpdatePrompt />}
+    </>
   );
 }
 

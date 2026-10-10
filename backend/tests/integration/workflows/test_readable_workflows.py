@@ -28,6 +28,7 @@ from duelo.adapters.persistence.models import ProjectModel
 from duelo.adapters.persistence.project_repository import SqlAlchemyProjectRepository
 from duelo.application.ingest_change import ingest_change
 from duelo.application.review_requests import ReviewCommitInput
+from duelo.application.task_queues import AGENTS_TASK_QUEUE, PLATFORM_TASK_QUEUE
 from duelo.application.workflow_naming import child_workflow_id
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.review import Finding, ReviewResult
@@ -88,12 +89,12 @@ def _workers(
     return (
         Worker(
             env.client,
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
             workflows=[ReviewChangeWorkflow, ReviewCommitWorkflow],
         ),
         Worker(
             env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     )
@@ -277,7 +278,7 @@ async def test_an_execution_started_without_presentation_data_keeps_the_old_chil
             "ReviewCommitWorkflow",
             ReviewCommitInput(change_id=str(change.id), agent_names=AGENTS),
             id="parent-sin-datos",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
         legacy_child = temporal_env.client.get_workflow_handle(f"review-{change.id}-r1")
         description = await legacy_child.describe()
@@ -298,19 +299,21 @@ async def test_an_execution_recorded_before_the_readable_names_still_replays(
     async with (
         Worker(
             temporal_env.client,
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
             workflows=[
                 ReviewCommitWorkflowBeforeReadableNames,
                 ReviewChangeWorkflowBeforeCompensation,
             ],
         ),
-        Worker(temporal_env.client, task_queue="agents", activities=[activities.run_review]),
+        Worker(
+            temporal_env.client, task_queue=AGENTS_TASK_QUEUE, activities=[activities.run_review]
+        ),
     ):
         await temporal_env.client.execute_workflow(
             "ReviewCommitWorkflow",
             ReviewCommitInput(change_id=str(change.id), agent_names=AGENTS, run=run),
             id=f"commit-antiguo-{run}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
         parent_history = await temporal_env.client.get_workflow_handle(
             f"commit-antiguo-{run}"

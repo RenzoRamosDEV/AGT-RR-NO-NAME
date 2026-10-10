@@ -8,6 +8,7 @@ from temporalio.service import RPCError, RPCStatusCode
 from duelo.adapters.orchestration.temporal_client import LazyTemporalClient
 from duelo.application.ports import ProjectSlugs, ReviewStartError
 from duelo.application.review_requests import ReviewCommitInput
+from duelo.application.task_queues import PLATFORM_TASK_QUEUE
 from duelo.application.workflow_naming import (
     FALLBACK_REPO,
     legacy_parent_workflow_id,
@@ -70,7 +71,7 @@ class TemporalReviewStarter:
                     title=safe_title(change.title),
                 ),
                 id=workflow_id(change, slug),
-                task_queue="platform",
+                task_queue=PLATFORM_TASK_QUEUE,
                 # Una review completada no se relanza al reenviar el commit (gastaría a los
                 # agentes otra vez); una que falló o se canceló sí puede reintentarse.
                 id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,

@@ -1,4 +1,5 @@
-"""Plazos de una review, en un solo sitio: el workflow y la configuración no se desincronizan."""
+"""Plazos y reintentos de una review, en un solo sitio: el workflow y la configuración no se
+desincronizan."""
 
 from __future__ import annotations
 
@@ -14,3 +15,11 @@ AGENT_TIMEOUT_MARGIN = timedelta(seconds=30)
 
 # Máximo de `AGENT_TIMEOUT_SECONDS`.
 MAX_AGENT_TIMEOUT_SECONDS = (RUN_REVIEW_START_TO_CLOSE - AGENT_TIMEOUT_MARGIN).total_seconds()
+
+# Reintentos de `run_review` y de su compensación (la `RetryPolicy` se construye en el workflow,
+# `application/` no depende de Temporal). Tres intentos en total con backoff exponencial, nunca
+# más de un minuto entre dos: un fallo de infraestructura se nota en minutos, no en horas.
+RUN_REVIEW_RETRY_MAX_ATTEMPTS = 3
+RUN_REVIEW_RETRY_INITIAL = timedelta(seconds=1)
+RUN_REVIEW_RETRY_BACKOFF = 2.0
+RUN_REVIEW_RETRY_MAX_INTERVAL = timedelta(minutes=1)

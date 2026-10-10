@@ -4,14 +4,28 @@ import asyncio
 from datetime import timedelta
 
 from temporalio import workflow
-from temporalio.common import RetryPolicy
+from temporalio.common import RetryPolicy, VersioningBehavior
 from temporalio.exceptions import ActivityError, ApplicationError
 
-from duelo.application.review_timeouts import RUN_REVIEW_START_TO_CLOSE
+from duelo.application.review_timeouts import (
+    RUN_REVIEW_RETRY_BACKOFF,
+    RUN_REVIEW_RETRY_INITIAL,
+    RUN_REVIEW_RETRY_MAX_ATTEMPTS,
+    RUN_REVIEW_RETRY_MAX_INTERVAL,
+    RUN_REVIEW_START_TO_CLOSE,
+)
+from duelo.application.task_queues import AGENTS_TASK_QUEUE
 from duelo.workflows.dto import ReviewChangeInput, RunReviewInput, RunReviewResult
 from duelo.workflows.review_details import render_details
 
-RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1))
+# Cambiar estas opciones es seguro para las ejecuciones en vuelo: no altera los comandos del
+# historial, solo cómo Temporal reprograma la activity.
+RETRY = RetryPolicy(
+    maximum_attempts=RUN_REVIEW_RETRY_MAX_ATTEMPTS,
+    initial_interval=RUN_REVIEW_RETRY_INITIAL,
+    backoff_coefficient=RUN_REVIEW_RETRY_BACKOFF,
+    maximum_interval=RUN_REVIEW_RETRY_MAX_INTERVAL,
+)
 
 # Marca del historial: las ejecuciones que ya estaban en vuelo antes de existir la compensación
 # se reproducen sin ella (no tienen el marcador), así que su replay no se rompe.
@@ -22,7 +36,9 @@ COMPENSATE_PATCH = "compensate-infra-failure"
 READABLE_PATCH = "readable-workflow-names"
 
 
-@workflow.defn
+# Auto-Upgrade: una ejecución en vuelo pasa al código nuevo, que debe reproducir su historial;
+# por eso cada cambio de comandos va bajo `workflow.patched` (docs/adr/0007).
+@workflow.defn(versioning_behavior=VersioningBehavior.AUTO_UPGRADE)
 class ReviewChangeWorkflow:
     """Hijo: ejecuta un agente por cada nombre en `agent_names`, en paralelo (task queue
     `agents`). El fallo de un agente no bloquea al otro - cada activity `run_review`
@@ -69,7 +85,7 @@ class ReviewChangeWorkflow:
             reviewed: RunReviewResult = await workflow.execute_activity(
                 "run_review",
                 run_input,
-                task_queue="agents",
+                task_queue=AGENTS_TASK_QUEUE,
                 result_type=RunReviewResult,
                 start_to_close_timeout=RUN_REVIEW_START_TO_CLOSE,
                 heartbeat_timeout=timedelta(seconds=30),
@@ -86,7 +102,7 @@ class ReviewChangeWorkflow:
             compensated: RunReviewResult = await workflow.execute_activity(
                 "record_review_infrastructure_failure",
                 run_input,
-                task_queue="agents",
+                task_queue=AGENTS_TASK_QUEUE,
                 result_type=RunReviewResult,
                 start_to_close_timeout=timedelta(minutes=1),
                 retry_policy=RETRY,

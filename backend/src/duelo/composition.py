@@ -61,7 +61,7 @@ from duelo.entrypoints.hook import default_env_path
 def build_api_dependencies(settings: Settings) -> ApiDependencies:
     engine = create_engine(settings.database_url)
     session_factory = create_session_factory(engine)
-    temporal = LazyTemporalClient(settings.temporal_address)
+    temporal = LazyTemporalClient(settings.temporal_address, settings.temporal_namespace)
 
     projects = SqlAlchemyProjectRepository(session_factory)
     starter = TemporalReviewStarter(temporal, settings.agent_names, projects)

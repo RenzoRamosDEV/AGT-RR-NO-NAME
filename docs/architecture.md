@@ -18,6 +18,8 @@ que ya está en el spec o en `openspec/specs/`.
 - [0001 - Temporal frente a alternativas](adr/0001-temporal-vs-alternativas.md): por qué
   Temporal orquesta las reviews en vez de una cola simple, DBOS, Hatchet, Inngest o
   Prefect.
+- [0007 - Versionado de workflows](adr/0007-versionado-de-workflows.md): parches
+  (`workflow.patched`) con replay tests y semántica Auto-Upgrade, en vez de Worker Versioning.
 
 ## Capacidades activas (OpenSpec)
 
@@ -208,6 +210,21 @@ que ya está en el spec o en `openspec/specs/`.
   arranca»: solo falla con un API antiguo y uno nuevo a la vez (drenar los productores antiguos al
   desplegar).
 
+## Operación del worker
+
+- **Apagado ordenado.** `SIGTERM` o `SIGINT` paran `duelo.worker` sin matarlo: deja de aceptar
+  tareas, espera `WORKER_SHUTDOWN_GRACE_SECONDS` a las reviews en curso y cancela las que sigan
+  (la cancelación mata el grupo de procesos del CLI; no se persiste nada y Temporal reintenta esa
+  review, gastando un intento de los 3, cuando vuelve un worker). Sale con código 0.
+- **Métricas.** Con `TEMPORAL_METRICS_ADDRESS=127.0.0.1:9464` el worker sirve en `/metrics` las
+  métricas del SDK. Alertas mínimas recomendadas (umbrales orientativos para un worker local):
+  `temporal_activity_schedule_to_start_latency` > 60 s sostenido (las reviews esperan: no hay
+  worker `agents` o `AGENT_MAX_CONCURRENCY` es corto), `temporal_workflow_task_schedule_to_start_latency`
+  > 5 s (worker `platform` saturado o caído), `temporal_worker_task_slots_available{worker_type="ActivityWorker"}`
+  = 0 sostenido (todos los CLI ocupados), `temporal_request_failure` creciente (el servidor de
+  Temporal no responde). Ver `docs/temporal-buenas-practicas.md` para la matriz completa frente al
+  estándar de buenas prácticas, incluida la decisión de versionado (`docs/adr/0007`).
+
 ## Variables de entorno
 
 | Variable | Por defecto | Qué hace |
@@ -216,6 +233,9 @@ que ya está en el spec o en `openspec/specs/`.
 | `OPERATOR_TOKEN` | sin configurar | Habilita `GET /reviews/{id}/raw-output` (distinto de `INGEST_TOKEN`, 16+ caracteres); sin él responde 404 |
 | `DATABASE_URL`, `TEMPORAL_ADDRESS`, `AGENT_NAMES`, `MAX_DIFF_CHARS` | ver `config.py` | Conexiones y límites base. `AGENT_NAMES=claude,codex` activa los CLI reales y debe ser igual en la API y en el worker |
 | `AGENT_TIMEOUT_SECONDS` / `AGENT_MAX_CONCURRENCY` | `240` / `2` | Worker: plazo (máximo 270 s: activity de 300 − 30) y CLI simultáneos |
+| `TEMPORAL_NAMESPACE` | `default` | Namespace de Temporal; igual en la API y en el worker de un mismo entorno |
+| `WORKER_SHUTDOWN_GRACE_SECONDS` | `30` | Worker: al recibir `SIGTERM`/`SIGINT`, segundos que espera a las activities en curso antes de cancelarlas (ver «Operación del worker») |
+| `TEMPORAL_METRICS_ADDRESS` | sin configurar | Worker: `host:puerto` donde expone las métricas del SDK en `/metrics` (Prometheus); sin ella no abre ningún puerto |
 | `CLAUDE_BIN`, `CODEX_BIN`, `CLAUDE_MODEL`, `CODEX_MODEL`, `CLAUDE_MAX_BUDGET_USD` | PATH / el del CLI / `2` | Worker: ruta de los ejecutables, modelo y tope de gasto de Claude Code |
 | `MAX_INGEST_BODY_BYTES` | `1500000` | Tamaño máximo del cuerpo de `POST /ingest/commit` y `/ingest/pr` (413 si lo supera); protege la memoria y es independiente de `MAX_DIFF_CHARS` |
 | `ALLOWED_ORIGINS` | vacía (sin CORS) | Orígenes `esquema://host[:puerto]` separados por comas, p. ej. `http://localhost:5173`; no admite `*` |
