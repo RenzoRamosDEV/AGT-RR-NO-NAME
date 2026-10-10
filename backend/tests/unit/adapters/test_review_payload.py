@@ -209,3 +209,48 @@ def test_a_message_exactly_at_the_limit_is_not_cut() -> None:
     payload = _valid(findings=[{"severity": "bug", "file": "a", "line": 1, "message": message}])
 
     assert parse_review_payload(payload).findings[0].message == message
+
+
+# --- prompt versionado --------------------------------------------------------------------------
+
+
+def test_the_instructions_come_from_the_versioned_prompt_file() -> None:
+    from duelo.adapters.agents.review_payload import PROMPT_VERSION, PROMPTS_DIR
+
+    assert PROMPT_VERSION == "v2"
+    on_disk = (PROMPTS_DIR / "v2.md").read_text(encoding="utf-8")
+    prompt = build_prompt(_change(), nonce="N1")
+
+    assert prompt.startswith(on_disk.replace("{mark}", "N1"))
+    assert "{mark}" not in prompt
+    assert "{mark}" in on_disk  # el fichero es el que lleva el marcador, no el código
+
+
+def test_injected_instructions_replace_the_file() -> None:
+    prompt = build_prompt(_change(), nonce="N1", instructions="Revisa esto: {mark}\n")
+
+    assert prompt.startswith("Revisa esto: N1\n")
+    assert "Eres un revisor" not in prompt
+
+
+def test_a_missing_prompt_version_fails_naming_the_path() -> None:
+    from duelo.adapters.agents.review_payload import PROMPTS_DIR, load_instructions
+
+    with pytest.raises(FileNotFoundError, match=str(PROMPTS_DIR / "v99.md")):
+        load_instructions("v99")
+
+
+def test_v2_carries_the_guardian_criteria() -> None:
+    prompt = build_prompt(_change(), nonce="N1")
+    instructions = prompt.split("Datos del cambio")[0]
+
+    # Prioridades, evidencia, rúbrica y severidades: lo que exige la spec `review-criteria`.
+    assert "Errores reales" in instructions
+    assert "Evidencia antes de reportar" in instructions
+    assert "Intenta refutarlo" in instructions
+    for band in ("0–3", "4–6", "7–10"):
+        assert band in instructions
+    for severity in SEVERITIES:
+        assert f"`{severity}`:" in instructions
+    # Y la delimitación de los datos sigue precediendo a los datos.
+    assert instructions.index("DATOS NO CONFIABLES") < prompt.index("<<<DATOS-N1")

@@ -10,31 +10,17 @@ Solo se añaden tests que aportan valor; la estrategia, las capas y el mapa del 
 Receta rápida: `just test-unit` (segundos, sin Docker) mientras desarrollas y `just ci`
 antes de cada push.
 
-## Revisión con Code Guardian
+## Revisión de código
 
-El agente `code-guardian` (`.claude/agents/`) revisa commits, ramas y PRs en solo lectura y
-emite un informe breve: estado (`APROBADO`, `REQUIERE CAMBIOS`, `BLOQUEADO`), hallazgos
-agrupados por dificultad del arreglo (`FÁCIL`, `MEDIO`, `DIFÍCIL`, `RECOMENDACIÓN`) con la
-skill que detectó cada uno, y un resumen con verificaciones y siguiente paso.
-Usa catorce skills (`.claude/skills/`): las de análisis (`bug-detection`, `security-audit`,
-`architecture-review`, `test-coverage`, `performance-review`, `safe-refactoring`,
-`dependency-and-config-audit`, `data-and-api-contracts`, `temporal-review`,
-`frontend-review`) y las transversales (`diff-review`,
-`change-hygiene`, `finding-verification`, `review-report`).
+La revisión de commits es cosa del producto, no de un agente de Claude Code: los dos agentes
+de Duelo (Claude Code y Codex) revisan cada commit con el **mismo prompt versionado**,
+`prompts/review/v2.md` (criterio: errores reales > seguridad > regresiones > tests > mejoras;
+evidencia antes de reportar; nota 0–3 / 4–6 / 7–10 según el estado del cambio; severidades
+`bug`, `risk`, `improvement`, `nit`). Cambiar el criterio es crear `v{n+1}.md`, nunca editar
+una versión ya usada en reviews guardadas (spec `review-criteria`).
 
-```text
-/guardian                    # último commit de la rama
-/guardian HEAD~3..HEAD       # un rango
-/guardian 42                 # un Pull Request
-/guardian backend/src/duelo/application
-```
-
-Úsalo antes de cada push y de abrir un PR. Propone, no edita: no tiene `Edit`/`Write` y un
-hook (`.claude/hooks/guardian-readonly.py`, con tests) bloquea los comandos `Bash` que
-escriben. Los hooks de un agente de proyecto exigen aceptar la confianza del workspace.
-Las correcciones las decides tú.
-Los hallazgos llevan confianza (`CONFIRMADO`/`PROBABLE`/`HIPÓTESIS`); solo un `BLOQUEANTE`
-confirmado bloquea.
+En `.claude/` solo quedan las skills de OpenSpec. Antes de un push o de un PR, la verificación
+es determinista: `just ci`.
 
 ## Antes de tocar código
 

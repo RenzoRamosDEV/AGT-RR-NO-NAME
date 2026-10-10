@@ -147,8 +147,10 @@ que ya está en el spec o en `openspec/specs/`.
   entorno sin secretos. Sin shell Codex no lee ficheros, así que revisa solo el diff y trabaja siempre en un directorio
   temporal vacío; Claude sí usa la carpeta del proyecto (el puerto `ProjectPaths` resuelve la ruta
   sin tocar los DTOs de Temporal) o un directorio temporal vacío. El prompt va por la entrada estándar
-  (el diff se trata como dato no confiable, delimitado con una marca aleatoria y recortado a 60 000
-  caracteres) y la salida JSON se valida contra un esquema (`adapters/agents/review_payload.py`); una
+  (las instrucciones son el fichero versionado `prompts/review/v2.md`, el mismo para los dos agentes
+  — capacidad `review-criteria`, change `review-prompt-guardian-criteria`: prioridades, evidencia
+  antes de reportar, rúbrica de la nota 0–3 / 4–6 / 7–10 y severidades definidas; el diff se trata
+  como dato no confiable, delimitado con una marca aleatoria y recortado a 60 000 caracteres) y la salida JSON se valida contra un esquema (`adapters/agents/review_payload.py`); una
   salida truncada por el límite de lectura es un fallo, nunca se parsea como completa. El CLI no
   recibe `INGEST_TOKEN`, `OPERATOR_TOKEN`, `DATABASE_URL` ni claves de API. Cada ejecución tiene
   plazo propio (`AGENT_TIMEOUT_SECONDS`, como máximo el de la activity menos 30 s:

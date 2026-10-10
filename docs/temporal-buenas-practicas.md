@@ -16,7 +16,7 @@ Leyenda: **Cumple** · **No aplica** (con motivo) · **Diferido** (con destino).
 | WF-3 Sin efectos en el workflow | Cumple | Toda persistencia y los CLI viven en `workflows/activities.py` |
 | WF-4 Cambios de comandos bajo versionado | Cumple | `workflow.patched("compensate-infra-failure")`, `("readable-workflow-names")`; regla en `docs/adr/0007` |
 | WF-5 Id de negocio determinista y política de reuso | Cumple | `application/workflow_naming.py`, `ALLOW_DUPLICATE_FAILED_ONLY` en `adapters/orchestration/temporal_review_starter.py` |
-| WF-6 Tipo de versionado declarado | Cumple | `versioning_behavior=AUTO_UPGRADE` en los dos `@workflow.defn`; `docs/adr/0007` |
+| WF-6 Tipo de versionado declarado | Cumple (en el ADR) | Auto-Upgrade documentado en `docs/adr/0007` y en los comentarios de los `@workflow.defn`; no se declara al SDK porque sin Worker Versioning el servidor real lo rechaza |
 | WF-7 Continue-As-New fuera de handlers | No aplica | Sin señales ni Continue-As-New: los workflows duran minutos |
 | WF-8 Historial > 1 000 eventos ⇒ Continue-As-New | No aplica | Un padre, un hijo y dos activities: < 50 eventos |
 | WF-9 Señales/consultas por Workflow ID sin Run ID | Cumple | El starter consulta por id (`_legacy_execution_is_taken`); no hay señales |
@@ -47,7 +47,7 @@ Leyenda: **Cumple** · **No aplica** (con motivo) · **Diferido** (con destino).
 | Regla | Estado | Evidencia |
 | --- | --- | --- |
 | VER-1 Worker Versioning por defecto | No aplica (decisión) | Un worker por cola en la máquina del usuario, sin despliegues con varias versiones: parches + replay tests. `docs/adr/0007` |
-| VER-2 Pinned / Auto-Upgrade según duración | Cumple | Auto-Upgrade declarado; es la única semántica posible al reiniciar `just worker` |
+| VER-2 Pinned / Auto-Upgrade según duración | Cumple | Auto-Upgrade (documentado, no declarado); es la única semántica posible al reiniciar `just worker` |
 | VER-3 Replay tests en CI | Cumple | Historias grabadas en `tests/integration/workflows/legacy_*.py`; corren con `uv run pytest` en `.github/workflows/ci.yml` |
 | VER-4 Sin Worker Versioning en colas por worker | No aplica | No hay Worker Versioning |
 
@@ -73,6 +73,18 @@ Leyenda: **Cumple** · **No aplica** (con motivo) · **Diferido** (con destino).
 
 ## Checklist de revisión de PR
 
-Está integrado en la skill `.claude/skills/temporal-review/SKILL.md` (determinismo, versionado,
-DTOs, timeouts y heartbeats, idempotencia, constantes de cola, política de reintentos, historial,
-apagado y métricas, tests esperados).
+Al tocar `backend/src/duelo/workflows/`, `worker.py` o los adaptadores de orquestación:
+
+- [ ] ¿El workflow sigue sin I/O, reloj ni aleatorios propios (solo APIs del SDK)?
+- [ ] ¿La entrada sigue siendo un único objeto con valores por defecto en los campos nuevos?
+- [ ] ¿Cambió el orden o el número de activities, hijos o timers? → `workflow.patched` + historia
+      grabada que lo reproduzca (`docs/adr/0007`).
+- [ ] ¿Las activities siguen siendo idempotentes, con timeouts y heartbeat si son largas?
+- [ ] ¿Los errores permanentes van como `non_retryable` y los transitorios por la `RetryPolicy`
+      compartida (`application/review_timeouts.py`)?
+- [ ] ¿Las task queues salen de `application/task_queues.py` (ningún literal nuevo)?
+- [ ] ¿Un workflow nuevo con bucle o señales acota su historial (Continue-As-New) o justifica que
+      no lo necesita?
+- [ ] ¿`worker.py` sigue parándose por señal con plazo de gracia y sin abrir el puerto de métricas
+      sin la variable?
+- [ ] ¿Pasan `tests/integration/workflows` (replays incluidos) y `recovery`?

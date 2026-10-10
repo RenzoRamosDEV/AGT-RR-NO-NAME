@@ -1,0 +1,84 @@
+URGENTE: REVISAR TEMPORAL TARDÍO (reviews que se quedan en «revisando…»)
+=======================================================================
+Fecha: 2026-10-11 00:40 (hora local; Temporal registra en UTC, 2 h menos)
+Escrito por Claude Code al cerrar la sesión; sin resolver.
+
+SÍNTOMA
+-------
+En el canal RenzoRamosDEV/Duelo dos commits llevan >25 min en «Claude está revisando… /
+Codex está revisando…» y varios de los anteriores tardaron ~20 min en cerrarse. Una review
+normal tarda 5–30 s con FakeAgent/diffs pequeños y 15–105 s con los CLI reales (medido hoy:
+Codex 14 s y Claude 104 s sobre un diff de 100 KB). «Pensando» 20 min NO es normal.
+
+Workflows afectados (Temporal UI http://localhost:8080):
+  commit-renzoramosdev-duelo-7cbf08c64007-cb186f  (RUNNING desde 22:11:55 UTC)
+    hijo review-…-7cbf08c64007-cb186f-r1: 2 activities programadas a las 22:32:52;
+    UNA completó a las 22:33:25 (una review guardada); la OTRA nunca registra
+    activity_task_started ni timeout en 25 min, con un worker vivo y con huecos libres.
+  commit-renzoramosdev-duelo-d345bbe7dfbb-cb186f  (RUNNING desde 22:11:53 UTC)
+    hijo review-…-d345bbe7dfbb-cb186f-r1: workflow_task_started a las 22:33:27 y nunca
+    completed ni timed_out (pending_workflow_task state=started, attempt=1). Un workflow
+    task debería vencer a los 10 s y reprogramarse: no lo hace.
+También: 92832c1 y 0cc8c81 (merges) terminaron el workflow a las 22:32 pero el canal no
+muestra reviews; 14c3675 solo tiene la de Codex. Comprobar en la BD (tabla reviews) qué
+se guardó para esos change_id.
+
+QUÉ PASÓ HOY (cronología, UTC)
+------------------------------
+22:05  `git push` → el hook pre-push ingirió 8 commits a la vez (incluidos 3 merges y el
+       commit de la PWA con un pnpm-lock de 3 600 líneas). El worker que corría era de una
+       sesión anterior de Claude Code (código anterior al change temporal-workflow-good-
+       practices, AGENT_NAMES=claude,codex, AGENT_MAX_CONCURRENCY=2).
+22:11  Los 5 últimos workflows arrancan; 6 commits se revisan en 5–30 s cada uno.
+22:27  Maté ese worker para probar el prompt v2 (mientras tenía reviews en vuelo).
+22:28  Arranqué un worker con el código de main de entonces: ROTO contra el servidor real
+       1.26.2 — cada activación fallaba con «deployment must be set when versioning behavior
+       specified» (versioning_behavior=AUTO_UPGRADE sin deployment_config; el servidor de
+       test lo acepta, el real no). Durante 5 min ningún workflow task se completó.
+22:34  Worker reiniciado con el arreglo (change fix-workflow-versioning-declaration, en este
+       commit). Desde entonces el log del worker no muestra errores, pero los dos workflows
+       de arriba no avanzan.
+
+HIPÓTESIS (no verificadas)
+--------------------------
+1. Tareas «huérfanas»: la activity y el workflow task fueron entregados al worker roto justo
+   antes de matarlo; el servidor los considera en manos de ese worker. Debería vencer por
+   heartbeat_timeout (30 s) / workflow task timeout (10 s) y no lo hace → revisar si el
+   servidor 1.26.2 con el sticky queue del worker muerto tarda más, o si el worker nuevo
+   comparte identidad.
+2. El diff de 7cbf08c/d345bbe (grande) hace que el CLI tarde > AGENT_TIMEOUT_SECONDS (240 s)
+   y la activity reintenta 3 veces en silencio (3 × 4 min = 12 min + backoff). Pero la
+   history no muestra activity_task_failed ni timed_out, así que no cuadra del todo.
+3. Las reviews de 92832c1/0cc8c81 sin filas en el canal: ¿diff vacío de un merge → el agente
+   devuelve algo que no valida → review `failed` que el canal no lista? Mirar la tabla.
+
+CÓMO DIAGNOSTICAR (10 min)
+--------------------------
+- Scripts que usé (recrearlos si hace falta): listar RUNNING con pending_activities y
+  pending_workflow_task, y fetch_history de los 4 ids de arriba (parents e hijos).
+- Temporal UI → workflow → «Pending activities» y «Stack trace» del hijo.
+- Log del worker: arrancarlo con `AGENT_NAMES=claude,codex uv run python -m duelo.worker`
+  y mirar si recoge la activity pendiente al instante (debería).
+- BD: `select change_id, agent, run, status, duration_ms, error from reviews order by
+  created_at desc limit 20;`
+
+CÓMO DESATASCAR (si solo hace falta salir del paso)
+---------------------------------------------------
+Terminar los dos workflows en la UI de Temporal y pulsar «Reintentar» en el canal
+(POST /changes/{id}/retry con el INGEST_TOKEN): arranca run 2 con id propio.
+
+QUÉ ARREGLAR A MEDIO PLAZO
+--------------------------
+- Un test de integración contra el servidor REAL (imagen temporalio/auto-setup en
+  testcontainers): el de test (time-skipping) no valida las opciones del Worker/defn como el
+  real y por eso se coló versioning_behavior. Está anotado en docs/testing.md y en el ADR 0007.
+- Vigilar en el frontend un «revisando…» de más de AGENT_TIMEOUT_SECONDS × 3: hoy el campo
+  stale lo marca a los 1 800 s (STALE_AFTER_SECONDS); quizá bajar o avisar antes.
+- El commit 5838cd6 («prompt de review v2 … (prueba)») es un snapshot sintético que hice
+  con `git stash create` para probar el prompt v2: no está en ninguna rama, por eso sale
+  como COMMIT DESHECHO. Se puede borrar/ignorar.
+
+NOTA
+----
+El worker y la API en :8001 que corrían los había lanzado otra sesión de Claude Code; al
+cerrar esta sesión se apaga todo (worker, API, contenedores de `just dev`).

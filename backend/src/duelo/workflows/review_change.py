@@ -4,7 +4,7 @@ import asyncio
 from datetime import timedelta
 
 from temporalio import workflow
-from temporalio.common import RetryPolicy, VersioningBehavior
+from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 
 from duelo.application.review_timeouts import (
@@ -36,9 +36,11 @@ COMPENSATE_PATCH = "compensate-infra-failure"
 READABLE_PATCH = "readable-workflow-names"
 
 
-# Auto-Upgrade: una ejecución en vuelo pasa al código nuevo, que debe reproducir su historial;
-# por eso cada cambio de comandos va bajo `workflow.patched` (docs/adr/0007).
-@workflow.defn(versioning_behavior=VersioningBehavior.AUTO_UPGRADE)
+# Semántica Auto-Upgrade (docs/adr/0007): una ejecución en vuelo pasa al código nuevo, que debe
+# reproducir su historial, así que cada cambio de comandos va bajo `workflow.patched`. No se
+# declara con `versioning_behavior`: sin Worker Versioning el servidor real rechaza la activación
+# («deployment must be set when versioning behavior specified»); el de test no.
+@workflow.defn
 class ReviewChangeWorkflow:
     """Hijo: ejecuta un agente por cada nombre en `agent_names`, en paralelo (task queue
     `agents`). El fallo de un agente no bloquea al otro - cada activity `run_review`

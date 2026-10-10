@@ -22,10 +22,12 @@ minutos y tienen pocas decenas de eventos. Ya hay dos marcadores de parche
 ## Decisión
 
 1. **Semántica Auto-Upgrade.** Una ejecución en vuelo pasa al código nuevo cuando se reinicia el
-   worker; el código nuevo debe reproducir cualquier historial anterior. Se declara en los dos
-   `@workflow.defn` con `versioning_behavior=VersioningBehavior.AUTO_UPGRADE` (documenta el tipo
-   y no tiene efecto mientras el worker no use *deployment versioning*; si algún día lo usa, es la
-   semántica que queremos).
+   worker; el código nuevo debe reproducir cualquier historial anterior. **No se declara al SDK**
+   con `versioning_behavior`: sin un `deployment_config` (Worker Versioning) el servidor real
+   rechaza cada activación con «deployment must be set when versioning behavior specified»,
+   aunque el servidor de test (time-skipping) la acepte — se comprobó al revés en una primera
+   versión de este ADR y rompió las reviews. Cualquier opción nueva de `@workflow.defn` o del
+   `Worker` se valida contra el servidor real (`just dev` + `just worker`) antes de integrarla.
 2. **Cada cambio de comandos va bajo `workflow.patched("<marcador>")`** con un replay test que
    reproduce una historia grabada con el código anterior (`handle.fetch_history()` guardada en
    `tests/integration/workflows/`). Sin esa historia el cambio no se considera seguro.
@@ -40,8 +42,9 @@ minutos y tienen pocas decenas de eventos. Ya hay dos marcadores de parche
 
 ## Consecuencias
 
-- Los replay tests son parte de la suite de integración y corren en CI; la skill
-  `temporal-review` exige parche + historia grabada en cualquier PR que toque los comandos.
+- Los replay tests son parte de la suite de integración y corren en CI; el checklist de
+  `docs/temporal-buenas-practicas.md` exige parche + historia grabada en cualquier PR que toque
+  los comandos.
 - Un worker antiguo nunca convive con uno nuevo: al reiniciar `just worker` todas las
   ejecuciones en vuelo pasan al código nuevo, de ahí que *Auto-Upgrade* sea la única semántica
   posible hoy.
