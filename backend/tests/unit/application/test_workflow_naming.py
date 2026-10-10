@@ -243,3 +243,16 @@ def test_a_backtick_in_the_change_id_cannot_close_its_code_span() -> None:
     card = static_details(kind="pr", slug="a/b", sha="abc", title="t", change_id="a`b", run=1)
 
     assert "**Change:** `ab`" in card
+
+
+def test_a_secret_in_the_title_is_hidden_in_the_summary_and_the_card() -> None:
+    """El título del change (lo escribe el autor del commit) va al historial de Temporal en el
+    resumen y la ficha estáticos."""
+    title = "fix: usar token=abc123tokenvalue y sk-abcdefghijklmnop1234"
+
+    summary = static_summary("commit", "a/b", title)
+    card = static_details(kind="commit", slug="a/b", sha="abc", title=title, change_id="c", run=1)
+
+    for text in (summary, card):
+        assert "abc123tokenvalue" not in text and "sk-abcdefghijklmnop1234" not in text
+    assert summary == "commit · a/b · fix: usar token=[oculto] y [oculto]"

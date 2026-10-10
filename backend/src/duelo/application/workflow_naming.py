@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
+from duelo.application.payload_limits import redact_secrets
+
 MAX_REPO_CHARS = 60
 SHA_CHARS = 12
 PROJECT_CHARS = 6
@@ -88,10 +90,16 @@ def escape_markdown(text: str) -> str:
     return _MARKDOWN_SPECIAL.sub(r"\\\1", text.replace("&", "&amp;").replace("<", "&lt;"))
 
 
+def safe_title(title: str) -> str:
+    """Título del change listo para el historial de Temporal: una línea, acotado y sin
+    credenciales (lo escribe el autor del commit y puede contener cualquier cosa)."""
+    return one_line(redact_secrets(title), MAX_TITLE_CHARS)
+
+
 def static_summary(kind: str, slug: str, title: str) -> str:
     """Línea que la lista de Temporal muestra junto al workflow: «commit · acme/widgets · título»"""
     parts = [kind, one_line(slug, 80)]
-    clean_title = one_line(title, MAX_TITLE_CHARS)
+    clean_title = safe_title(title)
     if clean_title:
         parts.append(clean_title)
     return " · ".join(parts)
@@ -99,7 +107,7 @@ def static_summary(kind: str, slug: str, title: str) -> str:
 
 def static_details(*, kind: str, slug: str, sha: str, title: str, change_id: str, run: int) -> str:
     """Ficha en markdown del workflow (pestaña «Details» de su página en Temporal)."""
-    clean_title = one_line(title, MAX_TITLE_CHARS)
+    clean_title = safe_title(title)
     shown_title = escape_markdown(clean_title) if clean_title else "_(sin título)_"
     return "\n".join(
         [

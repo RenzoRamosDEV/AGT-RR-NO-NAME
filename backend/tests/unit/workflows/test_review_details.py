@@ -125,3 +125,16 @@ def test_what_an_agent_writes_cannot_format_the_page_or_inject_html() -> None:
     assert "\n" not in line
     assert "\\*\\*gigante\\*\\*" in line and "\\[clic\\]\\(http://evil\\)" in line
     assert "**ag\\*\\*ent**" in line
+
+
+def test_a_secret_in_a_result_is_hidden_in_the_details_even_if_it_slipped_through() -> None:
+    """Defensa en profundidad: aunque un resultado llegara sin redactar (p. ej. de otra versión),
+    el texto que se publica como «Current Details» no deja ver la credencial."""
+    leaky = _done("clave sk-abcdefghijklmnop1234 expuesta")
+    failed = RunReviewResult(
+        status="failed", review_id="r", error="falló con token=abc123tokenvalue"
+    )
+
+    text = render_details(["a", "b"], {"a": leaky, "b": failed})
+
+    assert "sk-abcdefghijklmnop1234" not in text and "abc123tokenvalue" not in text

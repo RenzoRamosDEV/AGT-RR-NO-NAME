@@ -12,6 +12,7 @@ from duelo.application.workflow_naming import (
     FALLBACK_REPO,
     legacy_parent_workflow_id,
     parent_workflow_id,
+    safe_title,
     static_details,
     static_summary,
 )
@@ -65,7 +66,8 @@ class TemporalReviewStarter:
                     project_slug=slug,
                     project_id=str(change.project_id),
                     head_sha=change.head_sha,
-                    title=change.title,
+                    # El título viaja en la entrada del workflow, que queda en el historial.
+                    title=safe_title(change.title),
                 ),
                 id=workflow_id(change, slug),
                 task_queue="platform",

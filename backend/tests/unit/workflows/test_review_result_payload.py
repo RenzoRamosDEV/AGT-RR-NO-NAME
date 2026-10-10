@@ -179,3 +179,60 @@ def test_a_result_recorded_before_the_extract_existed_still_deserializes() -> No
 
     assert restored == RunReviewResult(status="completed", review_id="abc")
     assert restored.findings == [] and restored.summary is None and not restored.truncated
+
+
+SECRETS = (
+    "abc123tokenvalue",
+    "eyJhbGciOiJIUzI1NiJ9.payload",
+    "sk-abcdefghijklmnop1234",
+    "hunter2",
+    "ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5",
+)
+
+
+def _serialized(result: RunReviewResult) -> str:
+    return json.dumps(result, default=lambda o: o.__dict__)
+
+
+def test_a_secret_the_reviewer_quotes_in_a_successful_review_never_reaches_the_history() -> None:
+    """Regresión: solo el error de una review fallida se saneaba; el resumen y los hallazgos de
+    una review COMPLETADA se copiaban tal cual al historial inmutable de Temporal. Un revisor que
+    avisa «hay un token en el diff» lo citaría."""
+    review = _ok(
+        (
+            Finding(
+                "bug", "config/sk-abcdefghijklmnop1234.env", 3, "password = hunter2 en el código"
+            ),
+            Finding(
+                "risk",
+                "src/app.py",
+                9,
+                "cabecera Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload",
+            ),
+            Finding("nit", "src/x.py", 1, "se filtra ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5"),
+        ),
+        summary="El diff incluye token=abc123tokenvalue y la clave sk-abcdefghijklmnop1234.",
+    )
+
+    result = result_from_review(review)
+
+    dumped = _serialized(result)
+    for secret in SECRETS:
+        assert secret not in dumped, secret
+    assert result.summary == "El diff incluye token=[oculto] y la clave [oculto]."
+    assert result.findings[0].message == "password = [oculto] en el código"
+    assert result.findings[0].file == "config/[oculto].env"
+    assert result.findings[1].message == "cabecera Authorization: [oculto]"
+
+
+def test_redaction_does_not_count_as_truncation() -> None:
+    result = result_from_review(_ok(summary="token=abc123tokenvalue"))
+
+    assert result.summary == "token=[oculto]"
+    assert not result.truncated
+
+
+def test_a_secret_in_the_severity_is_hidden_too() -> None:
+    result = result_from_review(_ok((Finding("token=abc123tokenvalue", "f.py", 1, "m"),)))
+
+    assert "abc123tokenvalue" not in _serialized(result)

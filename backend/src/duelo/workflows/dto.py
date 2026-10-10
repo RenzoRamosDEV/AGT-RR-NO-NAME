@@ -16,9 +16,10 @@ from duelo.application.payload_limits import (
     MAX_FILE_CHARS,
     MAX_FINDINGS,
     MAX_MESSAGE_CHARS,
+    MAX_SEVERITY_CHARS,
     MAX_SUMMARY_CHARS,
-    bound,
     bound_error,
+    bound_redacted,
 )
 from duelo.application.review_requests import ReviewCommitInput
 from duelo.domain.review import Review
@@ -77,20 +78,23 @@ class ReviewChangeInput:
 
 
 def result_from_review(review: Review) -> RunReviewResult:
-    """Extracto acotado de `review` para el resultado de la activity. No incluye `raw_output`."""
+    """Extracto acotado de `review` para el resultado de la activity. No incluye `raw_output` y todo
+    el texto libre (resumen, hallazgos, error) sale sin credenciales: el historial de Temporal es
+    inmutable y lo que entra ahí no se puede borrar."""
     truncated = False
     summary: str | None = None
     if review.summary is not None:
-        summary, cut = bound(review.summary, MAX_SUMMARY_CHARS)
+        summary, cut = bound_redacted(review.summary, MAX_SUMMARY_CHARS)
         truncated = truncated or cut
 
     findings: list[FindingPayload] = []
     for finding in review.findings[:MAX_FINDINGS]:
-        message, cut_message = bound(finding.message, MAX_MESSAGE_CHARS)
-        file, cut_file = bound(finding.file, MAX_FILE_CHARS)
-        truncated = truncated or cut_message or cut_file
+        message, cut_message = bound_redacted(finding.message, MAX_MESSAGE_CHARS)
+        file, cut_file = bound_redacted(finding.file, MAX_FILE_CHARS)
+        severity, cut_severity = bound_redacted(finding.severity, MAX_SEVERITY_CHARS)
+        truncated = truncated or cut_message or cut_file or cut_severity
         findings.append(
-            FindingPayload(severity=finding.severity, file=file, line=finding.line, message=message)
+            FindingPayload(severity=severity, file=file, line=finding.line, message=message)
         )
     if len(review.findings) > MAX_FINDINGS:
         truncated = True

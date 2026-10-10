@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Final
 
+from duelo.application.payload_limits import redact_secrets
 from duelo.application.workflow_naming import escape_markdown, one_line
 from duelo.workflows.dto import RunReviewResult
 
@@ -33,7 +34,7 @@ def _agent_line(name: str, result: RunReviewResult | None) -> str:
     if result is None:
         return f"- ⏳ {who} · revisando…"
     if result.status != "completed":
-        reason = one_line(result.error or "sin detalle", ERROR_EXCERPT_CHARS)
+        reason = one_line(redact_secrets(result.error or "sin detalle"), ERROR_EXCERPT_CHARS)
         return f"- ❌ {who} · fallida — {escape_markdown(reason)}"
 
     score = f" · {result.score}/10" if result.score is not None else ""
@@ -42,7 +43,7 @@ def _agent_line(name: str, result: RunReviewResult | None) -> str:
     breakdown = severity_counts(result)
     if breakdown:
         findings += f" ({breakdown}{'…' if total > len(result.findings) else ''})"
-    summary = one_line(result.summary or "", SUMMARY_EXCERPT_CHARS)
+    summary = one_line(redact_secrets(result.summary or ""), SUMMARY_EXCERPT_CHARS)
     tail = f" — {escape_markdown(summary)}" if summary else ""
     return f"- ✅ {who} · completada{score} · {findings}{tail}"
 

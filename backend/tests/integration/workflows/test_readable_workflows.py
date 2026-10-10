@@ -30,6 +30,7 @@ from duelo.application.ingest_change import ingest_change
 from duelo.application.review_requests import ReviewCommitInput
 from duelo.application.workflow_naming import child_workflow_id
 from duelo.domain.change import Change, ChangeKind
+from duelo.domain.review import Finding, ReviewResult
 from duelo.workflows.review_change import ReviewChangeWorkflow
 from duelo.workflows.review_commit import ReviewCommitWorkflow
 from tests.integration.helpers import make_activities, reviews_for
@@ -366,3 +367,64 @@ async def test_a_commit_and_a_pr_with_the_same_sha_are_both_reviewed(
     assert _child_id(commit).startswith("review-commit-") and _child_id(pr).startswith("review-pr-")
     assert len(await reviews_for(session_factory, commit)) == 2
     assert len(await reviews_for(session_factory, pr)) == 2
+
+
+# Troceados: un literal con forma de credencial en el código lo marcaría el escáner de secretos.
+LEAKED = ("abc123" + "tokenvalue", "sk-" + "abcdefghijklmnop1234", "hunter" + "2")
+
+
+class LeakyAgent:
+    """Un revisor que avisa de que hay credenciales en el diff y las cita."""
+
+    name = "agent_1"
+
+    async def review(self, change: Change) -> ReviewResult:
+        return ReviewResult(
+            summary="El diff trae token=abc123tokenvalue y la clave sk-abcdefghijklmnop1234.",
+            score=2,
+            findings=(
+                Finding("bug", "src/config.py", 4, "password = hunter2 escrito en el código"),
+            ),
+        )
+
+
+def _every_byte_of(history: WorkflowHistory) -> bytes:
+    return b"".join(event.SerializeToString() for event in history.events)
+
+
+async def test_no_credential_reaches_the_immutable_temporal_history(
+    temporal_env: WorkflowEnvironment, session_factory: async_sessionmaker
+) -> None:
+    """Regresión: solo el error de una review fallida se saneaba; el resumen y los hallazgos de una
+    review COMPLETADA, y el título del change (entrada del workflow y resúmenes estáticos), se
+    copiaban tal cual al historial, que es inmutable. Se revisan los bytes de TODOS los eventos."""
+    change = await _persist(session_factory, sha="9" * 40, title="fix: usar token=abc123tokenvalue")
+    agents = {"agent_1": LeakyAgent(), "agent_2": FakeAgent("agent_2")}
+    platform, agents_worker = _workers(temporal_env, session_factory, agents)
+
+    async with platform, agents_worker:
+        await _starter(temporal_env, session_factory).start(change)
+        parent = temporal_env.client.get_workflow_handle(workflow_id(change, SLUG))
+        await parent.result()
+        child = temporal_env.client.get_workflow_handle(_child_id(change))
+        parent_history, child_history = await parent.fetch_history(), await child.fetch_history()
+        details = await _current_details(child)
+        descriptions = [await parent.describe(), await child.describe()]
+        statics = [
+            text
+            for description in descriptions
+            for text in (await description.static_summary(), await description.static_details())
+        ]
+
+    stored = await reviews_for(session_factory, change)
+    assert any("abc123tokenvalue" in (r.summary or "") for r in stored)  # el agente sí la citó
+    everything = _every_byte_of(parent_history) + _every_byte_of(child_history)
+    everything += (details + "".join(t or "" for t in statics)).encode()
+    for secret in LEAKED:
+        assert secret.encode() not in everything, secret
+    # Lo demás de la respuesta sigue legible.
+    results = {r["agent"]: r for r in _completed_activity_results(child_history)}
+    assert results["agent_1"]["summary"] == "El diff trae token=[oculto] y la clave [oculto]."
+    assert (
+        results["agent_1"]["findings"][0]["message"] == "password = [oculto] escrito en el código"
+    )
