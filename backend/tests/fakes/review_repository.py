@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from duelo.application.read_models import AgentStats
-from duelo.domain.events import ReviewCompleted, ReviewFailed
+from duelo.domain.events import ReviewCompleted, ReviewFailed, ReviewReused
 from duelo.domain.review import Review, ReviewStatus
 from tests.fakes.event_log import FakeEventLog
 
@@ -15,14 +15,16 @@ class FakeReviewRepository:
         self._by_natural_key: dict[tuple[str, str, int], Review] = {}
         self._project_of_change: dict[UUID, UUID] = {}
         self._events = events
-        self.persisted_events: list[ReviewCompleted | ReviewFailed] = []
+        self.persisted_events: list[ReviewCompleted | ReviewFailed | ReviewReused] = []
 
     def register_change(self, change_id: UUID, project_id: UUID) -> None:
         """El repositorio de changes avisa de a qué proyecto pertenece cada change: hace falta
         para filtrar las estadísticas por proyecto, como el JOIN del adaptador real."""
         self._project_of_change[change_id] = project_id
 
-    async def add(self, review: Review, event: ReviewCompleted | ReviewFailed) -> Review:
+    async def add(
+        self, review: Review, event: ReviewCompleted | ReviewFailed | ReviewReused
+    ) -> Review:
         key = (str(review.change_id), review.agent, review.run)
         existing = self._by_natural_key.get(key)
         if existing is not None:

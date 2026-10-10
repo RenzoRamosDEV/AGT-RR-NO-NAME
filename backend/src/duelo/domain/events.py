@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from duelo.domain.review import Review
+
 
 @dataclass(frozen=True, slots=True)
 class ChangeCreated:
@@ -38,6 +40,41 @@ class ReviewCompleted:
             "change_id": str(self.change_id),
             "project_id": str(self.project_id),
             "agent": self.agent,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewReused:
+    """Una review copiada de otro change (la PR reutiliza las de su commit idéntico)."""
+
+    review_id: UUID
+    change_id: UUID
+    project_id: UUID
+    agent: str
+    reused_from_change_id: UUID
+
+    type: str = "review.reused"
+
+    @classmethod
+    def of(cls, review: Review, *, project_id: UUID) -> ReviewReused:
+        """El evento de una review copiada; falla si la review no es una copia."""
+        if review.reused_from_change_id is None:
+            raise ValueError("la review no es una copia: no tiene change de origen")
+        return cls(
+            review_id=review.id,
+            change_id=review.change_id,
+            project_id=project_id,
+            agent=review.agent,
+            reused_from_change_id=review.reused_from_change_id,
+        )
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "review_id": str(self.review_id),
+            "change_id": str(self.change_id),
+            "project_id": str(self.project_id),
+            "agent": self.agent,
+            "reused_from_change_id": str(self.reused_from_change_id),
         }
 
 

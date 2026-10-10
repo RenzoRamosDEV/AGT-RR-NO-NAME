@@ -24,6 +24,8 @@ class ReviewBrief:
     score: int | None
     duration_ms: int | None
     run: int
+    # Change del que se copió la review (PR con las de su commit idéntico), o `None` si es propia.
+    reused_from: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

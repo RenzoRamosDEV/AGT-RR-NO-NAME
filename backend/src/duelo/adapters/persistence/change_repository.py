@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -9,12 +10,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from duelo.adapters.persistence.models import ChangeModel, EventModel, ReviewModel
+from duelo.adapters.persistence.review_repository import insert_review, review_from_row
 from duelo.adapters.persistence.sanitize import sanitize_json, sanitize_text
+from duelo.application.ports import CommitWithReviews
 from duelo.application.read_models import ChangeCursor, ChangeSummary, ReviewBrief
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
 from duelo.domain.diff import DiffSummary, FileDiff
-from duelo.domain.events import ChangeCreated
-from duelo.domain.review import ReviewStatus
+from duelo.domain.events import ChangeCreated, ReviewReused
+from duelo.domain.review import Review, ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, review_status_from_counts
 
 
@@ -24,7 +27,12 @@ class SqlAlchemyChangeRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(self, change: Change, event: ChangeCreated) -> Change:
+    async def add(
+        self,
+        change: Change,
+        event: ChangeCreated,
+        reused: Sequence[tuple[Review, ReviewReused]] = (),
+    ) -> Change:
         async with self._session.begin():
             insert_stmt = (
                 pg_insert(ChangeModel)
@@ -70,7 +78,50 @@ class SqlAlchemyChangeRepository:
                     payload=sanitize_json(event.to_payload()),
                 )
             )
+            # Las reviews copiadas van en la misma transacción: o nace la PR con todas, o no nace.
+            for review, review_event in reused:
+                await insert_review(self._session, review, review_event)
             return change
+
+    async def find_commit_with_reviews(
+        self, project_id: UUID, head_sha: str
+    ) -> CommitWithReviews | None:
+        # Transacción propia: la sesión sigue libre para el `add` que viene después (con la
+        # implícita abierta, `add` fallaría con «a transaction is already begun»).
+        async with self._session.begin():
+            row = (
+                await self._session.execute(
+                    select(ChangeModel).where(
+                        ChangeModel.project_id == project_id,
+                        ChangeModel.kind == ChangeKind.COMMIT.value,
+                        ChangeModel.head_sha == head_sha,
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return None
+            reviews = await self._session.execute(
+                select(ReviewModel)
+                .where(ReviewModel.change_id == row.id, ReviewModel.run == row.run)
+                .order_by(ReviewModel.agent)
+            )
+            return CommitWithReviews(
+                change=_to_domain(row),
+                reviews=tuple(review_from_row(r) for r in reviews.scalars()),
+            )
+
+    async def has_reused_reviews(self, change_id: UUID) -> bool:
+        async with self._session.begin():
+            found = await self._session.execute(
+                select(ReviewModel.id)
+                .where(
+                    ReviewModel.change_id == change_id,
+                    ReviewModel.run == 1,
+                    ReviewModel.reused_from_change_id.is_not(None),
+                )
+                .limit(1)
+            )
+            return found.first() is not None
 
     async def get(self, change_id: UUID) -> Change | None:
         row = (
@@ -195,6 +246,7 @@ class SqlAlchemyChangeRepository:
                     ReviewModel.score,
                     ReviewModel.duration_ms,
                     ReviewModel.run,
+                    ReviewModel.reused_from_change_id,
                 )
                 .join(ChangeModel, ChangeModel.id == ReviewModel.change_id)
                 .where(ChangeModel.id.in_(change_ids), ReviewModel.run == ChangeModel.run)
@@ -210,6 +262,7 @@ class SqlAlchemyChangeRepository:
                     score=r.score,
                     duration_ms=r.duration_ms,
                     run=r.run,
+                    reused_from=r.reused_from_change_id,
                 )
             )
         return {change_id: tuple(items) for change_id, items in grouped.items()}

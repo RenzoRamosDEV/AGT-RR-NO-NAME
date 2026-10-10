@@ -179,7 +179,9 @@ async def test_removing_a_project_deletes_its_changes_reviews_and_events_only(
             await session.execute(
                 select(func.count())
                 .select_from(ReviewModel)
-                .join(ChangeModel)
+                # `reviews` tiene dos claves a `changes` (`change_id` y `reused_from_change_id`):
+                # hay que decir por cuál se une.
+                .join(ChangeModel, ReviewModel.change_id == ChangeModel.id)
                 .where(ChangeModel.project_id == kept.id)
             )
         ).scalar_one()

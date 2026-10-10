@@ -10,7 +10,7 @@ from duelo.domain.review import Finding, Review, ReviewResult
 from tests.fakes.api import FakeApi, build_fake_api
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
-BRIEF_KEYS = {"agent", "status", "score", "duration_ms", "run"}
+BRIEF_KEYS = {"agent", "status", "score", "duration_ms", "run", "reused_from"}
 
 
 def _client(api: FakeApi) -> httpx.AsyncClient:

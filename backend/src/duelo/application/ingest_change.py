@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
 from duelo.application.ports import ChangeRepository
 from duelo.domain.change import Change, ChangeKind
-from duelo.domain.events import ChangeCreated
+from duelo.domain.events import ChangeCreated, ReviewReused
+from duelo.domain.review_reuse import reviews_to_reuse
 
 
 async def ingest_change(
@@ -21,9 +23,14 @@ async def ingest_change(
     diff: str,
     diff_truncated: bool,
     change_id: UUID | None = None,
+    agent_names: Sequence[str] = (),
 ) -> Change:
     """Persiste el change. `change_id` fija el id del candidato: si el repositorio devuelve un
-    change con otro id, ya existía (la identidad natural es otra)."""
+    change con otro id, ya existía (la identidad natural es otra).
+
+    Una PR (con `agent_names`, los agentes esperados) nace con las reviews copiadas de su commit
+    idéntico cuando todos las completaron: se guardan en la misma transacción que el change."""
+    now = datetime.now(UTC)
     change = Change.new(
         project_id=project_id,
         kind=kind,
@@ -34,7 +41,7 @@ async def ingest_change(
         url=url,
         diff=diff,
         diff_truncated=diff_truncated,
-        created_at=datetime.now(UTC),
+        created_at=now,
         id=change_id,
     )
     event = ChangeCreated(
@@ -43,4 +50,17 @@ async def ingest_change(
         kind=change.kind.value,
         head_sha=change.head_sha,
     )
-    return await repository.add(change, event)
+    if kind is not ChangeKind.PR or not agent_names:
+        return await repository.add(change, event)
+
+    source = await repository.find_commit_with_reviews(project_id, head_sha)
+    copies = reviews_to_reuse(
+        change,
+        source.change if source else None,
+        source.reviews if source else (),
+        agent_names=agent_names,
+        now=now,
+    )
+    return await repository.add(
+        change, event, [(c, ReviewReused.of(c, project_id=project_id)) for c in copies]
+    )

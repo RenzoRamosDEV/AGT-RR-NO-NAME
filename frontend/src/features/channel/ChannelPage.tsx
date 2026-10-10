@@ -216,7 +216,7 @@ function ChangeThread({
             <p className="muted">Aún no hay respuestas de los agentes.</p>
           )}
           {reviews.map((r) => (
-            <ReviewCard key={r.id} review={r} />
+            <ReviewCard key={r.id} review={r} sha={change.sha} />
           ))}
         </div>
       )}

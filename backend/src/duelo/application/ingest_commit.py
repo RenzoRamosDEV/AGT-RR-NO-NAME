@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -35,6 +36,9 @@ class IngestResult:
     change: Change
     # `False` si el change ya existía (reingesta idempotente).
     created: bool
+    # `True` si es una PR con las reviews copiadas de su commit idéntico (su run 1): no se
+    # revisa de nuevo, así que no tiene workflow.
+    reused: bool = False
 
 
 async def _ingest(
@@ -45,6 +49,7 @@ async def _ingest(
     submission: ChangeSubmission,
     *,
     max_diff_chars: int,
+    agent_names: Sequence[str] = (),
 ) -> IngestResult:
     project = await projects.get_by_slug(submission.project)
     if project is None:
@@ -63,9 +68,16 @@ async def _ingest(
         diff=submission.diff[:max_diff_chars],
         diff_truncated=len(submission.diff) > max_diff_chars,
         change_id=candidate_id,
+        agent_names=agent_names,
     )
-    await starter.start(change)
-    return IngestResult(change=change, created=change.id == candidate_id)
+    # Con las reviews ya copiadas no hay nada que revisar: arrancar el workflow gastaría la
+    # suscripción de los agentes. Tras un reintento (`run` > 1) vuelve a ser una PR normal.
+    reused = (
+        kind is ChangeKind.PR and change.run == 1 and await changes.has_reused_reviews(change.id)
+    )
+    if not reused:
+        await starter.start(change)
+    return IngestResult(change=change, created=change.id == candidate_id, reused=reused)
 
 
 async def ingest_commit(
@@ -90,8 +102,18 @@ async def ingest_pr(
     submission: ChangeSubmission,
     *,
     max_diff_chars: int,
+    agent_names: Sequence[str] = (),
 ) -> IngestResult:
-    """Igual que `ingest_commit` para un PR: la identidad es (proyecto, `pr`, head_sha)."""
+    """Igual que `ingest_commit` para un PR: la identidad es (proyecto, `pr`, head_sha).
+
+    Si el commit con ese mismo SHA y diff ya lo revisaron todos los `agent_names`, la PR nace con
+    esas reviews y no arranca workflow (ver `reviews_to_reuse`)."""
     return await _ingest(
-        ChangeKind.PR, projects, changes, starter, submission, max_diff_chars=max_diff_chars
+        ChangeKind.PR,
+        projects,
+        changes,
+        starter,
+        submission,
+        max_diff_chars=max_diff_chars,
+        agent_names=agent_names,
     )

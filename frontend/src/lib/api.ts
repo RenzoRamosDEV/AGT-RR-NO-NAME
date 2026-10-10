@@ -45,6 +45,8 @@ interface ReviewBriefDto {
   score: number | null;
   duration_ms: number | null;
   run: number;
+  /** Change the review was copied from (a PR reusing its identical commit's), `null` if its own. */
+  reused_from?: string | null;
 }
 
 interface ReviewDto {
@@ -57,6 +59,7 @@ interface ReviewDto {
   score?: number | null;
   duration_ms?: number | null;
   error?: string | null;
+  reused_from?: string | null;
 }
 
 interface AgentStatDto {
@@ -208,6 +211,7 @@ function toBrief(changeId: string, dto: ReviewBriefDto): Review {
     run: dto.run,
     score: dto.score,
     durationMs: dto.duration_ms,
+    reusedFrom: dto.reused_from ?? null,
     partial: true,
   };
 }
@@ -223,6 +227,7 @@ function toReview(dto: ReviewDto): Review {
     score: dto.score,
     durationMs: dto.duration_ms,
     error: dto.error,
+    reusedFrom: dto.reused_from ?? null,
   };
 }
 
