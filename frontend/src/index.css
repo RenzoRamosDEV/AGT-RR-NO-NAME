@@ -150,6 +150,13 @@ ul {
   text-decoration: none;
 }
 
+/* The emblem keeps its proportions inside the box that was reserved with width/height. */
+.brand-logo {
+  display: block;
+  flex: none;
+  object-fit: contain;
+}
+
 .menu-toggle {
   display: none;
 }

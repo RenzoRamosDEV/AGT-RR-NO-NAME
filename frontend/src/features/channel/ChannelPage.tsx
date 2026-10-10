@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
-import heroReview from "../../assets/hero-review.png";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { Busy } from "../../components/Busy";
 import { CopyButton } from "../../components/CopyButton";
@@ -8,6 +7,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
 import { StatusIcon } from "../../components/StatusIcon";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
+import { HERO } from "../../components/brand";
 import { Beam } from "../../components/fx/Beam";
 import { CommitIcon, PullRequestIcon, SearchIcon } from "../../components/icons";
 import { AgentAvatar, agentLabel } from "../../components/ui/AgentAvatar";
@@ -228,7 +228,7 @@ function EmptyChannel({ slug, agents }: { slug: string; agents: string }) {
   const command = ingestCommand(slug, import.meta.env.VITE_API_URL);
   return (
     <EmptyState
-      hero={heroReview}
+      hero={HERO}
       title="Aún no hay cambios en este canal."
       className="empty"
       action={<CopyButton label="Copiar comando" value={command} />}
@@ -322,7 +322,7 @@ export function ChannelPage({ slug }: { slug: string }) {
   if (first.status === "error" && first.error instanceof ApiError && first.error.notFound) {
     return (
       <div className="page">
-        <EmptyState kind="missing" heading title="Proyecto no encontrado">
+        <EmptyState kind="missing" hero={HERO} heading title="Proyecto no encontrado">
           <p className="muted">Este proyecto no existe o ya no se vigila.</p>
         </EmptyState>
       </div>

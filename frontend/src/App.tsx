@@ -1,7 +1,7 @@
 import { Link, Navigate, Route, Routes, useParams } from "react-router";
-import heroDuelo from "./assets/hero-duelo.png";
 import { AsyncBoundary } from "./components/AsyncBoundary";
 import { EmptyState } from "./components/EmptyState";
+import { HERO } from "./components/brand";
 import { MetalButton } from "./components/fx/MetalButton";
 import { ChannelPage } from "./features/channel/ChannelPage";
 import { useProjects } from "./features/projects/ProjectsContext";
@@ -21,7 +21,7 @@ function FirstProject() {
             <Navigate to={projectPath(list[0].slug)} replace />
           ) : (
             <EmptyState
-              hero={heroDuelo}
+              hero={HERO}
               title="Aún no hay proyectos vigilados."
               action={
                 <MetalButton variant="primary" onClick={openAddProject}>
@@ -45,6 +45,7 @@ function NotFoundPage() {
     <div className="page">
       <EmptyState
         kind="missing"
+        hero={HERO}
         heading
         title="No encontrado"
         action={
