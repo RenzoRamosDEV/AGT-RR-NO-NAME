@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from temporalio.testing import WorkflowEnvironment
 
@@ -65,3 +67,14 @@ def test_the_cli_agent_configuration_is_taken_from_the_worker_settings() -> None
     assert (config.claude_bin, config.codex_bin) == ("/c", "/x")
     assert (config.claude_model, config.codex_model) == ("m1", "m2")
     assert config.claude_max_budget_usd == 0.4
+
+
+async def test_both_workers_get_the_configured_shutdown_grace(
+    temporal_env: WorkflowEnvironment,
+) -> None:
+    platform, agents = build_workers(
+        temporal_env.client, _settings(worker_shutdown_grace_seconds=7)
+    )
+
+    assert platform.config()["graceful_shutdown_timeout"] == timedelta(seconds=7)
+    assert agents.config()["graceful_shutdown_timeout"] == timedelta(seconds=7)

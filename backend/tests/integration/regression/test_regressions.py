@@ -19,6 +19,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from duelo.adapters.agents.fake import FakeAgent
+from duelo.application.task_queues import AGENTS_TASK_QUEUE, PLATFORM_TASK_QUEUE
 from duelo.workflows.dto import ReviewChangeInput, RunReviewInput
 from duelo.workflows.review_change import ReviewChangeWorkflow
 from tests.integration.helpers import make_activities, persist_change, reviews_for
@@ -35,10 +36,10 @@ async def _run(
 ):
     activities = make_activities(session_factory, agents)
     async with (
-        Worker(env.client, task_queue="platform", workflows=[ReviewChangeWorkflow]),
+        Worker(env.client, task_queue=PLATFORM_TASK_QUEUE, workflows=[ReviewChangeWorkflow]),
         Worker(
             env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     ):
@@ -46,7 +47,7 @@ async def _run(
             ReviewChangeWorkflow.run,
             ReviewChangeInput(change_id=change_id, agent_names=agent_names),
             id=f"review-{change_id}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
         try:
             result = await handle.result()

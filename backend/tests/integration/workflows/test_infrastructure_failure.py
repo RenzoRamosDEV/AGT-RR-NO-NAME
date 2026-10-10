@@ -13,6 +13,7 @@ from temporalio.worker import Replayer, Worker
 from duelo.adapters.agents.fake import FakeAgent
 from duelo.adapters.persistence.models import EventModel
 from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.application.task_queues import AGENTS_TASK_QUEUE, PLATFORM_TASK_QUEUE
 from duelo.domain.change import Change
 from duelo.domain.review_status import (
     RETRYABLE_STATUSES,
@@ -63,10 +64,10 @@ async def _run_review_change(
         review_repository=repository,
     )
     async with (
-        Worker(env.client, task_queue="platform", workflows=[ReviewChangeWorkflow]),
+        Worker(env.client, task_queue=PLATFORM_TASK_QUEUE, workflows=[ReviewChangeWorkflow]),
         Worker(
             env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     ):
@@ -75,7 +76,7 @@ async def _run_review_change(
             ReviewChangeWorkflow.run,
             ReviewChangeInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
             id=workflow_id,
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
         history = await env.client.get_workflow_handle(workflow_id).fetch_history()
     return results, history
@@ -193,17 +194,19 @@ async def test_an_execution_recorded_before_the_compensation_still_replays(
     async with (
         Worker(
             temporal_env.client,
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
             workflows=[ReviewChangeWorkflowBeforeCompensation],
         ),
-        Worker(temporal_env.client, task_queue="agents", activities=[activities.run_review]),
+        Worker(
+            temporal_env.client, task_queue=AGENTS_TASK_QUEUE, activities=[activities.run_review]
+        ),
     ):
         with pytest.raises(WorkflowFailureError):
             await temporal_env.client.execute_workflow(
                 "ReviewChangeWorkflow",
                 ReviewChangeInput(change_id=str(change.id), agent_names=BOTH_AGENTS),
                 id=workflow_id,
-                task_queue="platform",
+                task_queue=PLATFORM_TASK_QUEUE,
             )
         history = await temporal_env.client.get_workflow_handle(workflow_id).fetch_history()
 

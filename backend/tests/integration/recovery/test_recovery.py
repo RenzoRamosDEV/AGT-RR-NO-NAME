@@ -24,6 +24,7 @@ from temporalio.worker import Worker
 from duelo.adapters.agents.fake import FakeAgent
 from duelo.adapters.persistence.models import EventModel
 from duelo.adapters.persistence.review_repository import SqlAlchemyReviewRepository
+from duelo.application.task_queues import AGENTS_TASK_QUEUE, PLATFORM_TASK_QUEUE
 from duelo.domain.events import ReviewCompleted, ReviewFailed
 from duelo.domain.review import Review
 from duelo.workflows.dto import ReviewChangeInput
@@ -91,10 +92,10 @@ async def _run_review_workflow(
     env: WorkflowEnvironment, activities: Any, change_id: str, agent_names: list[str]
 ) -> Any:
     async with (
-        Worker(env.client, task_queue="platform", workflows=[ReviewChangeWorkflow]),
+        Worker(env.client, task_queue=PLATFORM_TASK_QUEUE, workflows=[ReviewChangeWorkflow]),
         Worker(
             env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ),
     ):
@@ -102,7 +103,7 @@ async def _run_review_workflow(
             ReviewChangeWorkflow.run,
             ReviewChangeInput(change_id=change_id, agent_names=agent_names),
             id=f"review-{change_id}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
 
 
@@ -113,12 +114,14 @@ async def test_workflow_waits_for_a_missing_agents_worker_and_finishes_when_it_a
     agents = {"agent_1": FakeAgent("agent_1"), "agent_2": FakeAgent("agent_2")}
     activities = make_activities(session_factory, agents)
 
-    async with Worker(temporal_env.client, task_queue="platform", workflows=[ReviewChangeWorkflow]):
+    async with Worker(
+        temporal_env.client, task_queue=PLATFORM_TASK_QUEUE, workflows=[ReviewChangeWorkflow]
+    ):
         handle = await temporal_env.client.start_workflow(
             ReviewChangeWorkflow.run,
             ReviewChangeInput(change_id=str(change.id), agent_names=list(agents)),
             id=f"review-{change.id}",
-            task_queue="platform",
+            task_queue=PLATFORM_TASK_QUEUE,
         )
 
         # Las dos activities quedan pendientes: nadie atiende la cola `agents`.
@@ -128,7 +131,7 @@ async def test_workflow_waits_for_a_missing_agents_worker_and_finishes_when_it_a
 
         async with Worker(
             temporal_env.client,
-            task_queue="agents",
+            task_queue=AGENTS_TASK_QUEUE,
             activities=[activities.run_review, activities.record_review_infrastructure_failure],
         ):
             results = await handle.result()

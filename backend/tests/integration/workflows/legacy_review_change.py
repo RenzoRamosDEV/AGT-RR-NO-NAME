@@ -12,6 +12,7 @@ from datetime import timedelta
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from duelo.application.task_queues import AGENTS_TASK_QUEUE
 from duelo.workflows.dto import ReviewChangeInput, RunReviewInput, RunReviewResult
 
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1))
@@ -27,7 +28,7 @@ class ReviewChangeWorkflowBeforeCompensation:
                     workflow.execute_activity(
                         "run_review",
                         RunReviewInput(review_input.change_id, name, review_input.run),
-                        task_queue="agents",
+                        task_queue=AGENTS_TASK_QUEUE,
                         result_type=RunReviewResult,
                         start_to_close_timeout=timedelta(minutes=5),
                         heartbeat_timeout=timedelta(seconds=30),
