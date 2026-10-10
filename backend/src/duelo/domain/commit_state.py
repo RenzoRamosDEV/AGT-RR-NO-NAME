@@ -41,19 +41,28 @@ def commit_state_of(
     return CommitState.ACTIVE
 
 
-# `git revert` escribe «This reverts commit <sha40>.» en el cuerpo del mensaje. Se admiten SHAs de
-# 7 a 64 caracteres (abreviados a mano o SHA-256).
-_REVERTS = re.compile(r"This reverts commit ([0-9a-fA-F]{7,64})\b")
+# Lo que escribe `git revert`: título `Revert "<título>"` (o `Reapply "<título>"` al revertir un
+# revert) y, en el cuerpo, una línea EXACTA `This reverts commit <sha>.` (al revertir una fusión
+# añade `, reversing` y `changes made to <sha>.` en la línea siguiente). El SHA, completo y en
+# minúsculas (40 caracteres en SHA-1, 64 en SHA-256). Cualquier otra mención no cuenta.
+_TITLE = re.compile(r'(?:Revert|Reapply) ".')
+_REVERTS = re.compile(
+    r"^This reverts commit ([0-9a-f]{40}|[0-9a-f]{64})"
+    r"(?:\.|, reversing\nchanges made to (?:[0-9a-f]{40}|[0-9a-f]{64})\.)$",
+    re.MULTILINE,
+)
 
 
-def parse_reverted_sha(*texts: str) -> str | None:
-    """SHA (en minúsculas) del primer «This reverts commit <sha>» que aparezca en `texts`, o
-    `None`. Los mensajes `Revert "título"` sin ese texto no dicen qué SHA revierten."""
-    for text in texts:
-        found = _REVERTS.search(text)
-        if found is not None:
-            return found.group(1).lower()
-    return None
+def parse_reverted_sha(title: str, body: str) -> str | None:
+    """SHA que revierte un commit según su mensaje, o `None`.
+
+    Solo el formato que genera `git revert`: título que empieza por `Revert "` o `Reapply "` y una
+    línea exacta `This reverts commit <sha>.` en el cuerpo. Es lo que DECLARA el mensaje: no se
+    comprueba que el parche del commit sea de verdad el inverso del original."""
+    if _TITLE.match(title) is None:
+        return None
+    found = _REVERTS.search(body.replace("\r\n", "\n"))
+    return found.group(1) if found is not None else None
 
 
 # Un SHA solo puede llegar a un argumento de git si es hexadecimal: los guardados vienen de la

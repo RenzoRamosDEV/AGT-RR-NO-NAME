@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from datetime import UTC, datetime
 
 from duelo.adapters.subprocess_runner import (
@@ -20,12 +21,13 @@ LOG_TIMEOUT_SECONDS = 20.0
 class LocalGitHistory:
     """Pregunta al `git` del sistema qué commits son alcanzables en un repositorio local.
 
-    Sin shell y con plazo. Cualquier fallo (carpeta movida o borrada, git ausente o sin respuesta,
-    repositorio roto) es `HistoryUnavailable`: quien lo use no debe marcar nada."""
+    Sin shell y con plazo. Cualquier fallo (carpeta movida, borrada o sustituida por un enlace
+    simbólico, git ausente o sin respuesta, repositorio roto) es `HistoryUnavailable`: quien lo use
+    no debe marcar nada. Antes de CADA consulta se revalida que la ruta registrada sigue siendo la
+    raíz de su repositorio, para no leer (ni marcar a partir de) otro repositorio."""
 
     async def reachable(self, path: str, *, limit: int) -> Reachability:
-        if not os.path.isdir(path):
-            raise HistoryUnavailable("La carpeta del proyecto ya no existe")
+        await _ensure_same_repository(path)
         # `--all` incluye todas las referencias y `HEAD`: un commit en cabeza desacoplada o en
         # medio de un rebase sigue contando como alcanzable.
         result = await _git(
@@ -60,6 +62,7 @@ class LocalGitHistory:
         if not is_safe_sha_argument(sha):
             return False
         rev = sha.lower()
+        await _ensure_same_repository(path)
         exists = await _git(path, "cat-file", "-e", f"{rev}^{{commit}}")
         if exists.returncode != 0:
             return False  # el commit ya ni existe en el repositorio
@@ -77,9 +80,49 @@ class LocalGitHistory:
         return ancestor.returncode == 0
 
 
+# Un repositorio ajeno (o uno al que se sustituyó la carpeta) no debe poder ejecutar nada ni
+# cambiar la configuración con la que se lee: sin configuración de sistema ni de usuario, sin
+# `fsmonitor` ni ganchos, y sin variables que redirijan git a otro directorio.
+_GIT_ENV = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+_GIT_EXCLUDED_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR")
+_GIT_HARDENING = ("-c", "core.fsmonitor=false", "-c", f"core.hooksPath={os.devnull}")
+
+
+async def _ensure_same_repository(path: str) -> None:
+    """La ruta registrada debe seguir siendo, tal cual, la raíz de un repositorio: ni un enlace
+    simbólico (se rechazan al dar de alta el proyecto) ni una subcarpeta ni otro repositorio."""
+    try:
+        info = os.lstat(path)
+    except OSError as exc:
+        raise HistoryUnavailable("La carpeta del proyecto ya no existe") from exc
+    if stat.S_ISLNK(info.st_mode):
+        raise HistoryUnavailable("La carpeta del proyecto ahora es un enlace simbólico")
+    if not stat.S_ISDIR(info.st_mode):
+        raise HistoryUnavailable("La ruta del proyecto ya no es una carpeta")
+    top = await _git(path, "rev-parse", "--show-toplevel", "--absolute-git-dir")
+    if top.returncode != 0:
+        raise HistoryUnavailable("La carpeta del proyecto ya no es un repositorio")
+    lines = top.stdout.splitlines()
+    if len(lines) != 2:
+        raise HistoryUnavailable("git no identificó el repositorio de la carpeta del proyecto")
+    toplevel, git_dir = lines
+    real = os.path.realpath(path)
+    if os.path.realpath(toplevel) != real:
+        raise HistoryUnavailable("La carpeta del proyecto ya no es la raíz de su repositorio")
+    # Un `.git` que es un archivo `gitdir:` (o un enlace) puede apuntar a los objetos de otro
+    # repositorio: solo vale el directorio `.git` propio de la carpeta.
+    if os.path.realpath(git_dir) != os.path.join(real, ".git"):
+        raise HistoryUnavailable("El repositorio de la carpeta del proyecto no está en su .git")
+
+
 async def _git(path: str, *args: str, timeout: float = 10.0) -> CommandResult:
     try:
-        return await run_command(["git", "-C", path, *args], timeout=timeout)
+        return await run_command(
+            ["git", *_GIT_HARDENING, "-C", path, *args],
+            timeout=timeout,
+            env=_GIT_ENV,
+            exclude_env=_GIT_EXCLUDED_ENV,
+        )
     except CommandNotFound as exc:
         raise HistoryUnavailable("git no está instalado") from exc
     except CommandTimeout as exc:

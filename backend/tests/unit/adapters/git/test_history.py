@@ -146,7 +146,7 @@ async def test_a_window_that_exactly_fits_is_flagged_as_truncated_too(repo: Path
     assert reach.truncated is True
 
 
-async def test_one_call_to_git_is_enough_for_the_whole_set(
+async def test_one_call_to_git_reads_the_whole_set_after_the_identity_check(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     commit_file(repo, "a.txt", "1\n", "uno")
@@ -161,8 +161,10 @@ async def test_one_call_to_git_is_enough_for_the_whole_set(
 
     await LocalGitHistory().reachable(str(repo), limit=WINDOW)
 
-    assert len(calls) == 1
-    assert calls[0][:3] == ["git", "-C", str(repo)] and "--all" in calls[0]
+    assert len(calls) == 2
+    assert "rev-parse" in calls[0] and "--show-toplevel" in calls[0]
+    assert "log" in calls[1] and "--all" in calls[1]
+    assert ["-C", str(repo)] == calls[1][calls[1].index("-C") : calls[1].index("-C") + 2]
 
 
 # --- reachable: fallos -----------------------------------------------------------------------
@@ -262,3 +264,108 @@ async def test_a_sha_that_is_not_hexadecimal_never_reaches_git(
     monkeypatch.setattr(history_module, "run_command", forbidden)
 
     assert await LocalGitHistory().contains(str(repo), sha) is False
+
+
+# --- la ruta registrada se revalida en cada consulta ---------------------------------------------
+
+
+def _other_repo(tmp_path: Path) -> tuple[Path, str]:
+    other = init_repo(tmp_path / "otro")
+    return other, commit_file(other, "x.txt", "x\n", "ajeno")
+
+
+async def test_a_folder_replaced_by_a_symlink_to_another_repository_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    mine = init_repo(tmp_path / "mio")
+    commit_file(mine, "a.txt", "1\n", "mio")
+    other, _ = _other_repo(tmp_path)
+    moved = tmp_path / "mio-original"
+    mine.rename(moved)
+    (tmp_path / "mio").symlink_to(other, target_is_directory=True)
+
+    with pytest.raises(HistoryUnavailable, match="enlace simbólico"):
+        await LocalGitHistory().reachable(str(tmp_path / "mio"), limit=WINDOW)
+
+
+async def test_contains_also_refuses_a_symlinked_folder(tmp_path: Path) -> None:
+    other, sha = _other_repo(tmp_path)
+    link = tmp_path / "enlace"
+    link.symlink_to(other, target_is_directory=True)
+
+    with pytest.raises(HistoryUnavailable):
+        await LocalGitHistory().contains(str(link), sha)
+
+
+async def test_a_subfolder_of_a_repository_is_unavailable(repo: Path) -> None:
+    commit_file(repo, "a.txt", "1\n", "uno")
+    sub = repo / "src"
+    sub.mkdir()
+
+    with pytest.raises(HistoryUnavailable, match="raíz"):
+        await LocalGitHistory().reachable(str(sub), limit=WINDOW)
+
+
+async def test_a_folder_that_is_a_file_is_unavailable(tmp_path: Path) -> None:
+    file = tmp_path / "archivo"
+    file.write_text("x")
+
+    with pytest.raises(HistoryUnavailable):
+        await LocalGitHistory().reachable(str(file), limit=WINDOW)
+
+
+async def test_a_folder_swapped_for_a_different_repository_is_unavailable(tmp_path: Path) -> None:
+    mine = init_repo(tmp_path / "mio")
+    commit_file(mine, "a.txt", "1\n", "mio")
+    # La ruta apunta a un directorio que ya no es raíz de repositorio propio: un `.git` que es un
+    # archivo `gitdir:` hacia otro repositorio.
+    other, _ = _other_repo(tmp_path)
+    for child in mine.iterdir():
+        if child.name == ".git":
+            for inner in sorted(child.rglob("*"), reverse=True):
+                inner.unlink() if inner.is_file() or inner.is_symlink() else inner.rmdir()
+            child.rmdir()
+        else:
+            child.unlink()
+    (mine / ".git").write_text(f"gitdir: {other / '.git'}\n")
+
+    with pytest.raises(HistoryUnavailable):
+        await LocalGitHistory().reachable(str(mine), limit=WINDOW)
+
+
+async def test_a_hostile_repository_cannot_run_anything_while_it_is_read(
+    repo: Path, tmp_path: Path
+) -> None:
+    commit_file(repo, "a.txt", "1\n", "uno")
+    marker = tmp_path / "ejecutado"
+    script = tmp_path / "fsmonitor.sh"
+    script.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    script.chmod(0o755)
+    git(repo, "config", "core.fsmonitor", str(script))
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+
+    await LocalGitHistory().reachable(str(repo), limit=WINDOW)
+
+    assert not marker.exists()
+
+
+async def test_git_is_run_without_system_or_user_configuration(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commit_file(repo, "a.txt", "1\n", "uno")
+    seen: list[dict[str, object]] = []
+    real = history_module.run_command
+
+    async def spy(argv, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append({"argv": list(argv), **kwargs})
+        return await real(argv, **kwargs)
+
+    monkeypatch.setattr(history_module, "run_command", spy)
+
+    await LocalGitHistory().reachable(str(repo), limit=WINDOW)
+
+    for call in seen:
+        assert call["env"] == {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+        argv = call["argv"]
+        assert "core.fsmonitor=false" in argv and "core.hooksPath=/dev/null" in argv  # type: ignore[operator]

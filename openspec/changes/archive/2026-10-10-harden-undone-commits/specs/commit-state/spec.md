@@ -1,29 +1,4 @@
-# commit-state Specification
-
-## Purpose
-TBD - created by archiving change mark-undone-commits. Update Purpose after archive.
-
-## Requirements
-
-### Requirement: Estado de un commit
-Cada change de tipo `commit` SHALL tener un estado `commit_state` con uno de estos valores:
-`active` (por defecto), `discarded` (deshecho: su SHA ya no es alcanzable desde ninguna referencia
-del repositorio local) o `reverted` (revertido: otro commit del mismo proyecto lo invierte con
-`git revert`). Si se dan las dos circunstancias, el estado SHALL ser `discarded`. Un change de tipo
-`pr` SHALL tener siempre el estado `active`. El estado SHALL NOT alterar ni borrar el change ni sus
-reviews, y SHALL NOT modificar su `review_status`.
-
-#### Scenario: Commit normal
-- **WHEN** un commit no está marcado como deshecho ni como revertido
-- **THEN** su `commit_state` es `active`
-
-#### Scenario: Deshecho gana a revertido
-- **WHEN** un commit está marcado como deshecho y como revertido
-- **THEN** su `commit_state` es `discarded`
-
-#### Scenario: Las PRs no cambian de estado
-- **WHEN** se consulta un change de tipo `pr`
-- **THEN** su `commit_state` es `active`
+## MODIFIED Requirements
 
 ### Requirement: Barrido de alcanzabilidad de los commits
 Con `LOCAL_PROJECTS_ENABLED`, la API SHALL ejecutar cada `REACHABILITY_SWEEP_INTERVAL_SECONDS`
@@ -119,18 +94,3 @@ ocurrir ningún error. El `body` SHALL NOT guardarse.
 #### Scenario: Revert que sigue en la rama
 - **WHEN** otro commit dice revertir un original que ya está revertido por un commit que sigue en la rama
 - **THEN** la marca no cambia
-
-### Requirement: Estado visible en la API
-`GET /projects/{slug}/changes` y `GET /changes/{id}` SHALL incluir `commit_state` y `reverted_by`
-(`{id, head_sha}` del commit que lo revierte, o `null`) en cada change, como campos aditivos que no
-rompen el contrato existente. El listado SHALL resolver `reverted_by` sin consultas adicionales por
-change.
-
-#### Scenario: Listado con un commit revertido
-- **WHEN** un commit está revertido
-- **THEN** su elemento del listado trae `commit_state = reverted` y `reverted_by` con el id y el SHA
-  del revert
-
-#### Scenario: Cliente antiguo
-- **WHEN** un cliente ignora los campos nuevos
-- **THEN** sigue funcionando sin cambios

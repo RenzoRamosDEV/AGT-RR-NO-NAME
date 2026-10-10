@@ -208,14 +208,18 @@ del normal (`commit_state` = `active`, `discarded` o `reverted` en la API):
   desmarca solo. Tras un `git push` el commit sigue en `origin/<rama>` y no se marca hasta que se
   fuerce el push.
 - **COMMIT REVERTIDO** («Revertido por `abc1234`»): otro commit lo invierte con `git revert`. El hook
-  envía ahora el cuerpo del mensaje (`body`, opcional) y Duelo lee en él `This reverts commit <sha>`.
-  El original está revertido mientras ese revert siga en la rama: si lo deshaces (`reset`) vuelve a
+  envía ahora el cuerpo del mensaje (`body`, opcional) y Duelo solo reconoce el formato que escribe
+  `git revert`: título `Revert "…"` (o `Reapply "…"`) y una línea exacta
+  `This reverts commit <sha completo en minúsculas>.`; cualquier otra mención se ignora. Es lo que
+  declara el mensaje: no se comprueba que el parche sea de verdad el inverso. El original está revertido mientras ese revert siga en la rama: si lo deshaces (`reset`) vuelve a
   estar activo, y si lo corriges con `--amend` pasa a estar revertido por el commit nuevo.
 
 Si el commit está deshecho **y** revertido, gana «deshecho». Una PR nunca está deshecha ni
 revertida. **Límites:** un commit ingerido con un SHA que nunca existió en ese repositorio (una
 prueba a mano con `POST /ingest/commit`) aparece como deshecho en un proyecto local; los proyectos
-sin carpeta local no se evalúan; y con más de `REACHABILITY_WINDOW_COMMITS` commits solo se evalúan
+sin carpeta local no se evalúan; si la carpeta registrada pasa a ser un enlace simbólico, una
+subcarpeta o apunta a otro repositorio, el barrido no marca nada (y git se ejecuta sin configuración
+de usuario ni ganchos); y con más de `REACHABILITY_WINDOW_COMMITS` commits solo se evalúan
 los changes recientes y cada candidato se confirma uno a uno antes de marcarlo.
 
 Cada respuesta lleva `X-Request-ID` (se propaga el entrante si es válido) y la API escribe un

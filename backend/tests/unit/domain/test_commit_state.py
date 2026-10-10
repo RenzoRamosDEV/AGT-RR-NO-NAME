@@ -80,51 +80,69 @@ def test_a_pr_is_always_active(discarded_at: datetime | None, reverted: bool) ->
 # --- parse_reverted_sha --------------------------------------------------------------------
 
 
+SHA_64 = "e" * 64
+TITLE = 'Revert "feat: login"'
+
+
 def test_the_sha_of_a_git_revert_message_is_found() -> None:
     body = f"This reverts commit {SHA_A}.\n\nPorque rompe el login."
 
-    assert parse_reverted_sha('Revert "feat: login"', body) == SHA_A
+    assert parse_reverted_sha(TITLE, body) == SHA_A
 
 
 def test_a_revert_of_a_merge_commit_still_gives_the_sha() -> None:
     body = f"This reverts commit {SHA_A}, reversing\nchanges made to {SHA_B}."
 
-    assert parse_reverted_sha("", body) == SHA_A
+    assert parse_reverted_sha(TITLE, body) == SHA_A
 
 
-def test_an_abbreviated_sha_written_by_hand_is_accepted() -> None:
-    assert parse_reverted_sha("", "This reverts commit abc1234") == "abc1234"
+def test_a_sha256_is_accepted() -> None:
+    assert parse_reverted_sha(TITLE, f"This reverts commit {SHA_64}.") == SHA_64
 
 
-def test_the_sha_is_returned_in_lowercase() -> None:
-    assert parse_reverted_sha("", f"This reverts commit {SHA_A.upper()}") == SHA_A
+def test_a_reapply_title_is_accepted() -> None:
+    assert parse_reverted_sha('Reapply "feat: login"', f"This reverts commit {SHA_A}.") == SHA_A
 
 
-def test_the_title_is_read_too() -> None:
-    assert parse_reverted_sha(f"This reverts commit {SHA_B}", "") == SHA_B
+def test_windows_line_endings_are_accepted() -> None:
+    body = f"Porque sí\r\n\r\nThis reverts commit {SHA_A}.\r\n"
+
+    assert parse_reverted_sha(TITLE, body) == SHA_A
 
 
-def test_the_first_text_with_a_sha_wins() -> None:
-    first = f"This reverts commit {SHA_A}"
-    second = f"This reverts commit {SHA_B}"
+def test_the_line_may_come_after_other_paragraphs() -> None:
+    body = f"Se cae en producción.\n\nThis reverts commit {SHA_A}.\n\nRefs #12"
 
-    assert parse_reverted_sha(first, second) == SHA_A
+    assert parse_reverted_sha(TITLE, body) == SHA_A
 
 
 @pytest.mark.parametrize(
-    "text",
+    ("title", "body"),
     [
-        "",
-        "feat: algo",
-        'Revert "feat: login"',  # sin el cuerpo no dice qué SHA revierte
-        "This reverts commit",
-        "This reverts commit xyz1234",
-        "This reverts commit abc12",  # demasiado corto
-        "this reverts commit abc1234",  # git lo escribe con mayúscula inicial
+        (TITLE, ""),
+        (TITLE, "This reverts commit"),
+        (TITLE, f"This reverts commit {SHA_A}"),  # sin el punto final
+        (TITLE, f"Esto es como This reverts commit {SHA_A}. dentro de un párrafo"),
+        (TITLE, f"Nota: This reverts commit {SHA_A}."),  # no es la línea entera
+        (TITLE, f"This reverts commit {SHA_A}. Y más texto"),
+        (TITLE, "This reverts commit abc1234."),  # SHA corto
+        (TITLE, f"This reverts commit {SHA_A.upper()}."),  # mayúsculas
+        (TITLE, f"This reverts commit {'a' * 41}."),  # longitud intermedia
+        (TITLE, f"This reverts commit {'a' * 39}x."),  # no hexadecimal
+        (TITLE, f"this reverts commit {SHA_A}."),  # git lo escribe con mayúscula inicial
+        ("feat: algo", f"This reverts commit {SHA_A}."),  # no empieza por Revert "
+        ("revert: algo", f"This reverts commit {SHA_A}."),
+        ("Revert", f"This reverts commit {SHA_A}."),
+        (f"This reverts commit {SHA_B}.", ""),  # el título no es sitio para la frase
+        (TITLE, f"This reverts commit {SHA_A}, reversing\nchanges made to abc."),
     ],
 )
-def test_a_message_without_a_revert_gives_none(text: str) -> None:
-    assert parse_reverted_sha(text, text) is None
+def test_anything_that_git_revert_would_not_write_gives_none(title: str, body: str) -> None:
+    assert parse_reverted_sha(title, body) is None
+
+
+def test_the_sha_in_the_title_is_ignored_even_if_the_body_has_none() -> None:
+    assert parse_reverted_sha(f'Revert "{SHA_A}"', "") is None
 
 
 # --- is_safe_sha_argument ------------------------------------------------------------------

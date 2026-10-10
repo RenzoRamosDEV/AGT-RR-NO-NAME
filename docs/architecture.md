@@ -88,8 +88,13 @@ que ya está en el spec o en `openspec/specs/`.
   concluyente; con la ventana llena solo se evalúan los changes creados desde el commit más
   antiguo de la ventana y cada candidato se confirma uno a uno (`git for-each-ref --contains` y
   `merge-base --is-ancestor HEAD`) con el SHA validado como hexadecimal. Un fallo de git no marca
-  nada. El **revert** es un dato del propio commit: la ingesta guarda `changes.reverts_sha` (leído de
-  `This reverts commit <sha>` en el título o en el `body` opcional que ahora envía el hook) y un
+  nada, y antes de cada consulta se revalida que la carpeta no es un enlace simbólico y es la raíz
+  de su propio repositorio (`lstat` + `rev-parse --show-toplevel --absolute-git-dir`), con git sin
+  configuración de sistema ni de usuario, `core.fsmonitor=false` y `core.hooksPath=/dev/null`. El
+  **revert** es un dato del propio commit: la ingesta guarda `changes.reverts_sha`, leído solo del
+  formato de `git revert` (título `Revert "…"`/`Reapply "…"` y línea exacta
+  `This reverts commit <sha40|sha64>.` en el `body` opcional que envía el hook; es lo que declara el
+  mensaje, no se valida el parche inverso), y un
   commit está revertido mientras exista un revert **vivo** (no deshecho) que apunte a su SHA, calculado
   al leer (`LATERAL` en el listado, sin consultas por fila). Así no importa el orden de llegada ni
   que el revert se deshaga o se corrija con `--amend`. Eventos nuevos: `commit.discarded`,

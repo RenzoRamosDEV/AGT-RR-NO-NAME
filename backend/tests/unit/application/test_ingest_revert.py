@@ -29,7 +29,10 @@ class Fixture:
         self.projects = FakeProjectRepository(PROJECT)
         self.starter = FakeReviewStarter()
 
-    async def commit(self, sha: str, *, title: str = "feat: algo", body: str = "") -> UUID:
+    async def commit(self, sha: str, *, title: str | None = None, body: str = "") -> UUID:
+        # Como `git revert`: un mensaje que revierte lleva título `Revert "…"`.
+        if title is None:
+            title = 'Revert "feat: algo"' if "This reverts commit" in body else "feat: algo"
         result = await ingest_commit(
             self.projects,
             self.changes,
@@ -89,7 +92,7 @@ async def test_a_revert_marks_the_original_commit_as_reverted() -> None:
 async def test_the_revert_stores_the_sha_it_reverts_and_not_the_message() -> None:
     f = Fixture()
 
-    revert = await f.commit(SHA_B, body=_revert_message(SHA_A.upper()))
+    revert = await f.commit(SHA_B, body=_revert_message(SHA_A))
 
     stored = await f.changes.get(revert)
     assert stored is not None
@@ -222,13 +225,38 @@ async def test_a_commit_that_names_itself_does_not_revert_anything() -> None:
     assert await f.state(own) is CommitState.ACTIVE
 
 
-async def test_the_sha_can_come_in_the_title() -> None:
+async def test_the_phrase_in_the_title_does_not_revert_anything() -> None:
     f = Fixture()
     original = await f.commit(SHA_A)
 
-    await f.commit(SHA_B, title=f"This reverts commit {SHA_A}")
+    await f.commit(SHA_B, title=f"This reverts commit {SHA_A}.")
 
-    assert await f.state(original) is CommitState.REVERTED
+    assert await f.state(original) is CommitState.ACTIVE
+
+
+async def test_a_loose_mention_in_an_ordinary_commit_does_not_revert_anything() -> None:
+    f = Fixture()
+    original = await f.commit(SHA_A)
+
+    revert = await f.commit(SHA_B, title="docs: nota", body=f"This reverts commit {SHA_A}.")
+
+    assert await f.state(original) is CommitState.ACTIVE
+    stored = await f.changes.get(revert)
+    assert stored is not None and stored.reverts_sha is None
+    assert await f.event_types(original) == ["change.created"]
+
+
+async def test_the_phrase_inside_a_paragraph_does_not_revert_anything() -> None:
+    f = Fixture()
+    original = await f.commit(SHA_A)
+
+    await f.commit(
+        SHA_B,
+        title='Revert "feat: algo"',
+        body=f"Como dice This reverts commit {SHA_A}. en el hilo, no.",
+    )
+
+    assert await f.state(original) is CommitState.ACTIVE
 
 
 async def test_a_client_that_sends_no_body_keeps_working() -> None:

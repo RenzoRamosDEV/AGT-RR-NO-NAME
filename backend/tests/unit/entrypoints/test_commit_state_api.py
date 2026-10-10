@@ -24,6 +24,9 @@ def _client(api: FakeApi) -> httpx.AsyncClient:
 
 
 async def _ingest(client: httpx.AsyncClient, sha: str, **overrides: object) -> str:
+    # Como `git revert`: un mensaje que revierte lleva título `Revert "…"`.
+    if "This reverts commit" in str(overrides.get("body", "")):
+        overrides.setdefault("title", 'Revert "feat: algo"')
     response = await client.post(
         "/ingest/commit", json=valid_body(head_sha=sha, **overrides), headers=HEADERS
     )
