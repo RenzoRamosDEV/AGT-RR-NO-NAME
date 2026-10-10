@@ -162,10 +162,10 @@ describe("the key actions use the metal button, the empty states the hero pictur
     expect(channel.container.querySelector("img.hero-img")).toBeInTheDocument();
   });
 
-  it("the not-found page keeps the line illustration: the hero is for the empty states", async () => {
+  it("the not-found page shows the Duelo logo too, instead of the line illustration", async () => {
     const { container } = renderApp({}, "/nada/por/aqui");
     await screen.findByRole("heading", { name: "No encontrado" });
-    expect(container.querySelector("svg.empty-art")).toBeInTheDocument();
-    expect(container.querySelector("img.hero-img")).toBeNull();
+    expect(container.querySelector("img.hero-img")).toBeInTheDocument();
+    expect(container.querySelector("svg.empty-art")).toBeNull();
   });
 });

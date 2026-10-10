@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { BrandLogo } from "../components/BrandLogo";
 import { Busy } from "../components/Busy";
-import { Logo } from "../components/Logo";
 import { ThemeSwitch } from "../components/ThemeSwitch";
 import { ChartIcon, ChevronIcon, GearIcon, MenuIcon, PlusIcon } from "../components/icons";
 import { Button } from "../components/ui/Button";
@@ -50,7 +50,7 @@ function ShellLayout() {
           <MenuIcon />
         </Button>
         <Link to="/" className="brand">
-          <Logo />
+          <BrandLogo size={28} />
           <span>Duelo</span>
         </Link>
         <div className="topbar-spacer" />
