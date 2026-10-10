@@ -5,8 +5,11 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
+import urllib.error
 from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -158,6 +161,104 @@ def test_post_sends_json_with_the_token_to_ingest_commit(api: Recorder) -> None:
     ((path, headers, body),) = api.requests
     assert (path, body) == ("/ingest/commit", {"project": "a/b", "head_sha": "abc"})
     assert headers["X-Ingest-Token"] == "tok" and headers["Content-Type"] == "application/json"
+
+
+class Redirector:
+    """Servidor HTTP local que contesta a todo con una redirección hacia `target`."""
+
+    def __init__(self, target: str, status: int) -> None:
+        self.hits = 0
+        redirector = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                self.rfile.read(int(self.headers["Content-Length"]))
+                redirector.hits += 1
+                self.send_response(status)
+                self.send_header("Location", target)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self._server.server_address[1]}"
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+
+
+class Spy:
+    """Servidor HTTP local que anota cualquier petición (método y cabeceras), sea cual sea."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[str, dict[str, str]]] = []
+        spy = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def _note(self) -> None:
+                spy.seen.append((self.command, dict(self.headers)))
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            do_GET = do_POST = do_PUT = _note
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self._server.server_address[1]}"
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+
+
+@pytest.fixture
+def other_host() -> Iterator[Spy]:
+    spy = Spy()
+    yield spy
+    spy.close()
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_the_hook_never_follows_a_redirect_so_the_token_stays_on_its_host(
+    status: int, other_host: Spy
+) -> None:
+    """Origen: `urlopen` seguía un 301/302/303 repitiendo la petición (como GET) con sus cabeceras,
+    así que una API que redirigiera a otro host le entregaba el `X-Ingest-Token`."""
+    redirector = Redirector(f"{other_host.url}/robado", status)
+    try:
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            hook.post(redirector.url, "tok-secreto", {"project": "a/b", "head_sha": "abc"}, 5.0)
+    finally:
+        redirector.close()
+
+    assert caught.value.code == status
+    assert redirector.hits == 1
+    assert other_host.seen == []  # el otro host no recibió nada, ni con el token ni sin él
+
+
+def test_a_redirecting_api_does_not_break_the_hook(
+    repo: Path, other_host: Spy, inline: None, tmp_path: Path
+) -> None:
+    redirector = Redirector(f"{other_host.url}/robado", 302)
+    creds = tmp_path / "hook.env"
+    creds.write_text(f"INGEST_URL={redirector.url}\nINGEST_TOKEN=tok-secreto\n")
+    commit_file(repo, "a.txt", "1\n", "uno")
+    try:
+        code = hook.main(["post-commit", "--project", "a/b", "--env-file", str(creds)])
+    finally:
+        redirector.close()
+
+    assert code == 0  # el hook sigue siendo silencioso: un 3xx es un fallo más
+    assert redirector.hits == 1 and other_host.seen == []
 
 
 # --- qué commits suben ------------------------------------------------------------------------

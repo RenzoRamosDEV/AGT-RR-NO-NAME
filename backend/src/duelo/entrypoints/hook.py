@@ -99,6 +99,19 @@ def current_branch() -> str:
         return "HEAD"  # cabeza desacoplada
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Nunca sigue una redirección: `urllib` convertiría un 3xx en un `HTTPError`.
+
+    Por defecto `urlopen` repite la petición (un 301/302/303 como GET) hacia el `Location`
+    conservando las cabeceras, token incluido, y así el token saldría de la API configurada."""
+
+    def redirect_request(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def post(base_url: str, token: str, payload: dict[str, str], timeout: float) -> None:
     request = urllib.request.Request(  # noqa: S310 - la URL es la de la API configurada
         f"{base_url}/ingest/commit",
@@ -106,7 +119,7 @@ def post(base_url: str, token: str, payload: dict[str, str], timeout: float) -> 
         headers={"Content-Type": "application/json", "X-Ingest-Token": token},
         method="POST",
     )
-    urllib.request.urlopen(request, timeout=timeout).close()  # noqa: S310
+    _OPENER.open(request, timeout=timeout).close()
 
 
 def pushed_commits(stdin_text: str, remote: str) -> list[tuple[str, str]]:
