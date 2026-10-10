@@ -5,6 +5,8 @@ import {
   findingLine,
   findingLocation,
   groupFindings,
+  severityLabel,
+  severityLevel,
   severityRank,
   severityTone,
 } from "./findings";
@@ -125,5 +127,32 @@ describe("findings without a location", () => {
       }),
     ]);
     expect(group.findings.map((f) => f.message)).toEqual(["con línea", "sin línea"]);
+  });
+});
+
+describe("severityLevel and severityLabel", () => {
+  it("gives the backend's four severities their own color family", () => {
+    expect(["bug", "risk", "improvement", "nit"].map(severityLevel)).toEqual([
+      "danger",
+      "warning",
+      "info",
+      "neutral",
+    ]);
+  });
+
+  it("is case insensitive and treats an unknown severity as neutral", () => {
+    expect(severityLevel("BUG")).toBe("danger");
+    expect(severityLevel("whatever")).toBe("neutral");
+  });
+
+  it("names severities in Spanish and keeps an unknown one as written", () => {
+    expect(["bug", "risk", "improvement", "nit"].map(severityLabel)).toEqual([
+      "Bug",
+      "Riesgo",
+      "Mejora",
+      "Detalle",
+    ]);
+    expect(severityLabel("seguridad")).toBe("Seguridad");
+    expect(severityLabel("")).toBe("—");
   });
 });

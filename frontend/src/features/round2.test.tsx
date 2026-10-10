@@ -243,7 +243,7 @@ describe("change detail", () => {
     const panel = await screen.findByRole("region", { name: "Hallazgos" });
     expect(within(panel).getAllByRole("heading", { level: 3 })).toHaveLength(1);
     const items = within(panel).getAllByRole("listitem");
-    expect(items[0]).toHaveTextContent("critical");
+    expect(items[0]).toHaveTextContent("Crítico");
     expect(items[0]).toHaveTextContent("Codex");
     expect(items[1]).toHaveTextContent("menor");
   });

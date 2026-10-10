@@ -132,7 +132,7 @@ function Checks({ reviews }: { reviews: Review[] }) {
             aria-label={`${agentLabel(r.agent)}: ${REVIEW_STATE_TEXT[r.status]}`}
             title={`${agentLabel(r.agent)}: ${REVIEW_STATE_TEXT[r.status]}`}
           >
-            <AgentAvatar agent={r.agent} size="sm" />
+            <AgentAvatar agent={r.agent} size={20} />
             <span className="check-dot" aria-hidden="true" />
           </span>
         </li>

@@ -1,5 +1,5 @@
 import { Busy } from "../../components/Busy";
-import { agentLabel } from "../../components/ui/AgentAvatar";
+import { AgentAvatar, agentLabel } from "../../components/ui/AgentAvatar";
 import type { Change } from "../../data/mock";
 import { pendingAgents } from "../../lib/pending";
 
@@ -25,6 +25,7 @@ export function PendingAgents({
       ) : (
         waiting.map((agent) => (
           <li key={agent}>
+            <AgentAvatar agent={agent} size={20} />
             <Busy activity="agent" label={`${agentLabel(agent)} está revisando…`} inline />
           </li>
         ))

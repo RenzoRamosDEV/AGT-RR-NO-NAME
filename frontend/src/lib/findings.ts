@@ -40,6 +40,42 @@ export function severityTone(severity: string): "danger" | "warning" | "neutral"
   return WARNING.has(name) ? "warning" : "neutral";
 }
 
+export type SeverityLevel = "danger" | "warning" | "info" | "neutral";
+
+const INFO = new Set(["improvement", "low", "info"]);
+
+/**
+ * Four color families: red for what breaks, amber for what may, blue for improvements and gray for
+ * nits (and for anything the agent invented).
+ */
+export function severityLevel(severity: string): SeverityLevel {
+  const name = severity.toLowerCase();
+  if (DANGER.has(name)) return "danger";
+  if (WARNING.has(name)) return "warning";
+  return INFO.has(name) ? "info" : "neutral";
+}
+
+const SEVERITY_LABEL: Record<string, string> = {
+  critical: "Crítico",
+  bug: "Bug",
+  high: "Alto",
+  risk: "Riesgo",
+  medium: "Medio",
+  improvement: "Mejora",
+  low: "Bajo",
+  info: "Info",
+  nit: "Detalle",
+};
+
+/** Spanish name of a severity; an unknown one is shown as the agent wrote it, capitalized. */
+export function severityLabel(severity: string): string {
+  const name = severity.trim();
+  return (
+    SEVERITY_LABEL[name.toLowerCase()] ??
+    (name ? name.charAt(0).toUpperCase() + name.slice(1) : "—")
+  );
+}
+
 /** The backend (and some agents) send `N/A` or an empty string when there is no file. */
 export function findingFile(finding: Pick<Finding, "file">): string | undefined {
   const file = finding.file?.trim();

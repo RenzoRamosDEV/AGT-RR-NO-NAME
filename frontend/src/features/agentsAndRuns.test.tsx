@@ -62,7 +62,9 @@ describe("configured agents", () => {
   it("lists the real agents in Settings", async () => {
     renderWith({ health: health(AGENTS) }, "/settings");
     const row = (await screen.findByText("Agentes activos")).closest(".setting") as HTMLElement;
-    await waitFor(() => expect(row).toHaveTextContent("Agent_1, Agent_2, Gemini"));
+    const chips = await within(row).findAllByRole("listitem");
+    // Each chip is the avatar (the initials of an unknown agent) followed by its real name.
+    expect(chips.map((chip) => chip.textContent)).toEqual(["A1Agent_1", "A2Agent_2", "GGemini"]);
     expect(row).not.toHaveTextContent("Claude");
   });
 

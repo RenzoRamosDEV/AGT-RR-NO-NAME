@@ -294,6 +294,8 @@ Layout tipo Slack con la estética de GitHub y tema Sistema / Claro / Oscuro (ve
 
 **Tema:** estética de GitHub (contenido) y Slack (conversación), con tema Sistema / Claro / Oscuro y tokens CSS en `styles/tokens.css` (ADR 0003, que sustituye al 0002). El color secundario configurable queda diferido. Estados de carga de IA con `thinking-orbs`, que sigue el tema y tiene fallback estático bajo `prefers-reduced-motion`.
 
+**Reviews y agentes:** Claude y Codex se identifican con su logo (los demás agentes, con iniciales). El resumen y los hallazgos se pintan con un Markdown mínimo y seguro (código en línea, listas, negrita, enlaces http o https; nunca HTML), cada hallazgo es una tarjeta con severidad, ubicación `archivo:línea` copiable y recomendación aparte, el panel del detalle filtra por severidad y los textos largos se pliegan con «Ver más» (ADR 0005).
+
 **Accesibilidad:** navegación completa con teclado, `aria-expanded` en los hilos desplegables y contraste AA comprobado con el color elegido; si no llega, el tono se oscurece automáticamente.
 
 ## Integración con Claude Code y Codex
