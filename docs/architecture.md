@@ -97,6 +97,13 @@ que ya está en el spec o en `openspec/specs/`.
   lleva `X-Request-ID`); el truncado del diff a `MAX_DIFF_CHARS` sigue siendo el límite de negocio.
   El hook no sigue redirecciones (un 3xx es un fallo silencioso), de modo que el token no sale del
   host de la URL configurada. `GET /changes/{id}/events` ordena por `(created_at, id)`.
+- `change-queries` / `service-health` (change `dynamic-agents-and-review-summaries`): cada
+  elemento del canal lleva `reviews`, una lista ligera (`agent`, `status`, `score`, `duration_ms`,
+  `run`) solo del `run` actual, obtenida con **una** consulta adicional por página y sin las
+  columnas pesadas (`ReviewBrief` en `application/read_models.py`); `GET /health/dependencies`
+  añade `agent_names` (de `AGENT_NAMES`) para que la UI no suponga «Claude y Codex». El frontend
+  pide el detalle completo al abrir «Ver respuestas» y muestra del detalle solo el run actual, con
+  los anteriores colapsados.
 
 ## Variables de entorno
 

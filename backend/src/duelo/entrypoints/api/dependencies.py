@@ -65,6 +65,8 @@ class ApiDependencies:
     # Trabajos de larga duración que la app arranca al iniciar y cancela al cerrar.
     background_jobs: Sequence[Callable[[], Coroutine[Any, Any, None]]] = ()
     readiness_checks: Mapping[str, Check] = field(default_factory=dict)
+    # Nombres de los agentes configurados (`AGENT_NAMES`), solo para informarlos en el diagnóstico.
+    agent_names: Sequence[str] = ()
     # `None` = sin límite de peticiones (RATE_LIMIT_REQUESTS=0).
     rate_limiter: RateLimiter | None = None
     close: Callable[[], Awaitable[None]] = _noop

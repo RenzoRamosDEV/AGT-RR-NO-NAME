@@ -227,52 +227,8 @@
         "title": "ChangeKind",
         "type": "string"
       },
-      "ChangePageResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeSummaryResponse"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "ChangePageResponse",
-        "type": "object"
-      },
-      "ChangeReviewStatus": {
-        "enum": [
-          "pending",
-          "running",
-          "partial_failed",
-          "failed",
-          "completed"
-        ],
-        "title": "ChangeReviewStatus",
-        "type": "string"
-      },
-      "ChangeStatus": {
-        "enum": [
-          "pending"
-        ],
-        "title": "ChangeStatus",
-        "type": "string"
-      },
-      "ChangeSummaryResponse": {
+      "ChangeListItemResponse": {
+        "description": "Elemento del canal: el resumen del change m\u00e1s las reviews ligeras de su run actual.",
         "properties": {
           "author": {
             "title": "Author",
@@ -314,6 +270,13 @@
           "review_status": {
             "$ref": "#/components/schemas/ChangeReviewStatus"
           },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewBriefResponse"
+            },
+            "title": "Reviews",
+            "type": "array"
+          },
           "run": {
             "title": "Run",
             "type": "integer"
@@ -349,13 +312,66 @@
           "run",
           "created_at",
           "diff_summary",
-          "stale"
+          "stale",
+          "reviews"
         ],
-        "title": "ChangeSummaryResponse",
+        "title": "ChangeListItemResponse",
         "type": "object"
+      },
+      "ChangePageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ChangePageResponse",
+        "type": "object"
+      },
+      "ChangeReviewStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "partial_failed",
+          "failed",
+          "completed"
+        ],
+        "title": "ChangeReviewStatus",
+        "type": "string"
+      },
+      "ChangeStatus": {
+        "enum": [
+          "pending"
+        ],
+        "title": "ChangeStatus",
+        "type": "string"
       },
       "DependenciesHealthResponse": {
         "properties": {
+          "agent_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Agent Names",
+            "type": "array"
+          },
           "dependencies": {
             "additionalProperties": {
               "$ref": "#/components/schemas/DependencyHealthResponse"
@@ -374,7 +390,8 @@
         },
         "required": [
           "status",
-          "dependencies"
+          "dependencies",
+          "agent_names"
         ],
         "title": "DependenciesHealthResponse",
         "type": "object"
@@ -771,6 +788,53 @@
           "run"
         ],
         "title": "RetryReviewResponse",
+        "type": "object"
+      },
+      "ReviewBriefResponse": {
+        "description": "Review reducida del listado: sin resumen, hallazgos, error ni salida cruda. El detalle\ncompleto se pide con `GET /changes/{id}`.",
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "run": {
+            "title": "Run",
+            "type": "integer"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          }
+        },
+        "required": [
+          "agent",
+          "status",
+          "score",
+          "duration_ms",
+          "run"
+        ],
+        "title": "ReviewBriefResponse",
         "type": "object"
       },
       "ReviewResponse": {

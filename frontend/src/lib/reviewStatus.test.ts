@@ -16,7 +16,7 @@ describe("aggregateStatus", () => {
     [["completed", "running"], "running"],
     [["running", "running"], "running"],
   ] as [ReviewStatus[], string][])("%j -> %s", (statuses, expected) => {
-    expect(aggregateStatus(reviews(...statuses))).toBe(expected);
+    expect(aggregateStatus(reviews(...statuses), 2)).toBe(expected);
   });
 
   it("uses the number of expected agents", () => {

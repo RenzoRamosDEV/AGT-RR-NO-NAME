@@ -10,8 +10,20 @@ from uuid import UUID
 
 from duelo.domain.change import Change, ChangeKind, ChangeStatus
 from duelo.domain.diff import DiffSummary
-from duelo.domain.review import Review
+from duelo.domain.review import Review, ReviewStatus
 from duelo.domain.review_status import ChangeReviewStatus, FindingsSummary
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewBrief:
+    """Lo mínimo de una review para pintar el canal: sin resumen, hallazgos, error ni salida
+    cruda, que se piden con el detalle del change."""
+
+    agent: str
+    status: ReviewStatus
+    score: int | None
+    duration_ms: int | None
+    run: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +47,8 @@ class ChangeSummary:
     diff_summary: DiffSummary
     # Lo calcula el caso de uso con su reloj; el repositorio no lo conoce.
     stale: bool = False
+    # Solo las del `run` actual, por agente.
+    reviews: tuple[ReviewBrief, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

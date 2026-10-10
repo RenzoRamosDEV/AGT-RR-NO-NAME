@@ -239,6 +239,7 @@ describe("settings diagnostics", () => {
       { name: "postgres", status: "ok", latencyMs: 4 },
       { name: "temporal", status: "ok", latencyMs: 12 },
     ],
+    agentNames: ["claude", "codex"],
     ...overrides,
   });
 

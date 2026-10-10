@@ -35,6 +35,16 @@ interface ChangeSummaryDto {
   diff_truncated: boolean;
   run?: number;
   review_status?: ReviewAggregate;
+  /** Light reviews of the current run; only the channel listing sends them. */
+  reviews?: ReviewBriefDto[];
+}
+
+interface ReviewBriefDto {
+  agent: string;
+  status: "completed" | "failed";
+  score: number | null;
+  duration_ms: number | null;
+  run: number;
 }
 
 interface ReviewDto {
@@ -64,6 +74,7 @@ interface HealthDto {
     string,
     { status: "ok" | "unavailable"; latency_ms: number; reason?: "timeout" | "error" | null }
   >;
+  agent_names?: string[];
 }
 
 interface RetryDto {
@@ -71,7 +82,7 @@ interface RetryDto {
   run: number;
 }
 
-interface ChangeDetailDto extends ChangeSummaryDto {
+interface ChangeDetailDto extends Omit<ChangeSummaryDto, "reviews"> {
   diff: string;
   reviews: ReviewDto[];
 }
@@ -184,6 +195,20 @@ function toChange(dto: ChangeSummaryDto): Change {
     truncated: dto.diff_truncated,
     run: dto.run,
     reviewStatus: dto.review_status,
+    ...(dto.reviews ? { reviews: dto.reviews.map((b) => toBrief(dto.id, b)) } : {}),
+  };
+}
+
+/** The listing has no review ids: a change has one review per agent and run, so that is the key. */
+function toBrief(changeId: string, dto: ReviewBriefDto): Review {
+  return {
+    id: `${changeId}:${dto.agent}:${dto.run}`,
+    agent: dto.agent,
+    status: dto.status,
+    run: dto.run,
+    score: dto.score,
+    durationMs: dto.duration_ms,
+    partial: true,
   };
 }
 
@@ -244,7 +269,11 @@ export function createHttpSource(
     },
     async change(id) {
       const dto = await get<ChangeDetailDto>(`/changes/${encodeURIComponent(id)}`);
-      return { ...toChange(dto), diff: dto.diff, reviews: dto.reviews.map(toReview) };
+      return {
+        ...toChange({ ...dto, reviews: undefined }),
+        diff: dto.diff,
+        reviews: dto.reviews.map(toReview),
+      };
     },
     async agentStats() {
       const rows = await get<AgentStatDto[]>("/stats/agents");
@@ -269,6 +298,7 @@ export function createHttpSource(
             latencyMs: d.latency_ms,
             reason: d.reason ?? undefined,
           })),
+        agentNames: dto.agent_names ?? [],
       };
     },
     async retry(id, token) {

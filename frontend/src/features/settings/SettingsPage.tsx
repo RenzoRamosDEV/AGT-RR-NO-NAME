@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
+import { agentLabel } from "../../components/ui/AgentAvatar";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import type { DependencyHealth, Health } from "../../data/mock";
@@ -14,6 +15,10 @@ const REASON_LABEL: Record<NonNullable<DependencyHealth["reason"]>, string> = {
 };
 
 const dependencyLabel = (name: string) => DEPENDENCY_LABEL[name] ?? name;
+
+/** `Claude, Codex`; a server that does not report its agents shows a dash. */
+const agentNamesText = (names: readonly string[]) =>
+  names.length > 0 ? names.map(agentLabel).join(", ") : "—";
 
 function Diagnostics({ health }: { health: Health }) {
   return (
@@ -57,7 +62,9 @@ export function SettingsPage() {
       </div>
       <div className="setting">
         <span>Agentes activos</span>
-        <span className="muted">Claude, Codex</span>
+        <span className="muted">
+          {health.status === "ready" ? agentNamesText(health.data.agentNames) : "—"}
+        </span>
       </div>
       <ProjectsSettings />
       <section aria-labelledby="settings-health">

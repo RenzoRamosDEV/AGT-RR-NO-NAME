@@ -37,7 +37,7 @@ export function makeSource(overrides: Partial<DataSource> = {}): DataSource {
       throw new ApiError("no", 404);
     },
     agentStats: async () => [],
-    health: async () => ({ status: "ok", dependencies: [] }),
+    health: async () => ({ status: "ok", dependencies: [], agentNames: ["claude", "codex"] }),
     retry: async () => {
       throw new ApiError("no", 404);
     },

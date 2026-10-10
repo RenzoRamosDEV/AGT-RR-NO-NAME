@@ -14,6 +14,7 @@ from duelo.application.read_models import (
     ChangePage,
     ChangeSummary,
     RawOutput,
+    ReviewBrief,
 )
 from duelo.domain.change import MAX_HEAD_SHA, MAX_REF, MAX_URL, ChangeKind, ChangeStatus
 from duelo.domain.diff import DiffSummary
@@ -163,14 +164,49 @@ class ChangeSummaryResponse(BaseModel):
         )
 
 
+class ReviewBriefResponse(BaseModel):
+    """Review reducida del listado: sin resumen, hallazgos, error ni salida cruda. El detalle
+    completo se pide con `GET /changes/{id}`."""
+
+    agent: str
+    status: ReviewStatus
+    score: int | None
+    duration_ms: int | None
+    run: int
+
+    @classmethod
+    def from_domain(cls, brief: ReviewBrief) -> ReviewBriefResponse:
+        return cls(
+            agent=brief.agent,
+            status=brief.status,
+            score=brief.score,
+            duration_ms=brief.duration_ms,
+            run=brief.run,
+        )
+
+
+class ChangeListItemResponse(ChangeSummaryResponse):
+    """Elemento del canal: el resumen del change más las reviews ligeras de su run actual."""
+
+    reviews: list[ReviewBriefResponse]
+
+    @classmethod
+    def from_summary(cls, change: ChangeSummary) -> ChangeListItemResponse:
+        base = ChangeSummaryResponse.from_summary(change)
+        return cls(
+            **base.model_dump(),
+            reviews=[ReviewBriefResponse.from_domain(r) for r in change.reviews],
+        )
+
+
 class ChangePageResponse(BaseModel):
-    items: list[ChangeSummaryResponse]
+    items: list[ChangeListItemResponse]
     next_cursor: str | None = None
 
     @classmethod
     def from_page(cls, page: ChangePage, next_cursor: str | None) -> ChangePageResponse:
         return cls(
-            items=[ChangeSummaryResponse.from_summary(c) for c in page.items],
+            items=[ChangeListItemResponse.from_summary(c) for c in page.items],
             next_cursor=next_cursor,
         )
 
@@ -344,6 +380,8 @@ class DependencyHealthResponse(BaseModel):
 class DependenciesHealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     dependencies: dict[str, DependencyHealthResponse]
+    # Agentes configurados (`AGENT_NAMES`); la UI los usa en vez de suponer «Claude y Codex».
+    agent_names: list[str]
 
 
 class ErrorResponse(BaseModel):
