@@ -156,7 +156,16 @@ que ya está en el spec o en `openspec/specs/`.
   que reenviar un commit ya revisado no vuelve a lanzar a los agentes. **Versiones:** los metadatos
   de usuario exigen un servidor nuevo (el 1.24.2 los descarta; validado el 1.26.2, también como
   actualización sobre una base de datos del 1.24.2) y una UI reciente (la 2.31.2 no pinta «Summary &
-  Details»; la 2.36.1 sí).
+  Details»; la 2.36.1 sí). **Sin credenciales:** como el historial es inmutable, todo texto libre que
+  entra en él (resumen, ficheros, mensajes y severidad de los hallazgos, error y título del change, en la
+  entrada del workflow y en sus resúmenes estáticos, y los «Current Details») pasa por `redact_secrets`
+  **antes** de acotarse (`bound_redacted`; change `redact-secrets-in-temporal-history`): pares
+  `token=`/`password=`/`authorization:` con su valor (incluido `Bearer`/`Basic`), `sk-…`, tokens de
+  GitHub, claves de AWS, tokens de Slack, JWT y claves PEM. Es heurístico; la tabla `reviews` y la API
+  guardan el texto original. **Riesgos aceptados:** dos commits del mismo proyecto con los mismos 12
+  primeros hex de SHA compartirían id (≈ 2⁻⁴⁸ por pareja), y la guarda del id antiguo es «consulta y luego
+  arranca»: solo falla con un API antiguo y uno nuevo a la vez (drenar los productores antiguos al
+  desplegar).
 
 ## Variables de entorno
 

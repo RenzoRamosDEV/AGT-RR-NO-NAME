@@ -72,7 +72,19 @@ haga que Temporal ignore el commit repetido. Para filtrar un repositorio en la l
   actividad («claude revisa 3f2a9c1») salen en la línea de tiempo.
 
 El texto de las reviews, que puede citar trozos de tu código, **queda guardado en el historial de
-Temporal de tu máquina** (en el Postgres local), igual que ya queda en la tabla `reviews`.
+Temporal de tu máquina** (en el Postgres local), igual que ya queda en la tabla `reviews`. Como ese
+historial es **inmutable**, lo que entra en él pasa antes por una redacción de credenciales
+(`token=…`, `Authorization: Bearer …`, `sk-…`, tokens de GitHub, claves de AWS, tokens de Slack, JWT y
+claves privadas): un revisor que avisa de que hay una en el diff no la deja escrita para siempre.
+Es heurística, no una garantía (una contraseña en prosa sin forma reconocible no se detecta), y la
+tabla `reviews` y la API siguen guardando el texto original.
+
+**Al desplegar este cambio:** arranca el worker nuevo a la vez que el API y, si hubiera un API
+anterior, páralo antes y deja terminar las ingestas en vuelo. La comprobación del id antiguo es
+«consulta y luego arranca», no atómica: si un API antiguo y uno nuevo reciben el mismo commit a la vez,
+los agentes podrían ejecutarse dos veces (y gastar suscripción). Con un único API, como hoy, no ocurre.
+Dos commits del mismo proyecto con los mismos 12 primeros hex de SHA (≈ 2⁻⁴⁸ por pareja) compartirían
+id de workflow; se acepta para no alargar los nombres.
 
 Para ver «Summary & Details», «Current Details» y los resúmenes hace falta un Temporal nuevo: el
 servidor **1.24 los descarta** y la UI **2.31 no los pinta**. El `docker-compose.yml` usa ahora
