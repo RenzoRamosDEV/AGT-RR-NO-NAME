@@ -5,6 +5,7 @@ import { CopyButton } from "../../components/CopyButton";
 import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
 import { StatusIcon } from "../../components/StatusIcon";
+import { UndoneBanner } from "../../components/UndoneNotice";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
 import { HERO } from "../../components/brand";
 import { Beam } from "../../components/fx/Beam";
@@ -93,6 +94,7 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                 <span className="mono">{shortSha(change.sha)}</span>
               </p>
               <h1>{change.title}</h1>
+              <UndoneBanner change={change} slug={slug} />
               {change.reviewStatus && (
                 <p className="row status-line">
                   <span className="status-pill" data-tone={AGGREGATE_TONE[change.reviewStatus]}>

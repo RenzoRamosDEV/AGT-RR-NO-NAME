@@ -143,6 +143,14 @@ export const FileIcon = (p: IconProps) => (
   </Svg>
 );
 
+/** Curved arrow going back: a commit that was undone. */
+export const UndoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5.4 3.4 2.6 6.2l2.8 2.8" />
+    <path d="M2.6 6.2h6.5a3.7 3.7 0 0 1 0 7.4H5.6" />
+  </Svg>
+);
+
 export const ExternalIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h3" />

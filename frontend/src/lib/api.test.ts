@@ -28,6 +28,62 @@ describe("createHttpSource", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://api.test/projects", expect.anything());
   });
 
+  it("maps a reverted commit's state and the commit that reverts it", async () => {
+    const dto = {
+      ...summary,
+      kind: "commit",
+      commit_state: "reverted",
+      reverted_by: { id: "22222222-2222-2222-2222-222222222222", head_sha: "d93f0b4cccc" },
+    };
+    const source = createHttpSource(
+      "http://api.test",
+      vi.fn(async () => jsonResponse({ items: [dto], next_cursor: null })),
+    );
+    const [change] = (await source.changes("acme/widgets")).items;
+    expect(change.commitState).toBe("reverted");
+    expect(change.revertedBy).toEqual({
+      id: "22222222-2222-2222-2222-222222222222",
+      sha: "d93f0b4cccc",
+    });
+  });
+
+  it("maps a discarded commit and the detail of a reverted one", async () => {
+    const source = createHttpSource(
+      "http://api.test",
+      vi.fn(async (url: RequestInfo | URL) =>
+        String(url).includes("/changes/")
+          ? jsonResponse({
+              ...summary,
+              kind: "commit",
+              commit_state: "reverted",
+              reverted_by: { id: "r1", head_sha: "abc1234" },
+              diff: "",
+              reviews: [],
+            })
+          : jsonResponse({
+              items: [{ ...summary, kind: "commit", commit_state: "discarded" }],
+              next_cursor: null,
+            }),
+      ),
+    );
+    expect((await source.changes("acme/widgets")).items[0].commitState).toBe("discarded");
+    const detail = await source.change(summary.id);
+    expect(detail.commitState).toBe("reverted");
+    expect(detail.revertedBy).toEqual({ id: "r1", sha: "abc1234" });
+  });
+
+  it("treats a server that sends no commit state as a normal commit", async () => {
+    const source = createHttpSource(
+      "http://api.test",
+      vi.fn(async () =>
+        jsonResponse({ items: [{ ...summary, kind: "commit" }], next_cursor: null }),
+      ),
+    );
+    const [change] = (await source.changes("acme/widgets")).items;
+    expect(change.commitState).toBe("active");
+    expect(change.revertedBy).toBeUndefined();
+  });
+
   it("requests a channel page with kind and an encoded opaque cursor", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ items: [summary], next_cursor: "a+b/c=" }));
     const source = createHttpSource("http://api.test", fetchMock);
