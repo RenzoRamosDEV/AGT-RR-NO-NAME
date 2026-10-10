@@ -1,4 +1,5 @@
 import { type OrbState, ThinkingOrb } from "thinking-orbs";
+import { useResolvedTheme } from "../lib/theme";
 import { useReducedMotion } from "../lib/useReducedMotion";
 
 /** What the interface is doing; each activity has one orb state so the meaning lives in one place. */
@@ -30,6 +31,7 @@ interface Props {
  */
 export function Busy({ activity, label, inline = false, className = "" }: Props) {
   const reduced = useReducedMotion();
+  const theme = useResolvedTheme();
   const cls = ["busy", className].filter(Boolean).join(" ");
   const content = (
     <>
@@ -37,7 +39,7 @@ export function Busy({ activity, label, inline = false, className = "" }: Props)
         {reduced ? (
           "…"
         ) : (
-          <ThinkingOrb state={ACTIVITY_STATE[activity]} size={ORB_SIZE} theme="dark" />
+          <ThinkingOrb state={ACTIVITY_STATE[activity]} size={ORB_SIZE} theme={theme} />
         )}
       </span>
       <span>{label}</span>

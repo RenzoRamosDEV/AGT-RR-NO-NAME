@@ -47,8 +47,17 @@ describe("navigation", () => {
   it("reaches interactive controls in order with Tab", async () => {
     renderAt("/p/duelo");
     await screen.findByRole("link", { name: /acme\/widgets/ });
+    // Header first (menu, brand, theme), then the sidebar, then the page.
     await userEvent.tab();
     expect(screen.getByRole("button", { name: "Menú" })).toHaveFocus();
+    await userEvent.tab();
+    expect(screen.getByRole("link", { name: "Duelo" })).toHaveFocus();
+    for (const theme of ["Tema sistema", "Tema claro", "Tema oscuro"]) {
+      await userEvent.tab();
+      expect(screen.getByRole("button", { name: theme })).toHaveFocus();
+    }
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: /Proyectos/ })).toHaveFocus();
     await userEvent.tab();
     expect(screen.getByRole("link", { name: /duelo/ })).toHaveFocus();
     await userEvent.tab();

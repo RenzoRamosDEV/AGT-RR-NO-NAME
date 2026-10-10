@@ -9,6 +9,8 @@ interface Props<T> {
   loadingLabel: string;
   /** What the loading is doing, which picks the orb; a plain load by default. */
   activity?: Activity;
+  /** Decorative placeholder shown under the loading label (rows, cards). */
+  skeleton?: ReactNode;
   /** Shown instead of the generic error when the request answered 404. */
   notFound?: ReactNode;
   children: (data: T) => ReactNode;
@@ -19,18 +21,26 @@ export function AsyncBoundary<T>({
   state,
   loadingLabel,
   activity = "load",
+  skeleton,
   notFound,
   children,
 }: Props<T>) {
   if (state.status === "loading") {
-    return <Busy activity={activity} label={loadingLabel} />;
+    return (
+      <>
+        <Busy activity={activity} label={loadingLabel} className="busy-block" />
+        {skeleton}
+      </>
+    );
   }
   if (state.status === "error") {
     if (notFound && state.error instanceof ApiError && state.error.notFound) return <>{notFound}</>;
     return (
       <div className="notice" role="alert">
         <p>{state.error instanceof Error ? state.error.message : "Ocurrió un error inesperado."}</p>
-        <Button onClick={state.retry}>Reintentar</Button>
+        <Button size="sm" onClick={state.retry}>
+          Reintentar
+        </Button>
       </div>
     );
   }

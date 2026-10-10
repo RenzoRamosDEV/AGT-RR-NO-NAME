@@ -11,12 +11,33 @@ export interface FindingGroup {
   findings: GroupedFinding[];
 }
 
-const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"];
+/** From most to least serious; includes the backend's own words (`bug`, `risk`, `improvement`, `nit`). */
+const SEVERITY_ORDER = [
+  "critical",
+  "bug",
+  "high",
+  "risk",
+  "medium",
+  "improvement",
+  "low",
+  "info",
+  "nit",
+];
 
 /** Unknown severities (free text in the backend) sort after the known ones. */
 export function severityRank(severity: string): number {
   const rank = SEVERITY_ORDER.indexOf(severity.toLowerCase());
   return rank === -1 ? SEVERITY_ORDER.length : rank;
+}
+
+const DANGER = new Set(["critical", "bug", "high"]);
+const WARNING = new Set(["risk", "medium"]);
+
+/** Color family of a severity: red for what breaks, amber for what may, neutral for the rest. */
+export function severityTone(severity: string): "danger" | "warning" | "neutral" {
+  const name = severity.toLowerCase();
+  if (DANGER.has(name)) return "danger";
+  return WARNING.has(name) ? "warning" : "neutral";
 }
 
 /** The backend (and some agents) send `N/A` or an empty string when there is no file. */

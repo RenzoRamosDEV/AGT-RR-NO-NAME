@@ -147,6 +147,7 @@ function ProjectRow({
         )}
         {project.github && (
           <Button
+            size="sm"
             onClick={onSync}
             disabled={syncing}
             aria-busy={syncing}
@@ -161,7 +162,12 @@ function ProjectRow({
             )}
           </Button>
         )}
-        <Button onClick={onRemove} aria-label={`Quitar proyecto ${project.name}`}>
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={onRemove}
+          aria-label={`Quitar proyecto ${project.name}`}
+        >
           Quitar proyecto
         </Button>
       </div>
@@ -212,16 +218,18 @@ export function ProjectsSettings() {
   }
 
   return (
-    <section aria-labelledby="settings-projects">
-      <div className="row">
+    <section className="box" aria-labelledby="settings-projects">
+      <div className="box-title row">
         <h2 id="settings-projects">Proyectos vigilados</h2>
-        <Button onClick={openAddProject}>Añadir proyecto</Button>
+        <Button size="sm" variant="primary" onClick={openAddProject}>
+          Añadir proyecto
+        </Button>
       </div>
-      {notice && <output className="notice">{notice}</output>}
+      {notice && <output className="notice flat success">{notice}</output>}
       <AsyncBoundary state={projects} loadingLabel="Cargando proyectos…">
         {(list) =>
           list.length === 0 ? (
-            <p className="muted">Aún no hay proyectos vigilados.</p>
+            <p className="muted box-pad">Aún no hay proyectos vigilados.</p>
           ) : (
             <>
               <div className="retry">
