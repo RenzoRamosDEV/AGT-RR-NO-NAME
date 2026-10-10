@@ -2,6 +2,7 @@ import type {
   AgentStat,
   Change,
   ChangeKind,
+  CommitState,
   Finding,
   Health,
   Review,
@@ -35,6 +36,10 @@ interface ChangeSummaryDto {
   diff_truncated: boolean;
   run?: number;
   review_status?: ReviewAggregate;
+  /** `discarded`: no longer on any branch; `reverted`: undone by a later commit (`git revert`). */
+  commit_state?: CommitState;
+  /** The commit that reverts this one; only with `commit_state` = `reverted`. */
+  reverted_by?: { id: string; head_sha: string } | null;
   /** Light reviews of the current run; only the channel listing sends them. */
   reviews?: ReviewBriefDto[];
 }
@@ -198,6 +203,11 @@ function toChange(dto: ChangeSummaryDto): Change {
     truncated: dto.diff_truncated,
     run: dto.run,
     reviewStatus: dto.review_status,
+    // An old server sends neither field: the change is then a normal one.
+    commitState: dto.commit_state ?? "active",
+    ...(dto.reverted_by
+      ? { revertedBy: { id: dto.reverted_by.id, sha: dto.reverted_by.head_sha } }
+      : {}),
     ...(dto.reviews ? { reviews: dto.reviews.map((b) => toBrief(dto.id, b)) } : {}),
   };
 }

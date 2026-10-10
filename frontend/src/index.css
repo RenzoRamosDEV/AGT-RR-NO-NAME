@@ -1005,6 +1005,90 @@ kbd,
   margin: 0;
 }
 
+/* ---------- Undone commits (discarded or reverted): amber row, label in the middle ---------- */
+
+.change[data-commit-state] {
+  background: color-mix(in srgb, var(--warning-bg) 70%, transparent);
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.change[data-commit-state] .change-row:hover {
+  background: var(--warning-bg);
+}
+
+/* The title stays readable: a thin amber strike, not a heavy one. */
+.change[data-commit-state] .change-title a {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--warning) 70%, transparent);
+}
+
+.change-row[data-undone] {
+  grid-template-columns: 16px minmax(0, 1.5fr) minmax(150px, 1fr) auto;
+}
+
+.undone-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+  color: var(--warning);
+  text-align: center;
+}
+
+.undone-label strong {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.undone-label span {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.list-box[data-density="compact"] .undone-label {
+  flex-direction: row;
+  gap: 8px;
+  padding: 2px 10px;
+}
+
+.undone-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+}
+
+.undone-banner svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning);
+}
+
+.undone-banner strong {
+  display: block;
+  color: var(--warning);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.undone-banner p {
+  margin: 2px 0 0;
+}
+
 .change .thread {
   padding: 8px 16px 16px 44px;
   border-top: 1px solid var(--border-muted);
@@ -1923,6 +2007,16 @@ dialog.modal h2 {
 
   .change-row {
     grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .change-row[data-undone] {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .undone-label {
+    grid-column: 2;
+    align-items: flex-start;
+    text-align: left;
   }
 
   .change-side {

@@ -76,6 +76,10 @@
             "title": "Author",
             "type": "string"
           },
+          "commit_state": {
+            "$ref": "#/components/schemas/CommitState",
+            "default": "active"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -115,6 +119,16 @@
           "ref": {
             "title": "Ref",
             "type": "string"
+          },
+          "reverted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevertedByResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "review_status": {
             "$ref": "#/components/schemas/ChangeReviewStatus"
@@ -234,6 +248,10 @@
             "title": "Author",
             "type": "string"
           },
+          "commit_state": {
+            "$ref": "#/components/schemas/CommitState",
+            "default": "active"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -266,6 +284,16 @@
           "ref": {
             "title": "Ref",
             "type": "string"
+          },
+          "reverted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevertedByResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "review_status": {
             "$ref": "#/components/schemas/ChangeReviewStatus"
@@ -361,6 +389,15 @@
           "pending"
         ],
         "title": "ChangeStatus",
+        "type": "string"
+      },
+      "CommitState": {
+        "enum": [
+          "active",
+          "discarded",
+          "reverted"
+        ],
+        "title": "CommitState",
         "type": "string"
       },
       "DependenciesHealthResponse": {
@@ -568,6 +605,12 @@
             "title": "Author",
             "type": "string"
           },
+          "body": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Body",
+            "type": "string"
+          },
           "diff": {
             "default": "",
             "title": "Diff",
@@ -642,6 +685,12 @@
           "author": {
             "default": "",
             "title": "Author",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Body",
             "type": "string"
           },
           "diff": {
@@ -793,6 +842,26 @@
           "run"
         ],
         "title": "RetryReviewResponse",
+        "type": "object"
+      },
+      "RevertedByResponse": {
+        "description": "El commit que revierte a otro (`git revert`): lo m\u00ednimo para nombrarlo y enlazarlo.",
+        "properties": {
+          "head_sha": {
+            "title": "Head Sha",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "head_sha"
+        ],
+        "title": "RevertedByResponse",
         "type": "object"
       },
       "ReviewBriefResponse": {

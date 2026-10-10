@@ -65,7 +65,9 @@ services:
       STALE_AFTER_SECONDS: ${STALE_AFTER_SECONDS:-1800}
       # LOCAL_PROJECTS_ENABLED (alta de proyectos desde carpetas locales, con hooks de git) queda
       # apagado a propósito: el contenedor no ve tus repos. Para usarlo, arranca la API en tu
-      # máquina (ver README, «Proyectos desde carpetas locales»).
+      # máquina (ver README, «Proyectos desde carpetas locales»). Con él también corre el barrido
+      # que marca los commits deshechos (REACHABILITY_SWEEP_INTERVAL_SECONDS y
+      # REACHABILITY_WINDOW_COMMITS), así que tampoco aplica aquí.
     ports:
       - "127.0.0.1:8000:8000"
 

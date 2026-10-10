@@ -153,7 +153,13 @@ async def test_the_channel_query_walks_the_index_and_counts_reviews_index_only(
         # orden inverso y se cuentan las reviews de cada change con un index-only scan.
         assert "Index Scan Backward" in plan, plan
         assert "Index Only Scan using ix_reviews_change_run_status" in plan, plan
-        assert "Seq Scan" not in plan and "Sort" not in plan and "HashAggregate" not in plan, plan
+        assert "Seq Scan" not in plan and "HashAggregate" not in plan, plan
+        # El canal no se ordena: `changes` sale ya ordenado del índice. El único `Sort` que puede
+        # haber es el del LATERAL «revert más reciente» de cada commit (el alias `changes_1`), que
+        # ordena las pocas filas de revert de ese commit, no el proyecto.
+        assert "Sort Key: changes.created_at" not in plan, plan
+    # El revert vivo de cada commit se busca con el índice parcial, no recorriendo `changes`.
+    assert "Index Scan using ix_changes_project_reverts_sha" in unfiltered, unfiltered
     assert "ix_changes_project_created_at_id" in unfiltered
     assert "ix_changes_project_kind_created_at_id" in by_kind
     assert "ix_changes_project_created_at_id" in by_status

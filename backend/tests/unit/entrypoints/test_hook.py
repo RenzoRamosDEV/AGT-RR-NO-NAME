@@ -135,6 +135,48 @@ def test_the_payload_carries_sha_title_author_branch_and_diff(repo: Path) -> Non
     assert "+++ b/x.py" in payload["diff"] and "+print(1)" in payload["diff"]
 
 
+def test_the_payload_carries_the_message_body_without_the_title(repo: Path) -> None:
+    sha = commit_file(repo, "x.py", "print(1)\n", "feat: algo\n\nPrimera línea.\nSegunda línea.")
+
+    payload = hook.build_payload("acme/widgets", sha, "main")
+
+    assert payload["title"] == "feat: algo"
+    assert payload["body"] == "Primera línea.\nSegunda línea."
+
+
+def test_a_commit_with_only_a_title_sends_an_empty_body(repo: Path) -> None:
+    sha = commit_file(repo, "x.py", "print(1)\n", "feat: solo título")
+
+    payload = hook.build_payload("acme/widgets", sha, "main")
+
+    assert payload["title"] == "feat: solo título"
+    assert payload["body"] == ""
+
+
+def test_a_long_body_is_cut_to_what_the_hook_sends(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sha = commit_file(repo, "x.py", "print(1)\n", "feat: algo\n\n" + "cuerpo " * 100)
+    monkeypatch.setattr(hook, "MAX_BODY", 20)
+
+    payload = hook.build_payload("p", sha, "main")
+
+    assert len(payload["body"]) == 20
+
+
+def test_the_message_of_a_real_git_revert_carries_the_sha_the_api_needs(repo: Path) -> None:
+    """Es lo que permite a la API marcar el original como revertido: un `git revert` escribe el SHA
+    solo en el cuerpo del mensaje, y el título (`Revert "..."`) no lo trae."""
+    original = commit_file(repo, "x.py", "print(1)\n", "feat: login")
+    git(repo, "revert", "--no-edit", original)
+    revert = git(repo, "rev-parse", "HEAD").strip()
+
+    payload = hook.build_payload("acme/widgets", revert, "main")
+
+    assert payload["title"] == 'Revert "feat: login"'
+    assert f"This reverts commit {original}" in payload["body"]
+
+
 def test_a_huge_diff_and_long_fields_are_cut_to_what_the_api_accepts(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -332,6 +374,20 @@ def test_post_commit_sends_the_new_commit(
         "fix: algo",
     )
     assert api.requests[0][1]["X-Ingest-Token"] == "secreto"
+
+
+def test_post_commit_of_a_revert_sends_the_body_with_the_reverted_sha(
+    repo: Path, api: Recorder, inline: None, tmp_path: Path
+) -> None:
+    creds = env_file(tmp_path, api)
+    original = commit_file(repo, "a.txt", "1\n", "feat: login")
+    git(repo, "revert", "--no-edit", original)
+
+    assert hook.main(["post-commit", "--project", "acme/widgets", "--env-file", creds]) == 0
+
+    (body,) = api.wait_for(1)
+    assert body["title"] == 'Revert "feat: login"'
+    assert f"This reverts commit {original}" in str(body["body"])
 
 
 def test_pre_push_reads_the_refs_from_the_file_and_sends_each_commit(

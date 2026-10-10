@@ -6,6 +6,7 @@ import { CopyButton } from "../../components/CopyButton";
 import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
 import { StatusIcon } from "../../components/StatusIcon";
+import { UndoneLabel, UndoneStatusIcon } from "../../components/UndoneNotice";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
 import { HERO } from "../../components/brand";
 import { Beam } from "../../components/fx/Beam";
@@ -18,6 +19,7 @@ import { useAgentNames, useDataSource } from "../../data/source";
 import { agentList } from "../../lib/agents";
 import { ApiError } from "../../lib/api";
 import type { StateFilter } from "../../lib/channelQuery";
+import { undoneCounts, undoneNotice } from "../../lib/commitState";
 import { ingestCommand } from "../../lib/ingestHint";
 import { useNow } from "../../lib/now";
 import { isWaiting } from "../../lib/pending";
@@ -155,11 +157,22 @@ function ChangeThread({
   const panelId = useId();
   const reviews = full.status === "ready" ? full.reviews : (change.reviews ?? []);
   const KindIcon = change.kind === "pr" ? PullRequestIcon : CommitIcon;
+  // A commit that is no longer on its branch (or was reverted) is shown in amber, with its state
+  // said in words in the middle of the row. Its reviews are untouched.
+  const undone = undoneNotice(change);
   return (
-    <li className="change" data-status={change.reviewStatus}>
+    <li
+      className="change"
+      data-status={change.reviewStatus}
+      data-commit-state={undone ? undone.state : undefined}
+    >
       <Beam active={isWaiting(change.reviewStatus)}>
-        <div className="change-row">
-          <StatusIcon status={change.reviewStatus} />
+        <div className="change-row" data-undone={undone ? "" : undefined}>
+          {undone ? (
+            <UndoneStatusIcon notice={undone} />
+          ) : (
+            <StatusIcon status={change.reviewStatus} />
+          )}
           <div className="change-main">
             <div className="change-title">
               <Link to={changePath(slug, change.id)}>
@@ -188,6 +201,7 @@ function ChangeThread({
             </ul>
             <PendingAgents change={change} agentNames={agentNames} />
           </div>
+          {undone && <UndoneLabel notice={undone} />}
           <div className="change-side">
             <Checks reviews={change.reviews ?? []} />
             <Button
@@ -331,7 +345,9 @@ export function ChannelPage({ slug }: { slug: string }) {
 
   const unfiltered = filter === "all" && stateFilter === "all" && search === "";
   const emptyChannel = items.length === 0 && unfiltered && !hasMore;
-  const counts = stateCounts(items);
+  // The review counters keep counting an undone commit as a normal change; its own state is said
+  // apart ("1 deshecho · 2 revertidos").
+  const counts = [stateCounts(items), undoneCounts(items)].filter(Boolean).join(" · ");
   return (
     <div className="page">
       <div className="channel-head">

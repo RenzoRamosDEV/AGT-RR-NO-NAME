@@ -1,6 +1,13 @@
 from uuid import uuid4
 
-from duelo.domain.events import ChangeCreated, ReviewCompleted, ReviewFailed
+from duelo.domain.events import (
+    ChangeCreated,
+    CommitDiscarded,
+    CommitRestored,
+    CommitReverted,
+    ReviewCompleted,
+    ReviewFailed,
+)
 
 
 def test_change_created_payload_keeps_all_fields() -> None:
@@ -56,4 +63,34 @@ def test_review_failed_payload_keeps_all_fields() -> None:
         "project_id": str(project_id),
         "agent": "agent_2",
         "error": "timeout",
+    }
+
+
+def test_commit_discarded_payload_keeps_all_fields() -> None:
+    change_id, project_id = uuid4(), uuid4()
+    event = CommitDiscarded(change_id=change_id, project_id=project_id)
+
+    assert event.type == "commit.discarded"
+    assert event.to_payload() == {"change_id": str(change_id), "project_id": str(project_id)}
+
+
+def test_commit_restored_payload_keeps_all_fields() -> None:
+    change_id, project_id = uuid4(), uuid4()
+    event = CommitRestored(change_id=change_id, project_id=project_id)
+
+    assert event.type == "commit.restored"
+    assert event.to_payload() == {"change_id": str(change_id), "project_id": str(project_id)}
+
+
+def test_commit_reverted_payload_names_the_commit_that_reverts_it() -> None:
+    change_id, project_id, reverter_id = uuid4(), uuid4(), uuid4()
+    event = CommitReverted(
+        change_id=change_id, project_id=project_id, reverted_by_change_id=reverter_id
+    )
+
+    assert event.type == "commit.reverted"
+    assert event.to_payload() == {
+        "change_id": str(change_id),
+        "project_id": str(project_id),
+        "reverted_by_change_id": str(reverter_id),
     }

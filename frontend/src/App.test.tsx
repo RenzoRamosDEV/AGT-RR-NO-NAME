@@ -126,7 +126,8 @@ describe("channel threads", () => {
 
   it("filters by kind", async () => {
     renderAt("/p/duelo");
-    expect(await screen.findAllByRole("button", { name: "Ver respuestas" })).toHaveLength(2);
+    // Four commits (two of them undone) and one PR.
+    expect(await screen.findAllByRole("button", { name: "Ver respuestas" })).toHaveLength(5);
     await userEvent.click(screen.getByRole("button", { name: "PRs" }));
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: "Ver respuestas" })).toHaveLength(1),

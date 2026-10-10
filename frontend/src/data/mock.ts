@@ -31,6 +31,19 @@ export interface Review {
   partial?: boolean;
 }
 
+/**
+ * What happened to a commit afterwards, as reported by the API (`commit_state`): `discarded` = it is
+ * no longer on any branch of the local repository (reset, amend, rebase…); `reverted` = a later
+ * commit undoes it with `git revert`. A PR is always `active`.
+ */
+export type CommitState = "active" | "discarded" | "reverted";
+
+/** The commit that reverts another one, enough to name and link it. */
+export interface RevertedBy {
+  id: string;
+  sha: string;
+}
+
 export interface Change {
   id: string;
   kind: ChangeKind;
@@ -46,6 +59,10 @@ export interface Change {
   truncated?: boolean;
   run?: number;
   reviewStatus?: ReviewAggregate;
+  /** Absent (= `active`) when the source does not report it. */
+  commitState?: CommitState;
+  /** Set only when `commitState` is `reverted` and the reverting commit is known. */
+  revertedBy?: RevertedBy;
   /** Absent when the source does not report reviews (the API channel listing). */
   reviews?: Review[];
 }
@@ -130,6 +147,60 @@ export const projects: Project[] = [
             ],
           },
           { id: "r2", agent: "codex", status: "running" },
+        ],
+      },
+      {
+        // A commit that was undone with `git reset`: no longer on any branch of the repository.
+        id: "c3",
+        kind: "commit",
+        title: "fix: ajustar el límite de peticiones por IP",
+        author: "marta",
+        sha: "7c1d2e8",
+        ref: "main",
+        url: "https://github.com/RenzoRamosDEV/Duelo/commit/7c1d2e8",
+        createdAt: minutesAgo(40),
+        diff: DIFF,
+        commitState: "discarded",
+        reviewStatus: "completed",
+        reviews: [
+          { id: "r5", agent: "claude", status: "completed", run: 1, durationMs: 31_000, score: 6 },
+          { id: "r6", agent: "codex", status: "completed", run: 1, durationMs: 28_000, score: 7 },
+        ],
+      },
+      {
+        // A commit that `git revert` undid later: it is still on the branch.
+        id: "c4",
+        kind: "commit",
+        title: "feat: filtros del canal en el servidor",
+        author: "renzo",
+        sha: "b52e9a0",
+        ref: "main",
+        url: "https://github.com/RenzoRamosDEV/Duelo/commit/b52e9a0",
+        createdAt: minutesAgo(90),
+        diff: DIFF,
+        commitState: "reverted",
+        revertedBy: { id: "c5", sha: "d93f0b4" },
+        reviewStatus: "completed",
+        reviews: [
+          { id: "r7", agent: "claude", status: "completed", run: 1, durationMs: 40_000, score: 8 },
+          { id: "r8", agent: "codex", status: "completed", run: 1, durationMs: 36_000, score: 9 },
+        ],
+      },
+      {
+        id: "c5",
+        kind: "commit",
+        title: 'Revert "feat: filtros del canal en el servidor"',
+        author: "renzo",
+        sha: "d93f0b4",
+        ref: "main",
+        url: "https://github.com/RenzoRamosDEV/Duelo/commit/d93f0b4",
+        createdAt: minutesAgo(60),
+        diff: DIFF,
+        commitState: "active",
+        reviewStatus: "completed",
+        reviews: [
+          { id: "r9", agent: "claude", status: "completed", run: 1, durationMs: 22_000, score: 7 },
+          { id: "r10", agent: "codex", status: "completed", run: 1, durationMs: 19_000, score: 7 },
         ],
       },
       {
