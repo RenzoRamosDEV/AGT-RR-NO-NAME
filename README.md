@@ -43,12 +43,55 @@ podman exec -i <contenedor-postgres> psql -U duelo -c \
 curl -i -X POST localhost:8000/ingest/commit \
   -H "X-Ingest-Token: $INGEST_TOKEN" -H 'content-type: application/json' \
   -d '{"project":"demo/repo","ref":"refs/heads/main","head_sha":"abc123","title":"t","author":"yo","diff":"d"}'
-# -> 202 con el change_id; en la Temporal UI (localhost:8080) aparece commit-<proyecto>-abc123
+# -> 202 con el change_id; en la Temporal UI (localhost:8080) aparece commit-demo-repo-abc123-<proyecto6>
 #    y la tabla reviews acaba con una fila completed por agente
 curl localhost:8000/ready                 # 200 solo si Postgres y Temporal responden
 ```
 
 El token es un secreto compartido (`INGEST_TOKEN`); la API escucha solo en `127.0.0.1`.
+
+### Ver las reviews en Temporal
+
+Cada commit o PR es un workflow con un nombre que dice qué es y de qué repositorio:
+`commit-acme-widgets-3f2a9c1b7d4e-ab12cd` (o `pr-…`), y su hijo `review-commit-acme-widgets-3f2a9c1b7d4e-ab12cd-r1`
+(`-r2` si se reintenta). Son `{tipo}-{repo}-{sha de 12}-{proyecto de 6}`: el último trozo es el
+inicio del UUID del proyecto y evita que quitar un proyecto y volver a añadirlo con el mismo nombre
+haga que Temporal ignore el commit repetido. Para filtrar un repositorio en la lista de Temporal UI:
+`WorkflowId STARTS_WITH "commit-acme-widgets"`.
+
+**Lo que respondió cada reviewer se lee en Temporal**, sin ir a la base de datos:
+
+- En la página de un `review-…`, **Result** lista, por agente, el resumen, la nota, los hallazgos
+  (`severity`, `file`, `line`, `message`) y, si falló, el error saneado. Es lo mismo que devuelve
+  cada actividad `run_review` en el historial de eventos. Va **acotado** (resumen ≤ 2000 caracteres,
+  ≤ 30 hallazgos, mensajes ≤ 300; el campo `truncated` avisa si se cortó algo) y **nunca** lleva el
+  diff ni la salida cruda del CLI.
+- **Current Details** del hijo muestra una línea por agente que se rellena según terminan
+  («✅ claude · completada · 7/10 · 3 hallazgos (1 bug, 2 nit)…», «⏳ codex · revisando…»).
+- **Summary & Details** del workflow («commit · acme/widgets · título») y el resumen de cada
+  actividad («claude revisa 3f2a9c1») salen en la línea de tiempo.
+
+El texto de las reviews, que puede citar trozos de tu código, **queda guardado en el historial de
+Temporal de tu máquina** (en el Postgres local), igual que ya queda en la tabla `reviews`. Como ese
+historial es **inmutable**, lo que entra en él pasa antes por una redacción de credenciales
+(`token=…`, `Authorization: Bearer …`, `sk-…`, tokens de GitHub, claves de AWS, tokens de Slack, JWT y
+claves privadas): un revisor que avisa de que hay una en el diff no la deja escrita para siempre.
+Es heurística, no una garantía (una contraseña en prosa sin forma reconocible no se detecta), y la
+tabla `reviews` y la API siguen guardando el texto original.
+
+**Al desplegar este cambio:** arranca el worker nuevo a la vez que el API y, si hubiera un API
+anterior, páralo antes y deja terminar las ingestas en vuelo. La comprobación del id antiguo es
+«consulta y luego arranca», no atómica: si un API antiguo y uno nuevo reciben el mismo commit a la vez,
+los agentes podrían ejecutarse dos veces (y gastar suscripción). Con un único API, como hoy, no ocurre.
+Dos commits del mismo proyecto con los mismos 12 primeros hex de SHA (≈ 2⁻⁴⁸ por pareja) compartirían
+id de workflow; se acepta para no alargar los nombres.
+
+Para ver «Summary & Details», «Current Details» y los resúmenes hace falta un Temporal nuevo: el
+servidor **1.24 los descarta** y la UI **2.31 no los pinta**. El `docker-compose.yml` usa ahora
+`auto-setup:1.26.2` y `ui:2.36.1`. Si ya tenías el stack levantado, recréalo con `just down && just dev`
+(el volumen de Postgres se conserva y el servidor nuevo actualiza el esquema de Temporal solo; se
+comprobó que los workflows anteriores siguen ahí). Con el stack viejo todo lo demás funciona igual
+(nombres y resultados), sin esos paneles.
 
 ### Revisar de verdad con Claude Code y Codex
 

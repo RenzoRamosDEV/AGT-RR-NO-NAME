@@ -72,6 +72,14 @@ class ProjectPaths(Protocol):
         ...
 
 
+class ProjectSlugs(Protocol):
+    async def slug_of(self, project_id: UUID) -> str | None:
+        """Devuelve el nombre (`owner/repo`) del proyecto, o `None` si no existe.
+
+        Lo usa quien arranca un workflow para darle un nombre legible en la interfaz de Temporal."""
+        ...
+
+
 class ReviewRepository(Protocol):
     async def add(self, review: Review, event: ReviewCompleted | ReviewFailed) -> Review:
         """Persiste `review` y `event` en una única transacción.

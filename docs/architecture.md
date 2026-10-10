@@ -134,6 +134,38 @@ que ya está en el spec o en `openspec/specs/`.
   (riesgo residual aceptado). Los errores (sin CLI, sin sesión, plazo, salida
   inválida o truncada) usan mensajes fijos que nunca incluyen la salida del CLI y acaban en una
   `Review(failed)`.
+- `workflow-observability` (change `temporal-readable-workflows`): lo que se ve en la interfaz de
+  Temporal. **Nombres:** el padre es `{kind}-{repo}-{sha12}-{proyecto6}[-r{run}]` (`commit-…`, `pr-…`)
+  y el hijo `review-{kind}-{repo}-{sha12}-{proyecto6}-r{run}`; las funciones puras están en
+  `application/workflow_naming.py` porque las usan a la vez el adaptador que arranca el workflow y el
+  propio workflow, que no puede leer la base de datos (el nombre del repo llega en
+  `ReviewCommitInput`; el starter lo resuelve con el puerto `ProjectSlugs`). El sufijo `proyecto6`
+  (UUID del proyecto) evita que quitar un proyecto y volver a añadirlo con el mismo nombre haga que
+  `ALLOW_DUPLICATE_FAILED_ONLY` ignore en silencio el commit repetido. **Respuesta del reviewer:** el
+  resultado de `run_review` (`RunReviewResult`) lleva ahora un extracto **acotado** de la review
+  (agente, resumen ≤ 2000 caracteres, nota, ≤ 30 hallazgos de ≤ 300, error saneado sin credenciales y
+  `truncated`; `application/payload_limits.py`) y **nunca** el diff ni la salida cruda del CLI; así se
+  lee en el evento `ActivityTaskCompleted` y en el resultado del hijo y del padre. Los campos nuevos
+  tienen valor por defecto: un histórico anterior se deserializa y un worker viejo ignora los
+  campos de más. El hijo publica «Current Details» (markdown, una línea por agente, todo lo que
+  escribe un agente se escapa) y cada actividad y cada workflow llevan un resumen de usuario.
+  **Compatibilidad:** el id y los metadatos del hijo salen de la entrada del padre; una ejecución sin
+  esos datos (anterior al cambio) conserva el id antiguo, y todo va tras
+  `workflow.patched("readable-workflow-names")`. Antes de arrancar con el id nuevo el starter consulta
+  el antiguo (`{kind}-{proyecto}-{sha}`): si esa ejecución existe y no falló, no arranca otra, así
+  que reenviar un commit ya revisado no vuelve a lanzar a los agentes. **Versiones:** los metadatos
+  de usuario exigen un servidor nuevo (el 1.24.2 los descarta; validado el 1.26.2, también como
+  actualización sobre una base de datos del 1.24.2) y una UI reciente (la 2.31.2 no pinta «Summary &
+  Details»; la 2.36.1 sí). **Sin credenciales:** como el historial es inmutable, todo texto libre que
+  entra en él (resumen, ficheros, mensajes y severidad de los hallazgos, error y título del change, en la
+  entrada del workflow y en sus resúmenes estáticos, y los «Current Details») pasa por `redact_secrets`
+  **antes** de acotarse (`bound_redacted`; change `redact-secrets-in-temporal-history`): pares
+  `token=`/`password=`/`authorization:` con su valor (incluido `Bearer`/`Basic`), `sk-…`, tokens de
+  GitHub, claves de AWS, tokens de Slack, JWT y claves PEM. Es heurístico; la tabla `reviews` y la API
+  guardan el texto original. **Riesgos aceptados:** dos commits del mismo proyecto con los mismos 12
+  primeros hex de SHA compartirían id (≈ 2⁻⁴⁸ por pareja), y la guarda del id antiguo es «consulta y luego
+  arranca»: solo falla con un API antiguo y uno nuevo a la vez (drenar los productores antiguos al
+  desplegar).
 
 ## Variables de entorno
 
