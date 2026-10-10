@@ -79,6 +79,13 @@ que ya está en el spec o en `openspec/specs/`.
   `DELETE`. **Seguridad:** quien tenga `INGEST_TOKEN` hace que la API escriba hooks en repos del
   usuario; solo debe activarse con la API en la máquina del usuario y nunca en un contenedor ni
   expuesta (ver su `design.md`).
+- `change-queries` / `service-health` (change `dynamic-agents-and-review-summaries`): cada
+  elemento del canal lleva `reviews`, una lista ligera (`agent`, `status`, `score`, `duration_ms`,
+  `run`) solo del `run` actual, obtenida con **una** consulta adicional por página y sin las
+  columnas pesadas (`ReviewBrief` en `application/read_models.py`); `GET /health/dependencies`
+  añade `agent_names` (de `AGENT_NAMES`) para que la UI no suponga «Claude y Codex». El frontend
+  pide el detalle completo al abrir «Ver respuestas» y muestra del detalle solo el run actual, con
+  los anteriores colapsados.
 
 ## Variables de entorno
 

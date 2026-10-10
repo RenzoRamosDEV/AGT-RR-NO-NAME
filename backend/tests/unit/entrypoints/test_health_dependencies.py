@@ -66,4 +66,8 @@ async def test_a_slow_dependency_times_out_without_delaying_the_others(monkeypat
 async def test_without_checks_it_is_ok_and_empty() -> None:
     response = await _get({})
 
-    assert response.json() == {"status": "ok", "dependencies": {}}
+    assert response.json() == {
+        "status": "ok",
+        "dependencies": {},
+        "agent_names": ["agent_1", "agent_2"],
+    }

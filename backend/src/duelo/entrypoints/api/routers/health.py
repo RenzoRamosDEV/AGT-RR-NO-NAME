@@ -64,4 +64,8 @@ async def dependencies_health(request: Request) -> DependenciesHealthResponse:
     results = await asyncio.gather(*(_probe(check) for check in checks.values()))
     by_name = dict(zip(checks, results, strict=True))
     degraded = any(r.status != "ok" for r in results)
-    return DependenciesHealthResponse(status="degraded" if degraded else "ok", dependencies=by_name)
+    return DependenciesHealthResponse(
+        status="degraded" if degraded else "ok",
+        dependencies=by_name,
+        agent_names=list(request.app.state.dependencies.agent_names),
+    )

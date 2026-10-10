@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from uuid import UUID
 
-from duelo.application.read_models import ChangeCursor, ChangeSummary
+from duelo.application.read_models import ChangeCursor, ChangeSummary, ReviewBrief
 from duelo.domain.change import Change, ChangeKind
 from duelo.domain.events import ChangeCreated
 from duelo.domain.review_status import ChangeReviewStatus, review_status_of_run
@@ -74,9 +74,8 @@ class FakeChangeRepository:
             rows = [c for c in rows if (c.created_at, c.id) < (after.created_at, after.id)]
         summaries: list[ChangeSummary] = []
         for c in rows:
-            review_status = review_status_of_run(
-                c.run, await self._reviews.list_for_change(c.id), expected_agents=expected_agents
-            )
+            stored = await self._reviews.list_for_change(c.id)
+            review_status = review_status_of_run(c.run, stored, expected_agents=expected_agents)
             if status and review_status not in status:
                 continue
             summaries.append(
@@ -95,6 +94,17 @@ class FakeChangeRepository:
                     run=c.run,
                     created_at=c.created_at,
                     diff_summary=c.diff_summary,
+                    reviews=tuple(
+                        ReviewBrief(
+                            agent=r.agent,
+                            status=r.status,
+                            score=r.score,
+                            duration_ms=r.duration_ms,
+                            run=r.run,
+                        )
+                        for r in sorted(stored, key=lambda r: r.agent)
+                        if r.run == c.run
+                    ),
                 )
             )
         return summaries[:limit]

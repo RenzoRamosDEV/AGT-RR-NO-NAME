@@ -75,6 +75,7 @@ def build_fake_api(
     git: FakeGitRepository | None = None,
     hooks: FakeHookInstaller | None = None,
     github: FakeGithubPrSource | None = None,
+    agent_names: list[str] | None = None,
 ) -> FakeApi:
     settings = Settings(
         ingest_token=TOKEN,
@@ -83,6 +84,7 @@ def build_fake_api(
         stale_after_seconds=stale_after_seconds,
         allowed_origins=allowed_origins or [],
         local_projects_enabled=local_projects,
+        **({"agent_names": agent_names} if agent_names else {}),
     )
     stale_after = timedelta(seconds=settings.stale_after_seconds)
     project = Project(id=uuid4(), slug=PROJECT_SLUG)
@@ -176,6 +178,7 @@ def build_fake_api(
         list_change_events=list_change_events,
         get_review_raw_output=get_review_raw_output,
         readiness_checks=checks,
+        agent_names=settings.agent_names,
         rate_limiter=rate_limiter,
     )
     return FakeApi(
