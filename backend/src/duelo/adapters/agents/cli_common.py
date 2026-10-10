@@ -194,6 +194,9 @@ class CliAgent(ABC):
     label: str
     binary_name: str
     binary_env: str
+    # ¿El agente puede leer la carpeta del proyecto? Si no, trabaja siempre en un directorio
+    # temporal vacío y no se le expone el repositorio.
+    uses_project_folder: bool = True
 
     def __init__(
         self,
@@ -254,7 +257,8 @@ class CliAgent(ABC):
             env_var=self.binary_env,
             which=self._which,
         )
-        async with working_directory(self._project_paths, change.project_id) as cwd:
+        paths = self._project_paths if self.uses_project_folder else None
+        async with working_directory(paths, change.project_id) as cwd:
             return await self._run(change, executable, cwd)
 
     async def _execute(self, argv: Sequence[str], *, input: str, cwd: Path) -> CommandResult:  # noqa: A002

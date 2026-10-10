@@ -30,10 +30,13 @@ class FakeRunner:
         stdout: str = "",
         stderr: str = "",
         returncode: int = 0,
+        truncated: bool = False,
         raises: BaseException | None = None,
         on_call: Callable[[RunnerCall], None] | None = None,
     ) -> None:
-        self._result = CommandResult(returncode=returncode, stdout=stdout, stderr=stderr)
+        self._result = CommandResult(
+            returncode=returncode, stdout=stdout, stderr=stderr, truncated=truncated
+        )
         self._raises = raises
         self._on_call = on_call
         self.calls: list[RunnerCall] = []

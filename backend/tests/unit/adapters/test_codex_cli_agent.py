@@ -14,7 +14,11 @@ from duelo.adapters.agents.cli_common import (
     CliTimeout,
     CliUnavailable,
 )
-from duelo.adapters.agents.codex_cli import CodexCliAgent
+from duelo.adapters.agents.codex_cli import (
+    DISABLED_FEATURES,
+    MAX_LAST_MESSAGE_BYTES,
+    CodexCliAgent,
+)
 from duelo.adapters.agents.review_payload import REVIEW_SCHEMA
 from duelo.adapters.subprocess_runner import CommandNotFound, CommandTimeout
 from tests.fakes.cli_runner import (
@@ -72,6 +76,9 @@ def test_the_arguments_are_exactly_the_read_only_ones() -> None:
         "read-only",
         "--ephemeral",
         "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        *[a for feature in DISABLED_FEATURES for a in ("--disable", feature)],
         "--output-schema",
         "/t/schema.json",
         "-o",
@@ -99,6 +106,22 @@ def test_no_argument_enables_writing_or_bypassing_the_sandbox() -> None:
         assert dangerous not in joined
     assert option_value(args, "-m") == "gpt-x"
     assert args[-1] == "-"  # el prompt se lee de la entrada estándar
+
+
+@pytest.mark.regression
+def test_codex_cannot_run_commands_nor_read_outside_the_diff() -> None:
+    """Origen: `-s read-only` solo impide escribir; con él, un prompt «ejecuta cat /etc/hostname»
+    devolvía el contenido. Se desactivan las herramientas que ejecutan o salen del directorio y no
+    se carga la configuración ni las reglas del usuario."""
+    args = _agent(FakeRunner()).build_args(
+        "codex", schema=Path("s"), output=Path("o"), cwd=Path("w")
+    )
+
+    disabled = [args[i + 1] for i, a in enumerate(args) if a == "--disable"]
+    assert {"shell_tool", "unified_exec", "hooks", "view_image"} <= set(disabled)
+    assert disabled == list(DISABLED_FEATURES)
+    assert "--ignore-user-config" in args and "--ignore-rules" in args
+    assert "--enable" not in args  # nada vuelve a activar lo desactivado
 
 
 def test_the_model_is_only_passed_when_configured() -> None:
@@ -158,16 +181,29 @@ async def test_the_temporary_files_are_deleted_even_when_the_cli_times_out() -> 
     assert not exists(seen[0].parent)
 
 
-async def test_the_working_directory_is_the_project_folder_when_it_exists(tmp_path: Path) -> None:
+async def test_codex_never_gets_the_project_folder_only_an_empty_temporary_directory(
+    tmp_path: Path,
+) -> None:
+    """Sin herramienta de shell Codex no puede leer ficheros: revisa solo el diff y no se le
+    expone el repositorio del usuario."""
     change = make_change()
-    runner = FakeRunner(on_call=_writes_output(json.dumps(VALID)))
+    seen: dict[str, object] = {}
 
-    await _agent(runner, paths=FakeProjectPaths({change.project_id: str(tmp_path)})).review(change)
+    def spy(call: RunnerCall) -> None:
+        seen["cwd"] = call.cwd
+        seen["empty"] = list(Path(str(call.cwd)).iterdir()) == []
+        _writes_output(json.dumps(VALID))(call)
 
-    (call,) = runner.calls
-    assert call.cwd == str(tmp_path) and option_value(call.argv, "-C") == str(tmp_path)
-    # Los ficheros temporales NO van en la carpeta del usuario.
-    assert not str(option_value(call.argv, "-o")).startswith(str(tmp_path))
+    runner = FakeRunner(on_call=spy)
+    paths = FakeProjectPaths({change.project_id: str(tmp_path)})
+    (tmp_path / "secreto.txt").write_text("no debe verse")
+
+    await _agent(runner, paths=paths).review(change)
+
+    assert seen["cwd"] != str(tmp_path) and seen["empty"] is True
+    assert option_value(runner.calls[0].argv, "-C") == seen["cwd"]
+    assert not exists(str(seen["cwd"]))  # y se borra al terminar
+    assert (tmp_path / "secreto.txt").exists()  # la carpeta del usuario no se toca
 
 
 async def test_the_children_do_not_receive_secrets_nor_api_keys() -> None:
@@ -198,6 +234,25 @@ async def test_an_invalid_last_message_fails_in_a_controlled_way(text: str) -> N
 
     with pytest.raises(CliBadOutput):
         await _agent(runner).review(make_change())
+
+
+@pytest.mark.regression
+async def test_a_last_message_over_the_size_limit_is_rejected_not_parsed_cut() -> None:
+    """Origen: el fichero se leía con un recorte silencioso (`[:MAX]`): un mensaje más largo que el
+    límite, aunque lo recortado fuera un JSON completo, se daba por entero."""
+    padded = json.dumps(VALID) + " " * (MAX_LAST_MESSAGE_BYTES + 1)
+    runner = FakeRunner(on_call=_writes_output(padded))
+
+    with pytest.raises(CliBadOutput):
+        await _agent(runner).review(make_change())
+
+
+async def test_a_last_message_exactly_at_the_limit_is_still_accepted() -> None:
+    text = json.dumps(VALID)
+    padded = text + " " * (MAX_LAST_MESSAGE_BYTES - len(text.encode()))
+    runner = FakeRunner(on_call=_writes_output(padded))
+
+    assert (await _agent(runner).review(make_change())).score == 4
 
 
 async def test_a_missing_output_file_is_a_bad_output() -> None:

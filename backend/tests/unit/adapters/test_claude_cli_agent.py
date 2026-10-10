@@ -98,6 +98,7 @@ def test_the_arguments_are_exactly_the_read_only_ones() -> None:
         "--json-schema",
         json.dumps(REVIEW_SCHEMA),
         "--no-session-persistence",
+        "--restricted",
         "--tools",
         "Read,Grep,Glob",
         "--permission-mode",
@@ -126,6 +127,20 @@ def test_no_argument_enables_writing_running_commands_or_the_network() -> None:
     assert option_value(args, "--permission-mode") == "dontAsk"
     # `--bare` no lee la sesión OAuth del usuario: rompería el uso sin claves de API.
     assert "--bare" not in args
+
+
+@pytest.mark.regression
+def test_claude_runs_restricted_so_its_file_tools_stay_inside_the_working_directory() -> None:
+    """Origen: sin `--restricted` el confinamiento dependía solo del modo de permisos; con él las
+    herramientas de fichero quedan confinadas al directorio de trabajo y se quitan las que
+    ejecutan código."""
+    args = _agent(FakeRunner()).build_args("claude")
+
+    assert "--restricted" in args
+    # Y se mantienen los demás aislamientos del usuario.
+    assert "--strict-mcp-config" in args
+    assert "--disable-slash-commands" in args
+    assert option_value(args, "--setting-sources") == ""
 
 
 def test_the_model_is_only_passed_when_configured() -> None:
@@ -181,6 +196,15 @@ async def test_the_timeout_and_output_limit_are_passed_to_the_runner() -> None:
 
 
 # --- salida -------------------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+async def test_a_truncated_output_is_never_read_as_complete() -> None:
+    """Origen: `run_command` recortaba la salida sin avisar y el agente la parseaba igual."""
+    runner = FakeRunner(stdout=_ok(), truncated=True)  # parseable, pero el CLI escribió más
+
+    with pytest.raises(CliBadOutput):
+        await _agent(runner).review(make_change())
 
 
 async def test_the_result_text_is_used_when_there_is_no_structured_output() -> None:

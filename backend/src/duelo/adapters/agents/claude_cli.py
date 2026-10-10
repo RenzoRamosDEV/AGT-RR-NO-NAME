@@ -68,6 +68,10 @@ class ClaudeCliAgent(CliAgent):
 
         - `--tools Read,Grep,Glob` + `--permission-mode dontAsk` + `--permission-prompts none`:
           solo lectura y nunca se queda esperando una confirmación.
+        - `--restricted`: quita las herramientas que ejecutan código y WebFetch, ignora los ajustes
+          de usuario y CONFINA las de fichero al directorio de trabajo: un diff que induzca a leer
+          una ruta absoluta (credenciales, `hook.env`) fuera del repositorio no llega a leerla, y
+          eso ya no depende solo del modo de permisos.
         - `--strict-mcp-config`, `--disable-slash-commands`, `--setting-sources ""`: no carga los
           MCP, las skills ni los hooks del usuario (la sesión OAuth sí se sigue usando; `--bare`
           no, por eso no se usa).
@@ -82,6 +86,7 @@ class ClaudeCliAgent(CliAgent):
             "--json-schema",
             json.dumps(REVIEW_SCHEMA),
             "--no-session-persistence",
+            "--restricted",
             "--tools",
             READ_ONLY_TOOLS,
             "--permission-mode",
@@ -107,7 +112,10 @@ class ClaudeCliAgent(CliAgent):
 
     def _parse(self, result: CommandResult) -> ReviewResult:
         """Lee el objeto JSON de `--output-format json`: `structured_output` ya validado contra el
-        esquema, o `result` (el mismo JSON como texto) si no viene."""
+        esquema, o `result` (el mismo JSON como texto) si no viene. Una salida recortada por el
+        límite de lectura no se interpreta nunca como completa."""
+        if result.truncated:
+            raise CliBadOutput(self.label)
         try:
             data = json.loads(result.stdout)
         except json.JSONDecodeError as exc:
