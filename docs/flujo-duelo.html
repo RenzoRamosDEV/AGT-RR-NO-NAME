@@ -169,7 +169,7 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
     </table>
   </div>
 </div>
-<div class="note good" style="margin-top:14px"><b>Dato clave:</b> Postgres es la fuente de verdad y Temporal solo orquesta. Por Temporal viajan únicamente identificadores (<code>change_id</code>, <code>agent_name</code>, <code>run</code>); el diff nunca viaja, cada activity lo carga de la base de datos (<span class="ref">workflows/activities.py:49-51</span>).</div>
+<div class="note good" style="margin-top:14px"><b>Dato clave:</b> Postgres es la fuente de verdad y Temporal solo orquesta. Por Temporal viajan identificadores (<code>change_id</code>, <code>agent_name</code>, <code>run</code>), unos datos de presentación (tipo, repositorio, SHA y título) y, de lo que responde cada reviewer, un <b>extracto acotado</b> (resumen, nota, hallazgos, error saneado) para poder leerlo en la interfaz de Temporal. El diff y la salida cruda de un CLI <b>nunca</b> viajan: cada activity carga el change de la base de datos (<span class="ref">workflows/activities.py</span>, <code>run_review</code>).</div>
 </section>
 
 <section id="simulador">
@@ -226,7 +226,7 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
   <li><b>Guardar en Postgres (idempotente)</b>
     <code>INSERT … ON CONFLICT DO NOTHING RETURNING id</code> sobre la restricción <code>UNIQUE (project_id, kind, head_sha)</code> (<span class="ref">adapters/persistence/change_repository.py:26-53</span>). Si el change ya existía, se devuelve la fila existente sin tocarla (<span class="ref">:55-62</span>) y no se emite evento. Si es nuevo, se inserta <b>en la misma transacción</b> el evento <code>change.created</code> en <code>events</code> (<span class="ref">:64-70</span>). El estado <code>status</code> del change queda siempre en <code>pending</code>; el estado útil es <code>review_status</code>, derivado de las reviews.</li>
   <li><b>Arrancar la review en Temporal</b>
-    <code>TemporalReviewStarter.start</code> (<span class="ref">adapters/orchestration/temporal_review_starter.py:22-39</span>) lanza el workflow por nombre, <code>"ReviewCommitWorkflow"</code> (<span class="ref">:26</span>), en la cola <code>platform</code> (<span class="ref">:31</span>), con id determinista <code>{kind}-{project_id}-{sha}</code> y sufijo <code>-r{run}</code> desde el segundo run (<span class="ref">:42-44</span>). La política <code>ALLOW_DUPLICATE_FAILED_ONLY</code> (<span class="ref">:34</span>) hace que una review completada no se relance al reenviar el commit y que <code>WorkflowAlreadyStartedError</code> se trate como éxito silencioso (<span class="ref">:36-37</span>). Usa el namespace <code>default</code> y el cliente conecta de forma perezosa (<span class="ref">adapters/orchestration/temporal_client.py</span>), así que la API arranca aunque Temporal esté caído.
+    <code>TemporalReviewStarter.start</code> (<span class="ref">adapters/orchestration/temporal_review_starter.py:22-39</span>) lanza el workflow por nombre, <code>"ReviewCommitWorkflow"</code> (<span class="ref">:26</span>), en la cola <code>platform</code> (<span class="ref">:31</span>), con id determinista y legible <code>{kind}-{repo}-{sha12}-{proyecto6}</code> (por ejemplo <code>commit-acme-widgets-3f2a9c1b7d4e-ab12cd</code>) y sufijo <code>-r{run}</code> desde el segundo run (<code>workflow_id</code>; las funciones están en <span class="ref">application/workflow_naming.py</span>). Antes consulta el id antiguo (<code>{kind}-{proyecto}-{sha}</code>): si esa ejecución existe y no falló, no arranca otra, para no gastar de nuevo a los agentes con un commit ya revisado. Le pone además un resumen («commit · acme/widgets · título») y una ficha de usuario. La política <code>ALLOW_DUPLICATE_FAILED_ONLY</code> (<span class="ref">:34</span>) hace que una review completada no se relance al reenviar el commit y que <code>WorkflowAlreadyStartedError</code> se trate como éxito silencioso (<span class="ref">:36-37</span>). Usa el namespace <code>default</code> y el cliente conecta de forma perezosa (<span class="ref">adapters/orchestration/temporal_client.py</span>), así que la API arranca aunque Temporal esté caído.
     <ul><li>Si el arranque falla: <code>ReviewStartError</code> (<span class="ref">:38-39</span>) → <b>503</b> (<span class="ref">entrypoints/api/routers/ingest.py:43-47</span>). El change <b>ya quedó guardado</b>, así que reenviar es seguro.</li>
         <li>No hay transacción compartida entre Postgres y Temporal: si la API muere justo entre ambos pasos, el change queda <code>pending</code> sin workflow (la UI lo marca <code>stale</code> tras 30 min, pero nada lo recupera solo).</li></ul></li>
   <li><b>Respuesta 202</b>
@@ -270,10 +270,10 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
 <div class="tree" aria-label="Árbol de ejecución">API ── start_workflow ──▶ cola <b>platform</b>   (el worker de esta cola registra AMBOS workflows: worker.py:33-37)
                          │
                          ▼
-   <b>ReviewCommitWorkflow</b>           id: {kind}-{project_id}-{sha}[-r{run}]     (workflows/review_commit.py:22-31)
+   <b>ReviewCommitWorkflow</b>           id: {kind}-{repo}-{sha12}-{proyecto6}[-r{run}]   (workflows/review_commit.py)
         │  execute_child_workflow   (sin indicar otra cola: el hijo corre también en <b>platform</b>)
         ▼
-   <b>ReviewChangeWorkflow</b>           id: review-{change_id}-r{run}              (workflows/review_change.py:29-47)
+   <b>ReviewChangeWorkflow</b>           id: review-{kind}-{repo}-{sha12}-{proyecto6}-r{run}     (workflows/review_change.py)
         │  asyncio.gather  (fan-out en paralelo, uno por agente)
         ├──▶ activity <b>run_review</b>(agent_1)  ──▶ cola <b>agents</b>
         └──▶ activity <b>run_review</b>(agent_2)  ──▶ cola <b>agents</b>
@@ -288,7 +288,7 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
       <tr><td>Heartbeat</td><td>30 s (<span class="ref">:42</span>); <code>run_review</code> envía un latido al empezar y luego cada 10 s mientras el agente trabaja (<span class="ref">workflows/activities.py</span>, <code>HEARTBEAT_INTERVAL_SECONDS</code>)</td></tr>
       <tr><td>Reintentos</td><td>3 intentos, 1 s inicial, coeficiente por defecto 2,0 (<span class="ref">:11</span>)</td></tr>
       <tr><td>Entrada</td><td><code>RunReviewInput{change_id, agent_name, run}</code> (<span class="ref">workflows/dto.py</span>)</td></tr>
-      <tr><td>Salida</td><td><code>RunReviewResult{status, review_id}</code></td></tr>
+      <tr><td>Salida</td><td><code>RunReviewResult{status, review_id, agent, summary, score, findings[], findings_total, error, duration_ms, truncated}</code>: un extracto <b>acotado</b> de la review (resumen ≤ 2000 caracteres, ≤ 30 hallazgos de ≤ 300, error sin credenciales; sin diff ni salida cruda). Se lee en Temporal (<span class="ref">workflows/dto.py</span>, <span class="ref">application/payload_limits.py</span>)</td></tr>
     </table></div>
   <div class="card"><h3>Qué pasa cuando algo falla</h3>
     <table>
@@ -297,6 +297,15 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
       <tr><td><b>Agente desconocido / change inexistente</b></td><td><code>ApplicationError(non_retryable=True)</code> sin guardar review (<span class="ref">workflows/activities.py:43-47, 53-54</span>): rompe todo el workflow.</td></tr>
     </table></div>
 </div>
+<h3>Qué se ve en la interfaz de Temporal</h3>
+<p>Cada ejecución se reconoce por su nombre y lo que respondió cada reviewer se lee sin salir de Temporal:</p>
+<ul>
+<li><b>Nombres</b> (<span class="ref">application/workflow_naming.py</span>): <code>commit-acme-widgets-3f2a9c1b7d4e-ab12cd</code> o <code>pr-…</code> para el padre y <code>review-commit-acme-widgets-3f2a9c1b7d4e-ab12cd-r1</code> para el hijo (<code>-r2</code> si se reintenta). Son <code>{tipo}-{repo}-{sha12}-{proyecto6}</code>; el último trozo, el inicio del UUID del proyecto, mantiene el id único aunque se quite y se vuelva a añadir un proyecto con el mismo nombre. En la lista se filtra con <code>WorkflowId STARTS_WITH "commit-acme-widgets"</code>.</li>
+<li><b>Lo que respondió el reviewer:</b> en la página del <code>review-…</code>, <i>Result</i> trae por agente el resumen, la nota, los hallazgos (<code>severity</code>, <code>file</code>, <code>line</code>, <code>message</code>) o el error saneado; es el mismo resultado de cada actividad <code>run_review</code> en el historial. Va acotado (<code>truncated</code> avisa si se cortó) y nunca lleva el diff ni la salida cruda del CLI.</li>
+<li><b>«Current Details»</b> del hijo (<span class="ref">workflows/review_details.py</span>): una línea por agente que se va rellenando, «⏳ codex · revisando…» y después «✅ codex · completada · 9/10 · 1 hallazgo (1 nit) — resumen». Lo que escribe un agente se escapa para que no maquete la página.</li>
+<li><b>«Summary &amp; Details»</b> del workflow («commit · acme/widgets · título») y el <b>resumen de cada actividad</b> («claude revisa 3f2a9c1») en la línea de tiempo.</li>
+</ul>
+<div class="note"><b>Requisitos y cautelas.</b> Estos resúmenes y detalles exigen un Temporal nuevo: el servidor <b>1.24 los descarta</b> y la interfaz <b>2.31 no los pinta</b>; el <code>docker-compose.yml</code> usa ahora <code>auto-setup:1.26.2</code> y <code>ui:2.36.1</code> (comprobado también que actualizar sobre la base de datos del 1.24 conserva los workflows anteriores). Con el stack viejo los nombres y los resultados se ven igual. Y el texto de las reviews, que puede citar trozos de tu código, <b>queda en el historial de Temporal de tu máquina</b>, igual que ya queda en la tabla <code>reviews</code>.</div>
 <h3>¿Qué agentes existen de verdad?</h3>
 <p>Los agentes se eligen <b>por nombre</b> en <code>AGENT_NAMES</code> (<span class="ref">adapters/agents/registry.py</span> <code>build_agents</code>, sin distinguir mayúsculas):</p>
 <ul>
@@ -360,7 +369,7 @@ footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted
 <h2>7 · El reintento (<code>run + 1</code>)</h2>
 <ol class="steps">
   <li><b>Comprobación.</b> Solo se reintenta si el estado del run actual es <code>failed</code> o <code>partial_failed</code> (<span class="ref">application/retry_review.py:42-49</span>, <span class="ref">domain/review_status.py:58</span>); si no, <b>409</b>. Un <code>pending</code> o <code>running</code> no se puede reintentar.</li>
-  <li><b>Primero se arranca, después se avanza.</b> Se arranca el workflow del run siguiente (<span class="ref">application/retry_review.py:51</span>) con id <code>…-r2</code> y su hijo <code>review-{id}-r2</code>. Si el arranque falla (503), <code>run</code> no cambia y se puede repetir.</li>
+  <li><b>Primero se arranca, después se avanza.</b> Se arranca el workflow del run siguiente (<span class="ref">application/retry_review.py:51</span>) con id <code>…-r2</code> y su hijo <code>review-{kind}-{repo}-{sha12}-{proyecto6}-r2</code>. Si el arranque falla (503), <code>run</code> no cambia y se puede repetir.</li>
   <li><b>Compare-and-swap.</b> <code>UPDATE changes SET run = run + 1 WHERE id = … AND run = 1</code> (<span class="ref">adapters/persistence/change_repository.py:178-191</span>): dos reintentos simultáneos arrancan una sola ejecución (mismo id de workflow) y solo uno avanza <code>run</code>.</li>
   <li><b>Se reejecutan todos los agentes</b> del run nuevo, no solo el que falló. Las reviews del run anterior <b>se conservan</b> (la clave es <code>(change, agent, run)</code>), pero <code>review_status</code> y <code>findings_summary</code> solo cuentan el run actual.</li>
 </ol>
@@ -410,7 +419,9 @@ const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;',
 
 /* ===== constantes del escenario ===== */
 const SHA = 'abc1234', PID = '077825f5', CID = '3f9a21', T_BASE = 14 * 3600000 + 3 * 60000 + 7000;
-const WF = 'commit-' + PID + '-' + SHA;
+const SHA12 = 'abc1234def56', P6 = PID.slice(0, 6);
+const WF = 'commit-acme-widgets-' + SHA12 + '-' + P6;
+const CHILD = (run) => 'review-commit-acme-widgets-' + SHA12 + '-' + P6 + '-r' + run;
 const EXPECTED = 2;
 
 /* ===== nodos del diagrama ===== */
@@ -460,7 +471,7 @@ function initial(scn) {
     addEv(s, 'change.created', 'commit ' + SHA);
     addRv(s, 'agent_1', 1, 'completed', 7); addEv(s, 'review.completed', 'agent_1 r1');
     addRv(s, 'agent_2', 1, 'completed', 7); addEv(s, 'review.completed', 'agent_2 r1');
-    s.platform.push({k: 'wf0', label: WF, state: 'completed'}, {k: 'wf1', label: 'review-' + CID + '-r1', state: 'completed'});
+    s.platform.push({k: 'wf0', label: WF, state: 'completed'}, {k: 'wf1', label: CHILD(1), state: 'completed'});
     s.hot.clear();
     poll(s, true);
   }
@@ -537,7 +548,7 @@ const stPg = () => ({title: '4 · Guardar en Postgres (idempotente)', from: 'api
     log(s, 'INFO', 'pg', 'BEGIN; INSERT changes (run=1) ; INSERT events change.created ; COMMIT');
   }});
 const stStart = () => ({title: '5 · Arrancar el workflow en Temporal', from: 'api', to: 'temporal', label: 'start_workflow', nodes: ['api', 'temporal'], dt: 25,
-  text: 'La API pide a Temporal arrancar <code>ReviewCommitWorkflow</code> en la cola <code>platform</code> con id determinista <code>{kind}-{project_id}-{sha}</code> (<code>' + WF + '</code>). Ese id es la <b>segunda barrera de idempotencia</b>: arrancar dos veces el mismo commit deja una sola ejecución. Solo viajan IDs; el diff no.',
+  text: 'La API pide a Temporal arrancar <code>ReviewCommitWorkflow</code> en la cola <code>platform</code> con id determinista y legible <code>{kind}-{repo}-{sha12}-{proyecto6}</code> (<code>' + WF + '</code>: tipo, repositorio, 12 primeros hex del SHA y 6 del UUID del proyecto, que evita que un proyecto quitado y vuelto a añadir con el mismo nombre choque con la ejecución anterior). Ese id es la <b>segunda barrera de idempotencia</b>: arrancar dos veces el mismo commit deja una sola ejecución. Solo viajan IDs; el diff no.',
   ref: [REF.start, REF.wfid], fx: (s) => { setLane(s, 'platform', WF, 'running'); log(s, 'INFO', 'temporal', 'StartWorkflowExecution ReviewCommitWorkflow id=' + WF + ' queue=platform'); }});
 const stResp = () => ({title: '6 · 202 Accepted', from: 'api', to: 'hook', label: '202 created:true', nodes: ['api', 'hook'], dt: 8, good: true,
   text: 'La API responde <code>202 {change_id, diff_truncated, created:true}</code>. El hook ignora la respuesta (ya está en segundo plano). La review todavía no ha empezado a producir nada: <b>la API no espera a los agentes</b>.',
@@ -546,16 +557,16 @@ const stPoll1 = () => ({title: '7 · La UI lo ve: «Pendiente»', from: 'ui', to
   text: 'No hay <i>push</i> hacia el navegador: la UI pregunta cada 5 s. En el siguiente sondeo aparece el change con <code>review_status = pending</code> (0 reviews guardadas) y una insignia gris «Pendiente». El valor se <b>deriva</b> de las reviews; no se lee de ninguna columna de estado.',
   ref: [REF.status, REF.poll], fx: (s) => { poll(s); }});
 const stChild = () => ({title: '8 · El worker de platform ejecuta el padre', from: 'temporal', to: 'wp', label: 'workflow task', nodes: ['temporal', 'wp'], dt: 60,
-  text: 'El worker de la cola <code>platform</code> recoge el workflow. <code>ReviewCommitWorkflow</code> hace una sola cosa: lanzar el hijo <code>ReviewChangeWorkflow</code> con id <code>review-{change_id}-r{run}</code> y devolver su resultado. El hijo se lanza sin indicar otra cola: corre <b>también en <code>platform</code></b>, en el mismo worker, que registra los dos workflows (<code>worker.py:33-37</code>). El padre existe para que el id del hijo incluya el <code>run</code> y un reintento no choque.',
-  ref: [REF.parent, REF.worker], fx: (s) => { setLane(s, 'platform', 'review-' + CID + '-r' + curChange(s).run, 'running'); log(s, 'INFO', 'wp', 'ReviewCommitWorkflow → execute_child_workflow review-' + CID + '-r' + curChange(s).run); }});
+  text: 'El worker de la cola <code>platform</code> recoge el workflow. <code>ReviewCommitWorkflow</code> hace una sola cosa: lanzar el hijo <code>ReviewChangeWorkflow</code> con id <code>review-{kind}-{repo}-{sha12}-{proyecto6}-r{run}</code> (<code>' + CHILD(1) + '</code>) y devolver su resultado. El hijo publica «Current Details» y un resumen por actividad. El hijo se lanza sin indicar otra cola: corre <b>también en <code>platform</code></b>, en el mismo worker, que registra los dos workflows (<code>worker.py:33-37</code>). El padre existe para que el id del hijo incluya el <code>run</code> y un reintento no choque.',
+  ref: [REF.parent, REF.worker], fx: (s) => { setLane(s, 'platform', CHILD(curChange(s).run), 'running'); log(s, 'INFO', 'wp', 'ReviewCommitWorkflow → execute_child_workflow ' + CHILD(curChange(s).run)); }});
 const stFan = (run) => ({title: '9 · Fan-out: un agente por activity, en paralelo', from: 'wp', to: 'temporal', label: '2× run_review', nodes: ['wp', 'temporal', 'wa'], dt: 40,
-  text: '<code>ReviewChangeWorkflow</code> hace <code>asyncio.gather</code> de una activity <code>run_review</code> por cada nombre de <code>agent_names</code>, en la cola <code>agents</code>: <b>timeout 5 min, heartbeat 30 s, 3 intentos</b>. Cada activity recibe solo <code>(change_id, agent_name, run)</code> y late cada 10 s mientras el agente trabaja. Si una activity agota sus intentos por infraestructura, el workflow guarda una review <code>failed</code> con una activity compensatoria en lugar de dejar el change sin rastro.',
+  text: '<code>ReviewChangeWorkflow</code> hace <code>asyncio.gather</code> de una activity <code>run_review</code> por cada nombre de <code>agent_names</code>, en la cola <code>agents</code>: <b>timeout 5 min, heartbeat 30 s, 3 intentos</b>. Cada activity recibe solo <code>(change_id, agent_name, run)</code>, lleva un resumen en la línea de tiempo de Temporal («claude revisa abc1234») y late cada 10 s mientras el agente trabaja. Si una activity agota sus intentos por infraestructura, el workflow guarda una review <code>failed</code> con una activity compensatoria en lugar de dejar el change sin rastro.',
   ref: [REF.child, REF.opts], fx: (s) => { setLane(s, 'agents', 'run_review agent_1 · r' + run, 'running'); setLane(s, 'agents', 'run_review agent_2 · r' + run, 'running'); log(s, 'INFO', 'temporal', 'ScheduleActivityTask run_review ×2 queue=agents (r' + run + ')'); }});
 function stAgent(agent, ok, run, extra) {
   const lbl = 'run_review ' + agent + ' · r' + run;
   return {title: (extra || '10') + ' · ' + agent + (ok ? ' revisa y guarda' : ' falla'), from: 'wa', to: 'pg', label: ok ? 'INSERT review' : 'INSERT review (failed)', nodes: ['wa', 'pg'], dt: 180, bad: ok ? [] : ['wa'],
     text: ok
-      ? 'La activity carga el <code>Change</code> de Postgres (no del workflow), llama al agente (por defecto el <code>FakeAgent</code>: nota 7 y un hallazgo <code>nit</code>; con <code>AGENT_NAMES=claude,codex</code>, el CLI real en solo lectura) y guarda <b>una</b> transacción con la <code>Review</code> (<code>completed</code>) y el evento <code>review.completed</code>. La clave <code>UNIQUE (change_id, agent, run)</code> hace que reintentos y reentregas no dupliquen filas ni eventos.'
+      ? 'La activity carga el <code>Change</code> de Postgres (no del workflow), llama al agente (por defecto el <code>FakeAgent</code>: nota 7 y un hallazgo <code>nit</code>; con <code>AGENT_NAMES=claude,codex</code>, el CLI real en solo lectura) y guarda <b>una</b> transacción con la <code>Review</code> (<code>completed</code>) y el evento <code>review.completed</code>. La clave <code>UNIQUE (change_id, agent, run)</code> hace que reintentos y reentregas no dupliquen filas ni eventos. La activity <b>devuelve</b> además un extracto acotado de la respuesta (resumen, nota y hallazgos): queda en el evento <code>ActivityTaskCompleted</code> y el hijo lo lista en «Current Details» («✅ agent_1 · completada · 7/10 · 1 hallazgo»), así que <b>lo que respondió el reviewer se lee en Temporal</b> sin ir a Postgres.'
       : 'El agente lanza <code>RuntimeError</code>. La activity <b>captura la excepción</b>: guarda la review con <code>status=failed</code> y el texto del error, más el evento <code>review.failed</code>, y devuelve <code>RunReviewResult(status="failed")</code>. <b>No relanza</b>: para Temporal la activity terminó bien, así que el workflow no falla y el otro agente sigue. (Otra cosa es un fallo de infraestructura que agote los 3 intentos: ahí el workflow guarda la <code>Review(failed)</code> con una activity compensatoria y un mensaje fijo; ver «Limitaciones» por el residuo si la base de datos sigue caída.)',
     ref: ok ? [REF.act, REF.fake, REF.rvAdd] : [REF.actFail, REF.rvAdd], fx: (s) => {
       setLane(s, 'agents', lbl, ok ? 'completed' : 'failed');
@@ -569,7 +580,7 @@ const stPollRunning = () => ({title: '11 · Sondeo: «En curso» (1 de 2)', from
   ref: [REF.status], fx: (s) => { poll(s); }});
 const stWfDone = (run) => ({title: '12 · Los workflows terminan', from: 'wp', to: 'temporal', label: 'Completed', nodes: ['wp', 'temporal'], dt: 90, good: true,
   text: 'Con las dos activities devueltas, el hijo termina y el padre también: ambos quedan <b>Completed</b> en Temporal, aunque alguna review haya salido <code>failed</code>. Por eso «el workflow terminó» no significa «las reviews salieron bien».',
-  ref: [REF.child, REF.parent], fx: (s) => { setLane(s, 'platform', WF + (run > 1 ? '-r' + run : ''), 'completed'); setLane(s, 'platform', 'review-' + CID + '-r' + run, 'completed'); log(s, 'INFO', 'temporal', 'WorkflowExecutionCompleted review-' + CID + '-r' + run + ' y su padre'); }});
+  ref: [REF.child, REF.parent], fx: (s) => { setLane(s, 'platform', WF + (run > 1 ? '-r' + run : ''), 'completed'); setLane(s, 'platform', CHILD(run), 'completed'); log(s, 'INFO', 'temporal', 'WorkflowExecutionCompleted ' + CHILD(run) + ' y su padre'); }});
 const stPollFinal = (txt) => ({title: '13 · Sondeo: resultado final', from: 'ui', to: 'api', label: 'GET …/changes', nodes: ['ui', 'api'], dt: 2100, good: true,
   text: txt, ref: [REF.status, REF.poll], fx: (s) => { poll(s); }});
 
