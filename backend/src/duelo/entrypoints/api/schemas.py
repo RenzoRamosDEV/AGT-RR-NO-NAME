@@ -68,10 +68,32 @@ class IngestPrResponse(IngestCommitResponse):
 class ProjectResponse(BaseModel):
     id: UUID
     slug: str
+    # Carpeta local desde la que se dio de alta; `null` si el proyecto no tiene una.
+    path: str | None
+    hooks_installed: bool
+    github: bool
 
     @classmethod
     def from_domain(cls, project: Project) -> ProjectResponse:
-        return cls(id=project.id, slug=project.slug)
+        return cls(
+            id=project.id,
+            slug=project.slug,
+            path=project.path,
+            hooks_installed=project.hooks_installed,
+            github=project.github,
+        )
+
+
+class AddProjectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Ruta absoluta de la raíz de un repo git; la validación a fondo la hace el caso de uso.
+    path: str = Field(min_length=1, max_length=4096, pattern=NO_NUL)
+
+
+class SyncPrsResponse(BaseModel):
+    synced: int
+    created: int
 
 
 class DiffFileResponse(BaseModel):

@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duelo · Cómo funciona, de punta a punta</title>
+<meta name="description" content="Guía interactiva y animada del flujo de Duelo: hook de git, API, Postgres, Temporal (workflows y colas), workers y frontend.">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#000; --surface:#0a0a0a; --surface-2:#111; --border:#1f1f1f; --border-strong:#333;
+  --fg:#ededed; --fg-muted:#a1a1a1; --accent:#fff; --accent-fg:#000;
+  --success:#5ee0a0; --danger:#ff7b7b; --warning:#f0c15a; --info:#8ab4ff;
+  --radius-sm:6px; --radius:10px; --radius-lg:14px;
+  --font-sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 var(--font-sans)}
+a{color:var(--info)}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.ref{font-family:var(--font-mono);font-size:.86em}
+td,th,li,p,code,.ref,summary,h3{overflow-wrap:anywhere}
+.explain .chip{white-space:normal;overflow-wrap:anywhere;border-radius:var(--radius-sm)}
+code{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.05em .4em}
+.skip{position:absolute;left:-999px;top:8px;background:var(--accent);color:var(--accent-fg);padding:8px 12px;border-radius:var(--radius-sm);z-index:100}
+.skip:focus{left:8px}
+header.top{position:sticky;top:0;z-index:50;background:rgba(0,0,0,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+header.top .in{max-width:1240px;margin:0 auto;padding:10px 20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+header.top strong{letter-spacing:.02em}
+nav.toc{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:.88rem}
+nav.toc a{color:var(--fg-muted);text-decoration:none;padding:2px 0;border-bottom:1px solid transparent}
+nav.toc a:hover{color:var(--fg);border-color:var(--border-strong)}
+main{max-width:1240px;margin:0 auto;padding:0 20px 80px}
+section{padding:44px 0 8px;border-top:1px solid var(--border)}
+section:first-of-type{border-top:0}
+h1{font-size:clamp(1.9rem,4vw,2.8rem);line-height:1.15;margin:44px 0 12px}
+h2{font-size:1.55rem;margin:0 0 6px}
+h3{font-size:1.1rem;margin:26px 0 6px}
+.lead{color:var(--fg-muted);max-width:78ch;font-size:1.06rem}
+.muted{color:var(--fg-muted)}
+p{max-width:84ch}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.card h3{margin-top:0}
+.chip{display:inline-block;font:600 .72rem/1 var(--font-mono);padding:4px 8px;border-radius:99px;border:1px solid var(--border-strong);color:var(--fg-muted);white-space:nowrap}
+.chip.ok{color:var(--success);border-color:#1d5a40}.chip.bad{color:var(--danger);border-color:#6b2d2d}.chip.warn{color:var(--warning);border-color:#6a5a25}.chip.info{color:var(--info);border-color:#2c4573}
+.ref{color:var(--fg-muted);background:transparent;border:0;padding:0}
+.note{border-left:3px solid var(--warning);background:var(--surface);padding:10px 14px;border-radius:0 var(--radius-sm) var(--radius-sm) 0;max-width:84ch}
+.note.good{border-color:var(--success)}.note.bad{border-color:var(--danger)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--fg-muted);font-weight:600}
+.tw{overflow-x:auto}
+ol.steps{padding-left:0;list-style:none;counter-reset:s;max-width:96ch}
+ol.steps>li{counter-increment:s;position:relative;padding:4px 0 14px 46px;border-left:1px solid var(--border-strong);margin-left:14px}
+ol.steps>li::before{content:counter(s);position:absolute;left:-15px;top:2px;width:29px;height:29px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font:700 .85rem var(--font-sans)}
+ol.steps>li>b{display:block}
+ol.steps ul{margin:.3em 0 0;padding-left:1.2em;color:var(--fg-muted)}
+details{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2px 16px;margin:10px 0}
+details>summary{cursor:pointer;padding:10px 0;font-weight:600}
+.layers{display:grid;gap:8px;max-width:760px}
+.layer{border:1px solid var(--border-strong);border-radius:var(--radius);padding:10px 14px;background:var(--surface)}
+.layer b{display:block}
+.arrowd{text-align:center;color:var(--fg-muted);font-size:.85rem}
+.tree{font-family:var(--font-mono);font-size:.86rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;overflow-x:auto;white-space:pre;line-height:1.7}
+/* ---------- simulador ---------- */
+#sim{background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-lg);padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:10px}
+.bar label{color:var(--fg-muted);font-size:.85rem}
+button,select{font:inherit;color:var(--fg);background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:7px 12px;cursor:pointer}
+button:hover:not([aria-disabled=true]),select:hover{border-color:var(--fg-muted)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+button[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+input[type=range]{accent-color:#fff;flex:1;min-width:140px}
+.progress{font:600 .85rem var(--font-mono);color:var(--fg-muted);white-space:nowrap}
+.stagewrap{background:#000;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+svg#stage{display:block;width:100%;height:auto}
+.edge{stroke:#2a2a2a;stroke-width:2;stroke-dasharray:4 5}
+.node rect{fill:var(--surface-2);stroke:var(--border-strong);stroke-width:1.5;rx:10}
+.node text{fill:var(--fg);font:600 13px var(--font-sans);text-anchor:middle}
+.node text.sub{fill:var(--fg-muted);font:400 10.5px var(--font-sans)}
+.node.on rect{stroke:#fff;stroke-width:2.5}
+.node.bad rect{stroke:var(--danger);stroke-width:2.5;fill:#1a0a0a}
+.node.ok rect{stroke:var(--success)}
+@media(prefers-reduced-motion:no-preference){.node.on rect{animation:pulse 1.2s ease-in-out infinite}}
+@keyframes pulse{50%{stroke-width:4.5;stroke-opacity:.55}}
+.pkt circle{fill:#fff;stroke:#000;stroke-width:2}
+.pkt.bad circle{fill:var(--danger)}.pkt.good circle{fill:var(--success)}
+.pkt text{fill:#fff;font:700 11px var(--font-mono);text-anchor:middle;paint-order:stroke;stroke:#000;stroke-width:3px}
+.explain{margin-top:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-height:120px}
+.explain h3{margin:0 0 4px;font-size:1.02rem}
+.explain .refs{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
+.panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+@media(max-width:900px){.panels{grid-template-columns:1fr}}
+.panel{background:#050505;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;min-width:0}
+.panel h4{margin:0 0 8px;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+.panel table{font-size:.8rem}
+.panel td,.panel th{padding:4px 6px}
+tr.hot td{background:#14301f;animation:none}
+@media(prefers-reduced-motion:no-preference){tr.hot td{animation:flash 1.6s ease-out}}
+@keyframes flash{from{background:#2c7a52}to{background:#14301f}}
+#log{font:.78rem/1.5 var(--font-mono);max-height:230px;overflow:auto;white-space:pre-wrap;margin:0}
+#log .l{display:block}
+#log .t{color:#6f6f6f}.lvl-WARN{color:var(--warning)}.lvl-ERROR{color:var(--danger)}.lvl-INFO{color:var(--fg)}
+.lane{margin-bottom:8px}
+.lane>b{font:600 .8rem var(--font-mono);color:var(--info)}
+.lane .items{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;min-height:30px}
+.wf{border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:4px 8px;font:.74rem var(--font-mono);display:flex;gap:8px;align-items:center}
+.wf.running{border-color:var(--warning);color:var(--warning)}
+.wf.completed{border-color:#1d5a40;color:var(--success)}
+.wf.failed{border-color:#6b2d2d;color:var(--danger)}
+@media(prefers-reduced-motion:no-preference){.wf.running::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warning);animation:blink 1s infinite}}
+@keyframes blink{50%{opacity:.25}}
+.uimock{border:1px solid var(--border-strong);border-radius:var(--radius);padding:12px 14px;background:#0b0b0b}
+.uimock .row{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center}
+.uimock .ttl{font-weight:700}
+.badge{font:600 .72rem var(--font-sans);padding:3px 9px;border-radius:99px;border:1px solid var(--border-strong);color:var(--fg-muted)}
+.badge.pending{color:var(--fg-muted)}.badge.running{color:var(--warning);border-color:#6a5a25}.badge.completed{color:var(--success);border-color:#1d5a40}.badge.partial_failed,.badge.failed{color:var(--danger);border-color:#6b2d2d}
+.uimock .upd{font-size:.74rem;color:var(--fg-muted)}
+.uimock .tok{background:var(--surface-2);border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:2px 8px;font-size:.74rem;color:var(--fg-muted)}
+.sr{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--fg-muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+footer{border-top:1px solid var(--border);padding:24px 20px;color:var(--fg-muted);font-size:.85rem;max-width:1240px;margin:0 auto}
+</style>
+</head>
+<body>
+<a class="skip" href="#sim">Saltar al simulador</a>
+<header class="top"><div class="in">
+  <strong>Duelo · guía del flujo</strong>
+  <nav class="toc" aria-label="Secciones">
+    <a href="#general">Visión general</a><a href="#simulador">Simulador</a><a href="#flujo">Flujo paso a paso</a>
+    <a href="#temporal">Temporal</a><a href="#lectura">Lectura</a><a href="#frontend">Frontend</a>
+    <a href="#retry">Reintento</a><a href="#limites">Limitaciones reales</a>
+  </nav>
+</div></header>
+
+<main>
+<h1>Cómo funciona Duelo, de punta a punta</h1>
+<p class="lead">Cada vez que haces un commit o un push en un proyecto vigilado, Duelo recibe ese cambio, lo guarda, lo manda a Temporal para que varios agentes lo revisen en paralelo y te enseña el resultado en la interfaz. Esta página explica cada pieza, deja <em>verlo moverse</em> y dice sin adornos qué existe y qué no.</p>
+<p class="muted">Las referencias <span class="ref">archivo:línea</span> son relativas a <code>backend/src/duelo/</code> (las del frontend llevan el prefijo <code>frontend/src/</code>) y se comprobaron contra el código de la rama <code>main</code>. El código del hook se cita por función, no por línea, porque se endureció mientras se escribía esta guía (change <code>harden-local-project-hooks</code>).</p>
+
+<section id="general">
+<h2>1 · Visión general</h2>
+<p>Duelo es un monorepo con un backend Python (FastAPI + Temporal + Postgres) y un frontend React. El backend sigue una <b>arquitectura hexagonal</b>: la lógica no sabe nada de HTTP, de la base de datos ni de Temporal; son los adaptadores los que se conectan por puertos. <code>import-linter</code> impide en CI que una capa interior importe una exterior.</p>
+<div class="grid2">
+  <div>
+    <div class="layers" role="img" aria-label="Capas: dominio, aplicación y adaptadores, entrypoints y workflows">
+      <div class="layer"><b>Adaptadores · entrypoints · workflows</b><span class="muted">FastAPI (<span class="ref">entrypoints/api/</span>), SQLAlchemy (<span class="ref">adapters/persistence/</span>), cliente de Temporal (<span class="ref">adapters/orchestration/</span>), git y <code>gh</code> (<span class="ref">adapters/git/</span>, <span class="ref">adapters/github/</span>), workflows y activities (<span class="ref">workflows/</span>).</span></div>
+      <div class="arrowd">▲ dependen de ▲</div>
+      <div class="layer"><b>Aplicación</b><span class="muted">Casos de uso y puertos: <span class="ref">application/ingest_commit.py</span>, <span class="ref">retry_review.py</span>, <span class="ref">record_review.py</span>, <span class="ref">queries.py</span>, <span class="ref">ports.py</span>.</span></div>
+      <div class="arrowd">▲ dependen de ▲</div>
+      <div class="layer"><b>Dominio (puro)</b><span class="muted">Reglas sin I/O: <span class="ref">domain/change.py</span>, <span class="ref">review.py</span>, <span class="ref">review_status.py</span>, <span class="ref">diff.py</span>. <code>just test</code> exige 100 % de cobertura (líneas y ramas) en <b>domain + application</b> y un mínimo global del 97 % (<span class="ref">justfile:37-40,64-70</span>).</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Las piezas en una frase</h3>
+    <table>
+      <tr><td><b>Hook de git</b></td><td>avisa a la API de cada commit/push sin bloquear a git.</td></tr>
+      <tr><td><b>API (FastAPI)</b></td><td>valida, guarda e idempotentemente arranca la review; también sirve las lecturas.</td></tr>
+      <tr><td><b>Postgres</b></td><td>fuente de verdad: <code>projects</code>, <code>changes</code>, <code>reviews</code>, <code>events</code>.</td></tr>
+      <tr><td><b>Temporal</b></td><td>orquesta la review: cola <code>platform</code> (workflows) y cola <code>agents</code> (activities).</td></tr>
+      <tr><td><b>Workers</b></td><td>un proceso con dos <code>Worker</code>, uno por cola (<span class="ref">worker.py:24-39</span>).</td></tr>
+      <tr><td><b>Frontend</b></td><td>lee la API por HTTP y se refresca solo cada 5 s.</td></tr>
+    </table>
+  </div>
+</div>
+<div class="note good" style="margin-top:14px"><b>Dato clave:</b> Postgres es la fuente de verdad y Temporal solo orquesta. Por Temporal viajan únicamente identificadores (<code>change_id</code>, <code>agent_name</code>, <code>run</code>); el diff nunca viaja, cada activity lo carga de la base de datos (<span class="ref">workflows/activities.py:49-51</span>).</div>
+</section>
+
+<section id="simulador">
+<h2>2 · Simulador en tiempo (casi) real</h2>
+<p>Elige un escenario y pulsa <b>Reproducir</b>, o avanza con <b>Paso ▶</b> para leer cada paso con calma. Los paquetes viajan entre componentes y los paneles de abajo (tablas, carriles de Temporal, log y la maqueta del canal) cambian a la vez. Es una simulación determinista: los tiempos son ficticios, la lógica es la real.</p>
+<div id="sim" role="group" aria-label="Simulador del flujo" tabindex="-1">
+  <div class="bar">
+    <label for="scn">Escenario</label>
+    <select id="scn"></select>
+    <button id="bReset" type="button" aria-label="Reiniciar">⏮ Reiniciar</button>
+    <button id="bBack" type="button" aria-label="Paso atrás">◀ Atrás</button>
+    <button id="bPlay" type="button" class="primary" aria-label="Reproducir">▶ Reproducir</button>
+    <button id="bNext" type="button" aria-label="Paso adelante">Paso ▶</button>
+    <label for="spd">Velocidad</label>
+    <select id="spd"><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+    <span class="progress" id="prog" aria-hidden="true">Paso 0 / 0</span>
+  </div>
+  <div class="bar">
+    <label for="seek" class="sr">Ir a un paso</label>
+    <input id="seek" type="range" min="0" max="0" value="0" aria-label="Ir a un paso del escenario">
+    <label id="motionWrap" hidden><input type="checkbox" id="motion"> Permitir animación aunque mi sistema pida reducirla</label>
+  </div>
+  <div class="stagewrap"><svg id="stage" viewBox="0 0 1000 380" role="img" aria-label="Diagrama animado de componentes: git, hook, API, Postgres, Temporal, workers y navegador"></svg></div>
+  <div class="legend" aria-hidden="true"><span><i style="background:#fff"></i>petición</span><span><i style="background:var(--success)"></i>respuesta correcta</span><span><i style="background:var(--danger)"></i>fallo</span><span>Atajos con el simulador enfocado: <b>→</b> paso, <b>←</b> atrás, <b>Espacio</b> reproducir/pausar, <b>R</b> reiniciar</span></div>
+  <div class="explain" id="explain" aria-live="off"><h3>Elige un escenario y pulsa Reproducir</h3><p class="muted">Aquí aparecerá la explicación detallada de cada paso, con las referencias al código.</p></div>
+  <div class="sr" id="announce" role="status" aria-live="polite"></div>
+  <div class="panels">
+    <div class="panel"><h4>Maqueta del canal (UI)</h4><div id="uimock"></div></div>
+    <div class="panel"><h4>Carriles de Temporal</h4><div id="lanes"></div></div>
+    <div class="panel"><h4>Postgres · tablas</h4><div id="tables" class="tw"></div></div>
+    <div class="panel"><h4>Log de eventos (hora simulada)</h4><div id="log" role="log" aria-live="off"></div></div>
+  </div>
+</div>
+</section>
+
+<section id="flujo">
+<h2>3 · El flujo paso a paso</h2>
+<p>Esto es lo que recorre un commit desde que lo haces hasta que lo ves en pantalla. Cada paso coincide con uno del simulador.</p>
+<ol class="steps">
+  <li><b>git commit / git push → hook</b>
+    Al añadir un proyecto local (<code>POST /projects</code>, solo con <code>LOCAL_PROJECTS_ENABLED=true</code>) la API instala los hooks <code>post-commit</code> y <code>pre-push</code> entre los marcadores <code># &gt;&gt;&gt; duelo &gt;&gt;&gt;</code> / <code># &lt;&lt;&lt; duelo &lt;&lt;&lt;</code> (<span class="ref">adapters/git/hook_installer.py</span>, <code>render_block</code> e <code>install</code>), respetando <code>core.hooksPath</code> y los hooks que ya tuvieras.
+    <ul><li>El hook <b>nunca bloquea a git</b>: hace <code>fork</code>, el padre sale con código 0 y el hijo envía en segundo plano con plazo corto y errores silenciados (<span class="ref">entrypoints/hook.py</span>, <code>_detach_and_run</code> y <code>main</code>).</li>
+        <li><code>post-commit</code> envía el commit recién hecho. <code>pre-push</code> lee de <code>stdin</code> lo que se va a subir y solo envía commits de <b>ramas</b> (<code>refs/heads/</code>): ignora borrados y tags, y manda como mucho <b>20 commits por referencia</b>, los más antiguos primero (<span class="ref">entrypoints/hook.py</span>: <code>MAX_PUSH_COMMITS</code>, <code>pushed_commits</code>).</li>
+        <li>Antes de enviar, el hook <b>trunca el diff a 1 000 000 de caracteres</b>, título a 500, autor a 255 y rama a 255 (<code>build_payload</code>); después la API vuelve a truncar el diff a 200 000 (paso 2).</li>
+        <li>Credenciales: solo del fichero <code>hook.env</code> (modo 0600) cuya ruta va dentro del bloque instalado (<code>--env-file</code>, entre comillas simples); el entorno de quien lanza git no puede cambiar a dónde viaja el token, y la URL debe ser http(s) (<span class="ref">entrypoints/hook.py</span>: <code>load_config</code>). El token no vive en el repo. Lo implementa el change <code>harden-local-project-hooks</code>.</li>
+        <li>No hay cola ni reintentos: si la API está caída, ese envío se pierde. Un <code>push</code> posterior <b>solo</b> lo recupera si el commit sigue en el rango que sube (rama, dentro del tope de 20 por referencia); un tag, un commit ya subido o uno más allá del tope no se reenvían.</li>
+        <li>Limitación conocida: el hook usa <code>urllib</code>, que sigue por defecto las redirecciones 301/302/303 (las vuelve <code>GET</code> pero <b>conserva las cabeceras</b>, incluida <code>X-Ingest-Token</code>); 307/308 no se siguen. Si la URL de <code>hook.env</code> redirigiera a otro host, el token viajaría allí. La URL la escribe la API al dar de alta el proyecto, así que no cambia sola.</li></ul></li>
+  <li><b>POST /ingest/commit · /ingest/pr</b>
+    Dos dependencias en este orden (<span class="ref">entrypoints/api/routers/ingest.py:20-24</span>): primero el <b>límite de peticiones</b> (<span class="ref">entrypoints/api/rate_limit.py:14-28</span>, ventana deslizante en memoria, 300 peticiones/60 s por IP, 429 con <code>Retry-After</code>) y luego el <b>token</b> <code>X-Ingest-Token</code> (<span class="ref">entrypoints/api/auth.py:9-18</span>, <code>hmac.compare_digest</code>, 401 si falla). Los intentos con token inválido también gastan cupo.
+    <ul><li>Validación: el esquema pydantic prohíbe campos extra y limita longitudes; el dominio vuelve a comprobar NUL y tamaños (<span class="ref">domain/change.py</span>) → 422.</li>
+        <li>El proyecto debe existir (<span class="ref">application/ingest_commit.py:49-51</span>) → 404 «Proyecto desconocido».</li>
+        <li>El diff se trunca a <code>max_diff_chars</code> = 200 000 y se marca <code>diff_truncated</code> (<span class="ref">application/ingest_commit.py:63-64</span>, <span class="ref">config.py:46</span>). Ojo: el cuerpo HTTP se recibe entero antes de truncar.</li>
+        <li>Se calcula <code>diff_summary</code> (archivos, añadidas y borradas) solo para formato <code>git diff</code> (<span class="ref">domain/diff.py</span>).</li></ul></li>
+  <li><b>Guardar en Postgres (idempotente)</b>
+    <code>INSERT … ON CONFLICT DO NOTHING RETURNING id</code> sobre la restricción <code>UNIQUE (project_id, kind, head_sha)</code> (<span class="ref">adapters/persistence/change_repository.py:26-53</span>). Si el change ya existía, se devuelve la fila existente sin tocarla (<span class="ref">:55-62</span>) y no se emite evento. Si es nuevo, se inserta <b>en la misma transacción</b> el evento <code>change.created</code> en <code>events</code> (<span class="ref">:64-70</span>). El estado <code>status</code> del change queda siempre en <code>pending</code>; el estado útil es <code>review_status</code>, derivado de las reviews.</li>
+  <li><b>Arrancar la review en Temporal</b>
+    <code>TemporalReviewStarter.start</code> (<span class="ref">adapters/orchestration/temporal_review_starter.py:22-39</span>) lanza el workflow por nombre, <code>"ReviewCommitWorkflow"</code> (<span class="ref">:26</span>), en la cola <code>platform</code> (<span class="ref">:31</span>), con id determinista <code>{kind}-{project_id}-{sha}</code> y sufijo <code>-r{run}</code> desde el segundo run (<span class="ref">:42-44</span>). La política <code>ALLOW_DUPLICATE_FAILED_ONLY</code> (<span class="ref">:34</span>) hace que una review completada no se relance al reenviar el commit y que <code>WorkflowAlreadyStartedError</code> se trate como éxito silencioso (<span class="ref">:36-37</span>). Usa el namespace <code>default</code> y el cliente conecta de forma perezosa (<span class="ref">adapters/orchestration/temporal_client.py</span>), así que la API arranca aunque Temporal esté caído.
+    <ul><li>Si el arranque falla: <code>ReviewStartError</code> (<span class="ref">:38-39</span>) → <b>503</b> (<span class="ref">entrypoints/api/routers/ingest.py:43-47</span>). El change <b>ya quedó guardado</b>, así que reenviar es seguro.</li>
+        <li>No hay transacción compartida entre Postgres y Temporal: si la API muere justo entre ambos pasos, el change queda <code>pending</code> sin workflow (la UI lo marca <code>stale</code> tras 30 min, pero nada lo recupera solo).</li></ul></li>
+  <li><b>Respuesta 202</b>
+    <code>{change_id, diff_truncated, created}</code> (<span class="ref">entrypoints/api/routers/ingest.py:56-62</span>). <code>created=false</code> indica reingesta idempotente: los campos del segundo envío se ignoran por completo.</li>
+  <li><b>Workflows y activities</b> — detallado en la sección <a href="#temporal">Temporal</a>: el padre <code>ReviewCommitWorkflow</code> lanza el hijo <code>ReviewChangeWorkflow</code>, que ejecuta <code>run_review</code> una vez por agente, en paralelo.</li>
+  <li><b>Persistir reviews y eventos</b>
+    Cada activity guarda una <code>Review</code> y su evento (<code>review.completed</code> o <code>review.failed</code>) en una única transacción, idempotente por <code>UNIQUE (change_id, agent, run)</code> (<span class="ref">adapters/persistence/review_repository.py:22-72</span>, <span class="ref">:52</span>). Solo se guardan reviews <i>terminadas</i>: no existe una fila «en curso».</li>
+  <li><b>Lectura y UI</b> — ver <a href="#lectura">Lectura</a> y <a href="#frontend">Frontend</a>: la UI pregunta a la API cada 5 s y calcula el estado a partir de las reviews guardadas.</li>
+</ol>
+<h3 id="locales">Alta, baja y sincronización de proyectos locales</h3>
+<p class="muted">Solo existe con <code>LOCAL_PROJECTS_ENABLED=true</code> (apagado por defecto: sin él, los tres endpoints dan 404 aunque lleves token). Todos exigen <code>X-Ingest-Token</code> y pasan por el límite de peticiones.</p>
+<div class="grid2">
+  <div class="card"><h3>Alta (<code>POST /projects</code>)</h3>
+    <ul>
+      <li><b>Ruta estricta:</b> absoluta, sin <code>..</code>, existente, carpeta y <b>no enlace simbólico</b>; debe ser la <b>raíz del repo</b>, no una subcarpeta (<span class="ref">adapters/git/local_repository.py:26-47</span>). Si no, 422.</li>
+      <li><b>Slug:</b> <code>owner/repo</code> del remoto <code>origin</code>, o el nombre de la carpeta. Slug o carpeta repetidos → 409.</li>
+      <li><b>Primero se guarda, luego se toca el disco;</b> si los hooks no se pueden instalar, el registro se borra (<span class="ref">application/local_projects.py:52-72</span>).</li>
+      <li><b><code>core.hooksPath</code> fuera del repo se rechaza</b>: un directorio de hooks compartido ejecutaría el bloque en todos los repos (<span class="ref">adapters/git/hook_installer.py</span>, <code>_hooks_dir</code>, <span class="ref">:158-185</span>).</li>
+      <li><b>Hooks existentes:</b> deben ser scripts de shell y no enlaces simbólicos, o la instalación falla; el bloque de Duelo va entre marcadores y se añade sin tocar el resto (<span class="ref">:188-199</span>).</li>
+      <li><b>Escritura con vuelta atrás:</b> primero se comprueba todo, luego se escribe el fichero de credenciales y los hooks; si uno falla, los ya escritos se restauran (<span class="ref">:112-123</span>). Cada hook se reemplaza de forma atómica (fichero temporal + <code>os.replace</code>).</li>
+    </ul></div>
+  <div class="card"><h3>Baja (<code>DELETE /projects/{slug}</code>)</h3>
+    <ul>
+      <li><b>Primero se desinstalan los hooks</b> y solo si se logra se borra el proyecto con sus changes, reviews y eventos (<span class="ref">application/local_projects.py:75-91</span>).</li>
+      <li>Si los hooks no se pueden quitar: <b>409</b> y el proyecto se conserva, para poder reintentar (<span class="ref">entrypoints/api/routers/local_projects.py:78-80</span>). Borrar antes dejaría hooks activos con el token y sin registro.</li>
+      <li>Quitar el bloque restaura el hook del usuario tal como estaba; si el hook era solo de Duelo, se elimina el fichero.</li>
+    </ul>
+    <h3>Sincronizar PRs (<code>POST /projects/{slug}/sync-prs</code>)</h3>
+    <ul>
+      <li>Ejecuta <code>gh pr list --state open --limit 30</code> en la carpeta del repo y luego <code>gh pr diff N</code> por PR (<span class="ref">adapters/github/gh_cli.py:9-37</span>): <b>máximo 30 PRs abiertas</b>, <b>timeout de 30 s por llamada a <code>gh</code></b> y diff truncado a 1 000 000 de caracteres.</li>
+      <li>Una PR malformada se salta; una que rompe los límites del dominio se descarta con un aviso, y no tumban a las demás (<span class="ref">adapters/github/gh_cli.py:33-34</span>, <span class="ref">application/local_projects.py:107-126</span>). Cada PR se ingesta como <code>kind=pr</code>, idempotente por SHA.</li>
+      <li><code>gh</code> ausente, sin sesión o sin respuesta → 503 con un mensaje claro.</li>
+    </ul></div>
+</div>
+<div class="note" style="margin-top:12px"><b>Sincronización periódica (opcional).</b> Con <code>PR_SYNC_INTERVAL_SECONDS &gt; 0</code> se ejecuta al arrancar y luego cada intervalo; <b>un fallo se registra en el log y el bucle continúa</b>, y un proyecto que falla no impide los demás (<span class="ref">composition.py:227-230</span>, <span class="ref">entrypoints/api/background.py:10-23</span>, <span class="ref">application/local_projects.py:129-139</span>). Por defecto vale 0 (apagado). Con varios workers de uvicorn cada uno lanzaría el suyo: es inocuo por la idempotencia, pero redundante.</div>
+</section>
+
+<section id="temporal">
+<h2>4 · Temporal: workflows, activities y colas</h2>
+<p>Hay <b>dos workflows</b> y <b>una activity</b>, repartidos en <b>dos colas de tareas</b>: <code>platform</code> (los <b>dos</b> workflows, padre e hijo) y <code>agents</code> (la activity). Un solo proceso (<code>python -m duelo.worker</code>) levanta los dos workers (<span class="ref">worker.py:24-39</span>).</p>
+<div class="tree" aria-label="Árbol de ejecución">API ── start_workflow ──▶ cola <b>platform</b>   (el worker de esta cola registra AMBOS workflows: worker.py:33-37)
+                         │
+                         ▼
+   <b>ReviewCommitWorkflow</b>           id: {kind}-{project_id}-{sha}[-r{run}]     (workflows/review_commit.py:22-31)
+        │  execute_child_workflow   (sin indicar otra cola: el hijo corre también en <b>platform</b>)
+        ▼
+   <b>ReviewChangeWorkflow</b>           id: review-{change_id}-r{run}              (workflows/review_change.py:29-47)
+        │  asyncio.gather  (fan-out en paralelo, uno por agente)
+        ├──▶ activity <b>run_review</b>(agent_1)  ──▶ cola <b>agents</b>
+        └──▶ activity <b>run_review</b>(agent_2)  ──▶ cola <b>agents</b>
+                         │
+                         ▼
+   cada activity: carga el Change → agent.review() → guarda Review + evento en Postgres</div>
+<div class="grid2" style="margin-top:14px">
+  <div class="card"><h3>Opciones de cada activity</h3>
+    <table>
+      <tr><td>Cola</td><td><code>agents</code> (<span class="ref">workflows/review_change.py:39</span>)</td></tr>
+      <tr><td>Tiempo máximo</td><td><code>start_to_close</code> = 5 min (<span class="ref">:41</span>)</td></tr>
+      <tr><td>Heartbeat</td><td>30 s declarado (<span class="ref">:42</span>) — <b>ninguna activity envía latidos</b></td></tr>
+      <tr><td>Reintentos</td><td>3 intentos, 1 s inicial, coeficiente por defecto 2,0 (<span class="ref">:11</span>)</td></tr>
+      <tr><td>Entrada</td><td><code>RunReviewInput{change_id, agent_name, run}</code> (<span class="ref">workflows/dto.py</span>)</td></tr>
+      <tr><td>Salida</td><td><code>RunReviewResult{status, review_id}</code></td></tr>
+    </table></div>
+  <div class="card"><h3>Qué pasa cuando algo falla</h3>
+    <table>
+      <tr><td><b>El agente lanza una excepción</b></td><td>La activity la captura, guarda <code>Review(status=failed, error)</code> + evento <code>review.failed</code> y <b>devuelve</b> <code>status=failed</code>; no la relanza (<span class="ref">workflows/activities.py:57-70</span>). El workflow termina <i>Completed</i>.</td></tr>
+      <tr><td><b>Fallo de infraestructura</b> del worker (p. ej. Postgres caído al cargar el change o al guardar la review; «red» = la conexión del worker con Postgres/Temporal, <b>no</b> una llamada de un agente)</td><td>La <code>RetryPolicy</code> (3 intentos, idempotentes) <b>solo actúa sobre excepciones que escapan de la activity</b>; las del agente se capturan y no las reintenta Temporal. Si se agotan los 3 intentos, falla la activity, el hijo y el padre, y <b>no se guarda ninguna <code>Review(failed)</code></b> (solo se persiste el fallo cuando se captura una excepción de <code>agent.review()</code>, <span class="ref">workflows/activities.py:57-70</span>). Consecuencias en «Limitaciones».</td></tr>
+      <tr><td><b>Agente desconocido / change inexistente</b></td><td><code>ApplicationError(non_retryable=True)</code> sin guardar review (<span class="ref">workflows/activities.py:43-47, 53-54</span>): rompe todo el workflow.</td></tr>
+    </table></div>
+</div>
+<h3>¿Qué agentes existen de verdad?</h3>
+<p>Solo el <b><code>FakeAgent</code></b> (<span class="ref">adapters/agents/fake.py:7</span>): devuelve siempre nota 7 y un único hallazgo <code>nit</code> con <code>file="N/A"</code> y <code>line=0</code> (<span class="ref">:29-39</span>; la UI oculta esos dos valores y lo agrupa bajo «Sin archivo»), o lanza <code>RuntimeError</code> si se construye con <code>should_fail=True</code> (<span class="ref">:26-27</span>). El worker crea uno por cada nombre de <code>AGENT_NAMES</code>, por defecto <code>agent_1,agent_2</code> (<span class="ref">worker.py:30</span>, <span class="ref">config.py:28</span>). <b>No hay adaptador de Claude ni de Codex en el backend</b>, aunque la interfaz diga «Claude y Codex».</p>
+<h3>Ejecución</h3>
+<p>No existe un servicio worker en <code>docker-compose.yml</code>: se levanta con <code>just worker</code>. Si no hay worker escuchando, los workflows quedan en espera y los changes en <code>pending</code>.</p>
+</section>
+
+<section id="lectura">
+<h2>5 · Lectura: cómo se calcula lo que se muestra</h2>
+<div class="grid2">
+  <div class="card"><h3><code>review_status</code></h3>
+    <p>Se calcula siempre sobre las reviews del <b><code>run</code> actual</b> (<span class="ref">domain/review_status.py:24-53</span>):</p>
+    <div class="tw"><table>
+      <tr><th>Condición</th><th>Estado</th></tr>
+      <tr><td>0 reviews</td><td><span class="chip">pending</span></td></tr>
+      <tr><td>menos reviews que agentes esperados</td><td><span class="chip warn">running</span></td></tr>
+      <tr><td>todas completadas</td><td><span class="chip ok">completed</span></td></tr>
+      <tr><td>todas fallidas</td><td><span class="chip bad">failed</span></td></tr>
+      <tr><td>mezcla</td><td><span class="chip bad">partial_failed</span></td></tr>
+    </table></div>
+    <p class="muted">«Agentes esperados» es <code>len(AGENT_NAMES)</code> de la API. En el listado lo calcula SQL con una subconsulta <code>LATERAL</code> (<span class="ref">adapters/persistence/change_repository.py:90-104</span>, <span class="ref">:194</span>); en el detalle, Python (<span class="ref">application/queries.py:100</span>). Un test comprueba que ambos coinciden.</p></div>
+  <div class="card"><h3><code>stale</code> (diagnóstico)</h3>
+    <p>Un change en <code>pending</code> o <code>running</code> con más de 1800 s desde su creación se marca <code>stale</code> (<span class="ref">domain/review_status.py:65-72</span>). No relanza nada ni se guarda: se calcula al leer. Mide desde la creación, no desde el inicio del run actual.</p>
+    <h3>Eventos</h3>
+    <p><code>GET /changes/{id}/events</code> expone solo <code>change.created</code>, <code>review.completed</code> y <code>review.failed</code>, sin el <code>error</code> ni el payload crudo (<span class="ref">application/queries.py:124-135</span>).</p></div>
+</div>
+<h3>CORS y trazabilidad</h3>
+<p>CORS solo se activa si <code>ALLOWED_ORIGINS</code> no está vacío, con orígenes explícitos (nunca <code>*</code>) y <b>sin credenciales</b>: la autenticación va en cabeceras, no en cookies. Métodos permitidos: <code>GET</code>, <code>POST</code> y <code>DELETE</code>; cabeceras permitidas: <code>Content-Type</code>, <code>X-Ingest-Token</code> y <code>X-Request-ID</code>; expuestas: <code>X-Request-ID</code> y <code>Retry-After</code> (<span class="ref">entrypoints/api/app.py:50-60</span>). <code>X-Operator-Token</code> no está permitida: <code>raw-output</code> no se puede llamar desde un navegador. Cada respuesta lleva un <code>X-Request-ID</code> y se escribe una línea JSON de acceso, sin cuerpo, query ni tokens.</p>
+<h3>Endpoints de lectura</h3>
+<div class="tw"><table>
+  <tr><th>Endpoint</th><th>Qué devuelve</th></tr>
+  <tr><td><code>GET /projects</code></td><td>Proyectos (más ruta, hooks y GitHub si son locales) — <span class="ref">entrypoints/api/routers/projects.py:33</span></td></tr>
+  <tr><td><code>GET /projects/{owner}/{repo}/changes</code></td><td>Canal paginado por cursor, con filtros <code>kind</code>, <code>status</code> (repetible), <code>q</code> — <span class="ref">entrypoints/api/routers/projects.py:39</span>. Orden <code>(created_at, id)</code> descendente; se piden <code>limit+1</code> filas (<span class="ref">application/queries.py:65</span>) y el cursor es opaco (<span class="ref">entrypoints/api/cursor.py:18-23</span>) con filtro keyset (<span class="ref">adapters/persistence/change_repository.py:151</span>). El listado <b>no trae el diff ni las reviews</b>.</td></tr>
+  <tr><td><code>GET /changes/{id}</code></td><td>Detalle: diff, reviews (sin <code>raw_output</code>), <code>findings_summary</code> — <span class="ref">entrypoints/api/routers/changes.py:21</span></td></tr>
+  <tr><td><code>GET /changes/{id}/events</code></td><td>Línea de tiempo — <span class="ref">entrypoints/api/routers/changes.py:33</span></td></tr>
+  <tr><td><code>POST /changes/{id}/retry</code></td><td>Reintento (ver sección 7) — <span class="ref">entrypoints/api/routers/changes.py:46</span></td></tr>
+  <tr><td><code>GET /stats/agents</code></td><td>Totales por agente, global o por proyecto — <span class="ref">entrypoints/api/routers/stats.py:15</span></td></tr>
+  <tr><td><code>GET /health</code>, <code>/ready</code>, <code>/health/dependencies</code></td><td>Liveness, readiness y estado de Postgres y Temporal con latencia</td></tr>
+  <tr><td><code>GET /reviews/{id}/raw-output</code></td><td>Solo con <code>X-Operator-Token</code>. Devuelve <b>200</b> si existe una review con <code>raw_output</code> y el token de operador es válido (<span class="ref">entrypoints/api/routers/reviews.py:13-29</span>, <span class="ref">application/queries.py:158-163</span>); 401 con token inválido; 404 si <code>OPERATOR_TOKEN</code> no está configurado o la review no existe o no tiene salida. Como <code>run_review</code> guarda siempre <code>raw_output=None</code> (<span class="ref">workflows/activities.py:80</span>), <b>en la práctica da 404</b> con el flujo actual.</td></tr>
+</table></div>
+</section>
+
+<section id="frontend">
+<h2>6 · Frontend: cómo se muestra</h2>
+<ul>
+  <li><b>Fuente de datos.</b> Con <code>VITE_API_URL</code> definida habla con la API por HTTP; sin ella usa <b>datos de ejemplo</b> (<span class="ref">frontend/src/data/source.tsx:127</span>). Un navegador sin variable no toca el backend.</li>
+  <li><b>Rutas</b> (<span class="ref">frontend/src/App.tsx:59-62</span>): <code>/</code> redirige al primer proyecto; <code>/p/*</code> se interpreta a mano porque el slug <code>owner/repo</code> contiene una barra (canal en <code>/p/owner/repo</code>, detalle en <code>/p/owner/repo/changes/{id}</code>); <code>/stats</code>; <code>/settings</code>; cualquier otra ruta muestra «No encontrado».</li>
+  <li><b>Auto-actualización.</b> Un sondeo cada 5 s (<span class="ref">frontend/src/lib/polling.tsx:4</span>) refresca la barra lateral, el canal y el detalle; se pausa con la pestaña oculta y el detalle solo sondea mientras la review está <code>pending</code> o <code>running</code> (<span class="ref">frontend/src/features/review/ChangeDetailPage.tsx:24</span>). No hay SSE ni WebSocket: ver un cambio «en tiempo real» significa «con hasta 5 s de retraso».</li>
+  <li><b>Canal.</b> Búsqueda con debounce de 300 ms, filtros por tipo y estado <i>en el servidor</i>, «Cargar más» con el cursor, vista de tarjetas o compacta y antigüedad relativa.</li>
+  <li><b>Detalle.</b> Diff numerado con navegador de archivos, panel de hallazgos agrupado por archivo (los que no traen archivo van en «Sin archivo»), una tarjeta por review con run, duración, nota y el error sanitizado.</li>
+  <li><b>Reintento.</b> El botón aparece solo con <code>failed</code> o <code>partial_failed</code> y pide el token en un campo de contraseña que vive <b>solo en memoria</b> (<span class="ref">frontend/src/features/review/RetryReview.tsx:71</span>; nunca en <code>localStorage</code>, URL ni build).</li>
+  <li><b>Ajustes.</b> Proyectos, diagnóstico de Postgres y Temporal con latencia, <b>añadir proyecto local</b> (ruta absoluta → instala hooks), <b>sincronizar PRs</b> con <code>gh</code> (<span class="ref">application/local_projects.py:94-126</span>, <span class="ref">adapters/github/gh_cli.py:20-37</span>) y quitar proyecto (borra su historial y exige que los hooks se hayan desinstalado).</li>
+</ul>
+</section>
+
+<section id="retry">
+<h2>7 · El reintento (<code>run + 1</code>)</h2>
+<ol class="steps">
+  <li><b>Comprobación.</b> Solo se reintenta si el estado del run actual es <code>failed</code> o <code>partial_failed</code> (<span class="ref">application/retry_review.py:42-49</span>, <span class="ref">domain/review_status.py:58</span>); si no, <b>409</b>. Un <code>pending</code> o <code>running</code> no se puede reintentar.</li>
+  <li><b>Primero se arranca, después se avanza.</b> Se arranca el workflow del run siguiente (<span class="ref">application/retry_review.py:51</span>) con id <code>…-r2</code> y su hijo <code>review-{id}-r2</code>. Si el arranque falla (503), <code>run</code> no cambia y se puede repetir.</li>
+  <li><b>Compare-and-swap.</b> <code>UPDATE changes SET run = run + 1 WHERE id = … AND run = 1</code> (<span class="ref">adapters/persistence/change_repository.py:178-191</span>): dos reintentos simultáneos arrancan una sola ejecución (mismo id de workflow) y solo uno avanza <code>run</code>.</li>
+  <li><b>Se reejecutan todos los agentes</b> del run nuevo, no solo el que falló. Las reviews del run anterior <b>se conservan</b> (la clave es <code>(change, agent, run)</code>), pero <code>review_status</code> y <code>findings_summary</code> solo cuentan el run actual.</li>
+</ol>
+</section>
+
+<section id="limites">
+<h2>8 · Lo que hay que saber: limitaciones reales</h2>
+<p class="muted">Todo lo siguiente se comprobó contra el código. Son decisiones o huecos conocidos, no promesas.</p>
+<div class="grid2">
+<div>
+<h3>Orquestación</h3>
+<details open><summary>Heartbeat declarado, nunca enviado</summary><p><code>heartbeat_timeout=30 s</code> está en <span class="ref">workflows/review_change.py:42</span>, pero ninguna activity llama a <code>activity.heartbeat()</code>. Con un agente real que tarde más de 30 s, Temporal daría timeout y reintentaría sin motivo. Con el <code>FakeAgent</code> instantáneo no se nota.</p></details>
+<details><summary>Solo existe el FakeAgent</summary><p>Sin adaptadores de Claude o Codex; el worker no está en <code>docker-compose.yml</code>; la lista de agentes debe coincidir entre la API y el worker o el estado se calcula mal.</p></details>
+<details><summary>Un fallo del agente no falla el workflow</summary><p>Se guarda como <code>Review(failed)</code> y el workflow termina <i>Completed</i>; por eso <code>ALLOW_DUPLICATE_FAILED_ONLY</code> no lo relanza al reenviar el commit y hace falta el reintento (<code>-r{run}</code>).</p></details>
+<details><summary>Sin versionado de workflows, cancelación ni señales</summary><p>No hay <code>workflow.patched</code>, <code>continue_as_new</code>, señales ni consultas. Cambiar el código de un workflow con ejecuciones en vuelo no está protegido contra no determinismo.</p></details>
+<details open><summary>Fallo de infraestructura: sin <code>Review(failed)</code> y sin reintento por la API</summary><p>Si una activity falla por infraestructura y agota sus 3 intentos, <b>no se guarda ninguna review fallida</b> (<span class="ref">workflows/activities.py:57-70</span> solo persiste el fallo cuando se captura una excepción de <code>agent.review()</code>). Fallan la activity, el hijo y el padre, y la API sigue derivando <code>pending</code> o <code>running</code> según las reviews que sí llegaron a guardarse. Esos estados <b>no están en <code>RETRYABLE_STATUSES</code></b> (<span class="ref">domain/review_status.py:56-58</span>), así que <code>POST /changes/{id}/retry</code> responde 409. Lo que ayuda: <b>reenviar el commit</b> (idempotente), porque con <code>ALLOW_DUPLICATE_FAILED_ONLY</code> un workflow que quedó <i>Failed</i> sí se vuelve a arrancar con el mismo id; mientras tanto <code>stale</code> lo marca como diagnóstico a los 30 min.</p></details>
+<details><summary>Ventana entre guardar y arrancar</summary><p>Si la API muere entre guardar el change y arrancar Temporal, queda <code>pending</code> sin workflow. Solo lo señala <code>stale</code>; un <code>pending</code> no se puede reintentar (409) — la salida es reenviar el commit, que es idempotente.</p></details>
+<details><summary><code>raw_output</code> siempre nulo</summary><p>La activity guarda <code>raw_output=None</code> (<span class="ref">workflows/activities.py:80</span>), así que <code>/reviews/{id}/raw-output</code> da 404 para toda review creada por el flujo actual. El endpoint funcionaría (200 con token de operador) si algo guardara salida cruda.</p></details>
+<details><summary>El evento <code>review.failed</code> guarda el error</summary><p>La API no lo expone, pero está en la tabla <code>events</code>; puede contener texto interno del agente.</p></details>
+</div>
+<div>
+<h3>API y datos</h3>
+<details open><summary>Reingestar no actualiza</summary><p>Mismo <code>(proyecto, kind, sha)</code>: 202 con <code>created=false</code> y se ignora el resto de campos (título, diff…).</p></details>
+<details><summary>Sin límite de cuerpo HTTP</summary><p><code>diff</code> no tiene <code>max_length</code> en el esquema: se recibe entero antes de truncar a 200 000 caracteres. <code>title</code> y <code>author</code> se truncan en silencio a 500 y 255.</p></details>
+<details><summary>Límite de peticiones en memoria</summary><p>Por proceso y por IP del par TCP: con varios workers de uvicorn se multiplica, y detrás de un proxy sin <code>--proxy-headers</code> todos comparten IP. Solo cubre <code>POST /ingest/*</code>, el reintento y los endpoints de proyectos locales.</p></details>
+<details><summary>Lecturas sin autenticación</summary><p>Los <code>GET</code> no piden token. Antes de exponer la API fuera de <code>127.0.0.1</code> hace falta autenticación de lectura. El <code>INGEST_TOKEN</code> es único y compartido (ingesta, reintento y proyectos locales).</p></details>
+<details><summary>Proyectos locales escriben en <code>.git/hooks</code></summary><p>Quien tenga el token hace que la API escriba código que se ejecuta en cada commit. Por eso está apagado por defecto, no es para contenedores ni servidores compartidos y los hooks son desinstalables.</p></details>
+<details><summary>Estadísticas y <code>stale</code></summary><p><code>/stats/agents</code> cuenta las reviews de todos los runs. <code>stale</code> se mide desde <code>created_at</code>: tras un reintento sobre un change antiguo puede salir <code>stale</code> enseguida.</p></details>
+<h3>Frontend</h3>
+<details><summary>El detalle mezcla runs</summary><p>Muestra todas las reviews, sin filtrar por <code>run</code> (<span class="ref">frontend/src/features/review/ChangeDetailPage.tsx:51</span>), mientras el backend solo cuenta el run actual. Cada tarjeta indica su <code>Run N</code>.</p></details>
+<details><summary>Textos y constantes fijas</summary><p>«Claude y Codex» está escrito a mano (<span class="ref">frontend/src/features/channel/ChannelPage.tsx:172</span>, <span class="ref">frontend/src/features/settings/SettingsPage.tsx:60</span>) y los agentes esperados valen 2 (<span class="ref">frontend/src/lib/reviewStatus.ts:4</span>), aunque el backend los configura.</p></details>
+<details><summary>El listado no trae reviews</summary><p>Con la API real, «Ver respuestas» en el canal no tiene reviews que mostrar; el detalle sí las trae.</p></details>
+</div>
+</div>
+</section>
+</main>
+
+<footer>
+  <p>Guía generada a partir del código de <code>main</code> (change OpenSpec <code>add-flow-guide</code>). El simulador es una maqueta determinista: no consulta ninguna instancia real y no envía datos a ningún sitio. Para probar el flujo de verdad: <code>just dev</code>, <code>just migrate</code>, <code>just worker</code> (ver <code>README.md</code>).</p>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ===== constantes del escenario ===== */
+const SHA = 'abc1234', PID = '077825f5', CID = '3f9a21', T_BASE = 14 * 3600000 + 3 * 60000 + 7000;
+const WF = 'commit-' + PID + '-' + SHA;
+const EXPECTED = 2;
+
+/* ===== nodos del diagrama ===== */
+const NODES = {
+  git:      {x: 90,  y: 62,  label: 'git',                 sub: 'repo local'},
+  hook:     {x: 90,  y: 200, label: 'Hook',                sub: 'post-commit · pre-push'},
+  api:      {x: 345, y: 130, label: 'API · FastAPI',       sub: 'ingesta · lecturas · reintento'},
+  pg:       {x: 610, y: 56,  label: 'Postgres',            sub: 'changes · reviews · events'},
+  temporal: {x: 610, y: 205, label: 'Temporal',            sub: 'colas: platform · agents'},
+  wp:       {x: 880, y: 135, label: 'Worker platform',     sub: 'workflows padre e hijo'},
+  wa:       {x: 880, y: 290, label: 'Worker agents',       sub: 'activity run_review'},
+  ui:       {x: 345, y: 318, label: 'UI · navegador',      sub: 'canal · sondeo cada 5 s'}
+};
+const EDGES = [['git','hook'],['hook','api'],['api','pg'],['api','temporal'],['temporal','wp'],['temporal','wa'],['wa','pg'],['ui','api']];
+const NW = 150, NH = 58;
+const svgNS = 'http://www.w3.org/2000/svg';
+const stage = $('#stage');
+function el(name, attrs, parent) {
+  const e = document.createElementNS(svgNS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const gEdges = el('g', {}, stage), gNodes = el('g', {}, stage), gPkts = el('g', {}, stage);
+EDGES.forEach(([a, b]) => el('line', {class: 'edge', x1: NODES[a].x, y1: NODES[a].y, x2: NODES[b].x, y2: NODES[b].y}, gEdges));
+const nodeEls = {};
+Object.entries(NODES).forEach(([id, n]) => {
+  const g = el('g', {class: 'node', 'data-id': id}, gNodes);
+  const t = el('title', {}, g); t.textContent = n.label + ' — ' + n.sub;
+  el('rect', {x: n.x - NW / 2, y: n.y - NH / 2, width: NW, height: NH}, g);
+  const a = el('text', {x: n.x, y: n.y - 4}, g); a.textContent = n.label;
+  const b = el('text', {x: n.x, y: n.y + 14, class: 'sub'}, g); b.textContent = n.sub;
+  nodeEls[id] = g;
+});
+
+/* ===== estado derivado ===== */
+function fmt(t) {
+  const d = new Date(T_BASE + t), p = (n, w = 2) => String(n).padStart(w, '0');
+  const x = T_BASE + t;
+  return p(Math.floor(x / 3600000) % 24) + ':' + p(Math.floor(x / 60000) % 60) + ':' + p(Math.floor(x / 1000) % 60) + '.' + p(x % 1000, 3);
+}
+function initial(scn) {
+  const s = {t: 0, hot: new Set(), changes: [], reviews: [], events: [], platform: [], agents: [], log: [],
+    nextEv: 1, nextRv: 1, ui: {badge: null, run: 1, counts: '', seenAt: null, polls: 0, retryable: false, title: ''}, bad: [], ok: []};
+  if (scn.preloaded) {
+    s.changes.push({k: 'c', id: CID, sha: SHA, kind: 'commit', status: 'pending', run: 1});
+    addEv(s, 'change.created', 'commit ' + SHA);
+    addRv(s, 'agent_1', 1, 'completed', 7); addEv(s, 'review.completed', 'agent_1 r1');
+    addRv(s, 'agent_2', 1, 'completed', 7); addEv(s, 'review.completed', 'agent_2 r1');
+    s.platform.push({k: 'wf0', label: WF, state: 'completed'}, {k: 'wf1', label: 'review-' + CID + '-r1', state: 'completed'});
+    s.hot.clear();
+    poll(s, true);
+  }
+  return s;
+}
+function log(s, lvl, who, text) { s.log.push({t: fmt(s.t), lvl, who, text}); }
+function addEv(s, type, detail) { const id = s.nextEv++; s.events.push({k: 'e' + id, id, type, detail}); s.hot.add('e' + id); }
+function addRv(s, agent, run, status, score, err) {
+  const id = 'r' + s.nextRv++; s.reviews.push({k: id, id, agent, run, status, score, err}); s.hot.add(id);
+}
+function curChange(s) { return s.changes[0]; }
+function statusOf(s) {
+  const c = curChange(s); if (!c) return null;
+  const rs = s.reviews.filter((r) => r.run === c.run);
+  const done = rs.filter((r) => r.status === 'completed').length, bad = rs.filter((r) => r.status === 'failed').length, tot = done + bad;
+  if (tot === 0) return 'pending';
+  if (tot < EXPECTED) return 'running';
+  if (bad === 0) return 'completed';
+  if (done === 0) return 'failed';
+  return 'partial_failed';
+}
+function poll(s, silent) {
+  const c = curChange(s); s.ui.polls++;
+  if (!c) { s.ui.badge = null; return; }
+  const st = statusOf(s), rs = s.reviews.filter((r) => r.run === c.run);
+  s.ui.badge = st; s.ui.run = c.run; s.ui.seenAt = s.t;
+  s.ui.retryable = st === 'failed' || st === 'partial_failed';
+  s.ui.counts = rs.length ? rs.filter((r) => r.status === 'completed').length + ' completada(s), ' + rs.filter((r) => r.status === 'failed').length + ' fallida(s)' : 'sin reviews aún';
+  s.ui.title = 'chore: añadir archivo de prueba';
+  if (!silent) log(s, 'INFO', 'ui', 'GET /projects/acme/widgets/changes → review_status=' + st + ' (run ' + c.run + ')');
+}
+function setLane(s, lane, label, state) {
+  const arr = s[lane], f = arr.find((x) => x.label === label);
+  if (f) f.state = state; else arr.push({k: lane + label, label, state});
+}
+
+/* ===== pasos reutilizables ===== */
+const REF = {
+  hookInst: 'adapters/git/hook_installer.py · render_block / install',
+  hookMain: 'entrypoints/hook.py · main / _detach_and_run',
+  rate: 'entrypoints/api/rate_limit.py:14-28', auth: 'entrypoints/api/auth.py:9-18', deps: 'entrypoints/api/routers/ingest.py:20-24',
+  proj: 'application/ingest_commit.py:49-51', trunc: 'application/ingest_commit.py:63-64',
+  add: 'adapters/persistence/change_repository.py:26-71', conflict: 'adapters/persistence/change_repository.py:50',
+  existing: 'adapters/persistence/change_repository.py:55-62', created: 'application/ingest_commit.py:68',
+  start: 'adapters/orchestration/temporal_review_starter.py:22-39', wfid: 'adapters/orchestration/temporal_review_starter.py:42-44',
+  policy: 'adapters/orchestration/temporal_review_starter.py:34-37', startErr: 'adapters/orchestration/temporal_review_starter.py:38-39',
+  err503: 'entrypoints/api/routers/ingest.py:43-47', resp: 'entrypoints/api/routers/ingest.py:56-62',
+  parent: 'workflows/review_commit.py:22-31', child: 'workflows/review_change.py:29-47', opts: 'workflows/review_change.py:39-43',
+  act: 'workflows/activities.py:56-83', actFail: 'workflows/activities.py:57-70', fake: 'adapters/agents/fake.py:26-39',
+  rvAdd: 'adapters/persistence/review_repository.py:22-72', status: 'domain/review_status.py:24-53', stale: 'domain/review_status.py:65-72',
+  retry1: 'application/retry_review.py:42-49', retry2: 'application/retry_review.py:51', cas: 'adapters/persistence/change_repository.py:178-191',
+  poll: 'frontend/src/lib/polling.tsx:4', retryUi: 'frontend/src/features/review/RetryReview.tsx:71', worker: 'worker.py:24-39',
+  lazy: 'adapters/orchestration/temporal_client.py'
+};
+
+const stCommit = () => ({title: '1 · git commit', from: 'git', to: 'hook', label: 'post-commit', nodes: ['git', 'hook'], dt: 0,
+  text: 'Haces <code>git commit</code> en un proyecto añadido a Duelo. Git ejecuta el hook <code>post-commit</code> que la API instaló entre los marcadores <code># &gt;&gt;&gt; duelo &gt;&gt;&gt;</code>. Si ya tenías un hook propio, el bloque de Duelo se añadió al final sin tocarlo.',
+  ref: [REF.hookInst], fx: (s) => { log(s, 'INFO', 'git', 'git commit ' + SHA + ' (rama main) → ejecuta .git/hooks/post-commit'); }});
+const stHook = (okApi) => ({title: '2 · El hook envía sin bloquear', from: 'hook', to: 'api', label: 'POST /ingest/commit', nodes: ['hook', 'api'], dt: 40, bad: okApi ? [] : ['api'],
+  text: okApi
+    ? 'El hook arma el JSON (proyecto, rama, SHA, título, autor, diff) leyendo con <code>git</code> —sin interpolar nada en un shell— y lee URL y token <b>solo</b> del fichero <code>hook.env</code> cuya ruta lleva el propio bloque. Hace <code>fork</code>: el padre sale con código 0 y git continúa al instante; el hijo envía la petición en segundo plano con plazo corto.'
+    : 'El hook hace <code>fork</code>: el padre sale con código 0 y <b>git termina sin esperar</b>. El hijo intenta enviar la petición, pero la API no responde: <b>conexión rechazada</b>. El error se traga en silencio (stdout/stderr redirigidos a <code>/dev/null</code>) para no ensuciar ni retrasar el commit.',
+  ref: [REF.hookMain], fx: (s) => {
+    log(s, 'INFO', 'hook', 'fork → git vuelve en < 5 ms; hijo envía POST /ingest/commit');
+    if (!okApi) { log(s, 'ERROR', 'hook', 'conexión rechazada con la API; envío descartado en silencio (sin cola ni reintento)'); s.bad = ['api']; }
+  }});
+const stValidate = () => ({title: '3 · La API valida', from: 'hook', to: 'api', label: '', nodes: ['api'], dt: 12, noPacket: true,
+  text: 'Dos dependencias, en este orden: <b>1)</b> límite de peticiones (300 por 60 s y por IP; 429 con <code>Retry-After</code>) y <b>2)</b> token <code>X-Ingest-Token</code> comparado en tiempo constante (401 si falla). Después valida el cuerpo (campos extra → 422; NUL y longitudes), comprueba que el proyecto existe (404 si no) y <b>trunca el diff a 200 000 caracteres</b> marcando <code>diff_truncated</code>.',
+  ref: [REF.deps, REF.rate, REF.auth, REF.proj, REF.trunc], fx: (s) => { log(s, 'INFO', 'api', 'POST /ingest/commit · rate_limit ok · token ok · proyecto acme/widgets ok · diff 412 chars'); }});
+const stPg = () => ({title: '4 · Guardar en Postgres (idempotente)', from: 'api', to: 'pg', label: 'INSERT … ON CONFLICT', nodes: ['api', 'pg'], dt: 18,
+  text: '<code>INSERT … ON CONFLICT (project_id, kind, head_sha) DO NOTHING RETURNING id</code>. Como es la primera vez, inserta la fila en <code>changes</code> y, <b>en la misma transacción</b>, el evento <code>change.created</code> en <code>events</code>. Es atómico: o están las dos filas o ninguna. La columna <code>status</code> queda siempre en <code>pending</code>; el estado real se deriva después de las reviews.',
+  ref: [REF.add, REF.conflict], fx: (s) => {
+    s.changes.push({k: 'c', id: CID, sha: SHA, kind: 'commit', status: 'pending', run: 1}); s.hot.add('c'); addEv(s, 'change.created', 'commit ' + SHA);
+    log(s, 'INFO', 'pg', 'BEGIN; INSERT changes (run=1) ; INSERT events change.created ; COMMIT');
+  }});
+const stStart = () => ({title: '5 · Arrancar el workflow en Temporal', from: 'api', to: 'temporal', label: 'start_workflow', nodes: ['api', 'temporal'], dt: 25,
+  text: 'La API pide a Temporal arrancar <code>ReviewCommitWorkflow</code> en la cola <code>platform</code> con id determinista <code>{kind}-{project_id}-{sha}</code> (<code>' + WF + '</code>). Ese id es la <b>segunda barrera de idempotencia</b>: arrancar dos veces el mismo commit deja una sola ejecución. Solo viajan IDs; el diff no.',
+  ref: [REF.start, REF.wfid], fx: (s) => { setLane(s, 'platform', WF, 'running'); log(s, 'INFO', 'temporal', 'StartWorkflowExecution ReviewCommitWorkflow id=' + WF + ' queue=platform'); }});
+const stResp = () => ({title: '6 · 202 Accepted', from: 'api', to: 'hook', label: '202 created:true', nodes: ['api', 'hook'], dt: 8, good: true,
+  text: 'La API responde <code>202 {change_id, diff_truncated, created:true}</code>. El hook ignora la respuesta (ya está en segundo plano). La review todavía no ha empezado a producir nada: <b>la API no espera a los agentes</b>.',
+  ref: [REF.resp], fx: (s) => { log(s, 'INFO', 'api', '202 {change_id:' + CID + ', created:true}'); }});
+const stPoll1 = () => ({title: '7 · La UI lo ve: «Pendiente»', from: 'ui', to: 'api', label: 'GET …/changes', nodes: ['ui', 'api'], dt: 2400,
+  text: 'No hay <i>push</i> hacia el navegador: la UI pregunta cada 5 s. En el siguiente sondeo aparece el change con <code>review_status = pending</code> (0 reviews guardadas) y una insignia gris «Pendiente». El valor se <b>deriva</b> de las reviews; no se lee de ninguna columna de estado.',
+  ref: [REF.status, REF.poll], fx: (s) => { poll(s); }});
+const stChild = () => ({title: '8 · El worker de platform ejecuta el padre', from: 'temporal', to: 'wp', label: 'workflow task', nodes: ['temporal', 'wp'], dt: 60,
+  text: 'El worker de la cola <code>platform</code> recoge el workflow. <code>ReviewCommitWorkflow</code> hace una sola cosa: lanzar el hijo <code>ReviewChangeWorkflow</code> con id <code>review-{change_id}-r{run}</code> y devolver su resultado. El hijo se lanza sin indicar otra cola: corre <b>también en <code>platform</code></b>, en el mismo worker, que registra los dos workflows (<code>worker.py:33-37</code>). El padre existe para que el id del hijo incluya el <code>run</code> y un reintento no choque.',
+  ref: [REF.parent, REF.worker], fx: (s) => { setLane(s, 'platform', 'review-' + CID + '-r' + curChange(s).run, 'running'); log(s, 'INFO', 'wp', 'ReviewCommitWorkflow → execute_child_workflow review-' + CID + '-r' + curChange(s).run); }});
+const stFan = (run) => ({title: '9 · Fan-out: un agente por activity, en paralelo', from: 'wp', to: 'temporal', label: '2× run_review', nodes: ['wp', 'temporal', 'wa'], dt: 40,
+  text: '<code>ReviewChangeWorkflow</code> hace <code>asyncio.gather</code> de una activity <code>run_review</code> por cada nombre de <code>agent_names</code>, en la cola <code>agents</code>: <b>timeout 5 min, heartbeat 30 s, 3 intentos</b>. Cada activity recibe solo <code>(change_id, agent_name, run)</code>. (El heartbeat está declarado pero ninguna activity lo envía.)',
+  ref: [REF.child, REF.opts], fx: (s) => { setLane(s, 'agents', 'run_review agent_1 · r' + run, 'running'); setLane(s, 'agents', 'run_review agent_2 · r' + run, 'running'); log(s, 'INFO', 'temporal', 'ScheduleActivityTask run_review ×2 queue=agents (r' + run + ')'); }});
+function stAgent(agent, ok, run, extra) {
+  const lbl = 'run_review ' + agent + ' · r' + run;
+  return {title: (extra || '10') + ' · ' + agent + (ok ? ' revisa y guarda' : ' falla'), from: 'wa', to: 'pg', label: ok ? 'INSERT review' : 'INSERT review (failed)', nodes: ['wa', 'pg'], dt: 180, bad: ok ? [] : ['wa'],
+    text: ok
+      ? 'La activity carga el <code>Change</code> de Postgres (no del workflow), llama al agente (el <code>FakeAgent</code>: nota 7 y un hallazgo <code>nit</code>) y guarda <b>una</b> transacción con la <code>Review</code> (<code>completed</code>) y el evento <code>review.completed</code>. La clave <code>UNIQUE (change_id, agent, run)</code> hace que reintentos y reentregas no dupliquen filas ni eventos.'
+      : 'El agente lanza <code>RuntimeError</code>. La activity <b>captura la excepción</b>: guarda la review con <code>status=failed</code> y el texto del error, más el evento <code>review.failed</code>, y devuelve <code>RunReviewResult(status="failed")</code>. <b>No relanza</b>: para Temporal la activity terminó bien, así que el workflow no falla y el otro agente sigue. (Otra cosa es un fallo de infraestructura que agote los 3 intentos: ahí <b>no</b> se guarda <code>Review(failed)</code>; ver «Limitaciones».)',
+    ref: ok ? [REF.act, REF.fake, REF.rvAdd] : [REF.actFail, REF.rvAdd], fx: (s) => {
+      setLane(s, 'agents', lbl, ok ? 'completed' : 'failed');
+      addRv(s, agent, run, ok ? 'completed' : 'failed', ok ? 7 : null, ok ? '' : 'RuntimeError: agente agent_2 falló');
+      addEv(s, ok ? 'review.completed' : 'review.failed', agent + ' r' + run);
+      log(s, ok ? 'INFO' : 'WARN', 'wa', agent + (ok ? ' → Review completed (score 7)' : ' → RuntimeError capturada → Review failed') + ' · evento ' + (ok ? 'review.completed' : 'review.failed'));
+    }};
+}
+const stPollRunning = () => ({title: '11 · Sondeo: «En curso» (1 de 2)', from: 'ui', to: 'api', label: 'GET …/changes', nodes: ['ui', 'api'], dt: 1900,
+  text: 'Hay 1 review del run actual y se esperan 2 (<code>len(AGENT_NAMES)</code>): el estado es <code>running</code>. Una review fallida no cierra el estado mientras falte otro agente. En BD no existe ninguna fila «en curso»: <b>running es solo «faltan reviews por registrar»</b>.',
+  ref: [REF.status], fx: (s) => { poll(s); }});
+const stWfDone = (run) => ({title: '12 · Los workflows terminan', from: 'wp', to: 'temporal', label: 'Completed', nodes: ['wp', 'temporal'], dt: 90, good: true,
+  text: 'Con las dos activities devueltas, el hijo termina y el padre también: ambos quedan <b>Completed</b> en Temporal, aunque alguna review haya salido <code>failed</code>. Por eso «el workflow terminó» no significa «las reviews salieron bien».',
+  ref: [REF.child, REF.parent], fx: (s) => { setLane(s, 'platform', WF + (run > 1 ? '-r' + run : ''), 'completed'); setLane(s, 'platform', 'review-' + CID + '-r' + run, 'completed'); log(s, 'INFO', 'temporal', 'WorkflowExecutionCompleted review-' + CID + '-r' + run + ' y su padre'); }});
+const stPollFinal = (txt) => ({title: '13 · Sondeo: resultado final', from: 'ui', to: 'api', label: 'GET …/changes', nodes: ['ui', 'api'], dt: 2100, good: true,
+  text: txt, ref: [REF.status, REF.poll], fx: (s) => { poll(s); }});
+
+/* ===== escenarios ===== */
+const SCENARIOS = {};
+SCENARIOS.exito = {name: 'Éxito: commit revisado por dos agentes', steps: [
+  stCommit(), stHook(true), stValidate(), stPg(), stStart(), stResp(), stPoll1(), stChild(), stFan(1),
+  stAgent('agent_1', true, 1), stPollRunning(), stAgent('agent_2', true, 1, '10b'), stWfDone(1),
+  stPollFinal('Las dos reviews del run 1 están guardadas y completadas: <code>review_status = completed</code>. La insignia pasa a verde en el sondeo siguiente (hasta 5 s después de que ocurriera). En total: 1 fila en <code>changes</code>, 2 en <code>reviews</code> y 3 en <code>events</code>.')]};
+SCENARIOS.fallo = {name: 'Un agente falla → «Reintentar» → run 2', steps: (() => {
+  const a = [stCommit(), stHook(true), stValidate(), stPg(), stStart(), stResp(), stPoll1(), stChild(), stFan(1),
+    stAgent('agent_1', true, 1), stPollRunning(), stAgent('agent_2', false, 1, '10b'), stWfDone(1),
+    stPollFinal('Mezcla de una review completada y otra fallida en el run actual: <code>review_status = partial_failed</code>. La UI enseña la insignia roja y el botón <b>Reintentar review</b>. El workflow, sin embargo, está <i>Completed</i>: el fallo del agente se modela como dato, no como error de Temporal.')];
+  a.push({title: '14 · Pulsas «Reintentar»', from: 'ui', to: 'api', label: 'POST …/retry', nodes: ['ui', 'api'], dt: 4800,
+    text: 'Escribes el token de ingesta en un campo de contraseña (vive <b>solo en memoria</b>: ni <code>localStorage</code> ni URL) y se envía <code>POST /changes/{id}/retry</code> con <code>X-Ingest-Token</code>. Pasa por el mismo límite de peticiones que la ingesta.',
+    ref: [REF.retryUi], fx: (s) => { log(s, 'INFO', 'ui', 'POST /changes/' + CID + '/retry (token en memoria)'); }});
+  a.push({title: '15 · La API comprueba que se puede reintentar', from: 'api', to: 'pg', label: 'SELECT reviews', nodes: ['api', 'pg'], dt: 14,
+    text: 'Lee las reviews del change y calcula el estado del run actual: <code>partial_failed</code> está en <code>RETRYABLE_STATUSES</code> (<code>failed</code> y <code>partial_failed</code>). Si estuviera <code>pending</code>, <code>running</code> o <code>completed</code> respondería <b>409</b>: una review completada nunca se relanza porque gastaría a los agentes otra vez.',
+    ref: [REF.retry1, 'domain/review_status.py:58'], fx: (s) => { log(s, 'INFO', 'api', 'retry: estado run 1 = partial_failed → permitido'); }});
+  a.push({title: '16 · Primero se arranca el run 2', from: 'api', to: 'temporal', label: 'start …-r2', nodes: ['api', 'temporal'], dt: 22,
+    text: 'Se arranca el workflow del run siguiente con id <code>' + WF + '-r2</code> <b>antes</b> de tocar la BD. Si el arranque fallara (503), <code>run</code> seguiría en 1 y se podría repetir; al revés, el change quedaría apuntando a un run sin reviews. Un id determinista por run hace que dos reintentos simultáneos arranquen una sola ejecución.',
+    ref: [REF.retry2, REF.wfid], fx: (s) => { setLane(s, 'platform', WF + '-r2', 'running'); log(s, 'INFO', 'temporal', 'StartWorkflowExecution ReviewCommitWorkflow id=' + WF + '-r2'); }});
+  a.push({title: '17 · Compare-and-swap de <code>run</code>', from: 'api', to: 'pg', label: 'UPDATE run=2', nodes: ['api', 'pg'], dt: 16,
+    text: '<code>UPDATE changes SET run = 2 WHERE id = … AND run = 1</code>: si otro reintento ya lo avanzó, no toca nada y se devuelve el valor actual. No se emite evento nuevo ni se borra nada: las reviews del run 1 <b>se conservan</b>.',
+    ref: [REF.cas], fx: (s) => { curChange(s).run = 2; s.hot.add('c'); log(s, 'INFO', 'pg', 'UPDATE changes SET run=2 WHERE run=1 → 1 fila'); }});
+  a.push(Object.assign(stChild(), {title: '18 · Hijo del run 2'}));
+  a.push(Object.assign(stFan(2), {title: '19 · Se reejecutan TODOS los agentes (run 2)'}));
+  a.push(stAgent('agent_1', true, 2, '20'));
+  a.push(stAgent('agent_2', true, 2, '20b'));
+  a.push(Object.assign(stWfDone(2), {title: '21 · Terminan los workflows del run 2'}));
+  a.push(stPollFinal('<code>review_status</code> solo cuenta las reviews del <b>run 2</b> (2 completadas) → <code>completed</code>. Las dos del run 1 siguen en la tabla, y el detalle de la UI las muestra mezcladas con las nuevas (cada tarjeta indica su <code>Run N</code>).'));
+  return a; })()};
+SCENARIOS.temporal = {name: 'Temporal caído → 503 → reenvío idempotente', steps: [
+  stCommit(), stHook(true), stValidate(), stPg(),
+  {title: '5 · Temporal no responde', from: 'api', to: 'temporal', label: 'start_workflow ✕', nodes: ['api', 'temporal'], bad: ['temporal'], dt: 3000,
+    text: 'El cliente de Temporal conecta de forma perezosa, así que la API arrancó y responde <code>/health</code> aunque Temporal esté caído. Pero al intentar <code>start_workflow</code> la conexión falla y el adaptador lanza <code>ReviewStartError</code>. Importante: <b>el change ya está guardado</b> en Postgres (con su evento).',
+    ref: [REF.lazy, REF.startErr], fx: (s) => { s.bad = ['temporal']; log(s, 'ERROR', 'temporal', 'start_workflow: conexión rechazada (localhost:7233)'); }},
+  {title: '6 · 503 al cliente', from: 'api', to: 'hook', label: '503 reintenta', nodes: ['api', 'hook'], bad: ['temporal'], dt: 6, badPkt: true,
+    text: 'La API responde <b>503</b> «No se pudo arrancar la review, reintenta». El hook no reintenta (no tiene cola). El change queda en <code>pending</code> sin workflow; si nadie lo reenvía, la UI lo marcará <code>stale</code> a los 30 min, pero nada lo recupera solo.',
+    ref: [REF.err503, REF.stale], fx: (s) => { log(s, 'WARN', 'api', '503 No se pudo arrancar la review, reintenta'); poll(s, true); }},
+  {title: '7 · La UI enseña «Pendiente»', from: 'ui', to: 'api', label: 'GET …/changes', nodes: ['ui', 'api'], dt: 2600, bad: ['temporal'],
+    text: 'El change existe (la ingesta guardó) pero no tiene reviews: <code>pending</code>. Un <code>pending</code> <b>no se puede reintentar</b> con el botón (409): la salida es reenviar el commit, que es idempotente.',
+    ref: [REF.status], fx: (s) => { s.bad = ['temporal']; poll(s); }},
+  {title: '8 · Temporal vuelve; reenvías el commit (p. ej. <code>git push</code> o <code>curl</code>)', from: 'hook', to: 'api', label: 'POST /ingest/commit', nodes: ['hook', 'api'], dt: 90000,
+    text: 'Se reenvía exactamente el mismo commit. La inserción choca con <code>UNIQUE (project_id, kind, head_sha)</code>, <b>no inserta</b> ni crea evento y devuelve la fila existente: <code>created=false</code>. Pero el caso de uso vuelve a llamar a <code>start()</code> con ese change, y ahora Temporal sí responde.',
+    ref: [REF.existing, REF.created], fx: (s) => { s.bad = []; log(s, 'INFO', 'api', 'reenvío: ON CONFLICT → fila existente (created=false), sin evento nuevo'); }},
+  Object.assign(stStart(), {title: '9 · Esta vez el workflow arranca'}),
+  Object.assign(stResp(), {title: '10 · 202 con <code>created:false</code>', label: '202 created:false', text: 'La respuesta es 202 con <code>created:false</code>: el change ya existía, pero la review está por fin en marcha. <b>Reenviar es seguro</b>: nunca duplica el change ni los eventos. Es también la salida cuando un workflow quedó <i>Failed</i> por infraestructura: el botón «Reintentar» no sirve en <code>pending</code>/<code>running</code> (409).'}),
+  stChild(), stFan(1), stAgent('agent_1', true, 1, '13'), stAgent('agent_2', true, 1, '13b'), stWfDone(1),
+  stPollFinal('El flujo se recupera solo con reenviar el commit: 1 fila en <code>changes</code> (no se duplicó), 2 reviews y 3 eventos.')]};
+SCENARIOS.duplicado = {name: 'Commit duplicado (created = false)', preloaded: true, steps: [
+  {title: '1 · Se reenvía un commit que ya existe', from: 'hook', to: 'api', label: 'POST /ingest/commit', nodes: ['hook', 'api'], dt: 5000,
+    text: 'Estado de partida: el commit <code>' + SHA + '</code> ya fue revisado (1 change, 2 reviews, 3 eventos). Ahora llega de nuevo —un <code>git push</code> repetido, un reintento del cliente—. Pasa el mismo límite de peticiones, el mismo token y las mismas validaciones.',
+    ref: [REF.deps], fx: (s) => { log(s, 'INFO', 'api', 'POST /ingest/commit ' + SHA + ' (reenvío)'); }},
+  {title: '2 · ON CONFLICT: no se inserta nada', from: 'api', to: 'pg', label: 'INSERT … ON CONFLICT', nodes: ['api', 'pg'], dt: 14,
+    text: 'La restricción <code>uq_changes_natural_key</code> detecta el duplicado: <code>RETURNING</code> no devuelve fila, así que se hace un <code>SELECT</code> y se devuelve la existente. <b>No se crea evento y no se actualiza ningún campo</b>: si el segundo envío traía otro título o diff, se ignoran.',
+    ref: [REF.conflict, REF.existing], fx: (s) => { log(s, 'INFO', 'pg', 'INSERT … ON CONFLICT DO NOTHING → 0 filas; SELECT existente (sin cambios en tablas)'); }},
+  {title: '3 · Temporal tampoco relanza', from: 'api', to: 'temporal', label: 'start_workflow', nodes: ['api', 'temporal'], dt: 20,
+    text: 'Se intenta arrancar el mismo id <code>' + WF + '</code>. Con <code>ALLOW_DUPLICATE_FAILED_ONLY</code>, un workflow ya completado <b>no se relanza</b> (no se gasta otra vez a los agentes) y <code>WorkflowAlreadyStartedError</code> se trata como éxito silencioso.',
+    ref: [REF.policy], fx: (s) => { log(s, 'INFO', 'temporal', 'WorkflowExecutionAlreadyStarted ' + WF + ' → ignorado'); }},
+  {title: '4 · 202 con <code>created:false</code>', from: 'api', to: 'hook', label: '202 created:false', nodes: ['api', 'hook'], dt: 6, good: true,
+    text: 'La respuesta es la misma 202, con <code>created:false</code>. Las tablas siguen idénticas: observa que ninguna fila se resaltó en los paneles. <b>La ingesta es idempotente.</b>',
+    ref: [REF.created, REF.resp], fx: (s) => { log(s, 'INFO', 'api', '202 {change_id:' + CID + ', created:false}'); }}]};
+SCENARIOS.hook = {name: 'Hook con la API caída (no bloquea)', steps: [
+  stCommit(), stHook(false),
+  {title: '3 · Nada llegó a Duelo', from: 'ui', to: 'api', label: 'GET …/changes', nodes: ['ui', 'api'], dt: 2800, bad: ['api'],
+    text: 'Postgres y Temporal siguen intactos y la UI no muestra nada nuevo. <b>El commit en tu repo es perfectamente válido</b>: el hook es un mero aviso y por diseño no puede romper ni retrasar tu trabajo. A cambio, no hay cola ni reintento automático: <b>ese envío concreto se perdió</b>.',
+    ref: [REF.hookMain], fx: (s) => { s.bad = ['api']; log(s, 'WARN', 'ui', 'sondeo: la API no responde; se mantienen los datos anteriores'); }},
+  {title: '4 · La API vuelve; haces <code>git push</code>', from: 'git', to: 'hook', label: 'pre-push', nodes: ['git', 'hook'], dt: 120000,
+    text: 'El hook <code>pre-push</code> lee de <code>stdin</code> las referencias que se suben y <b>reenvía los commits de ramas que se suben</b> (hasta 20 por referencia; ignora tags y borrados). Si el commit olvidado cae en ese rango, se recupera; <b>si no, se pierde</b>: no hay cola ni garantía. Desde aquí el flujo es el de siempre.',
+    ref: [REF.hookMain], fx: (s) => { s.bad = []; log(s, 'INFO', 'git', 'git push → pre-push envía ' + SHA); }},
+  Object.assign(stHook(true), {title: '5 · El hook reenvía'}), stValidate(), stPg(), stStart(), stResp(), stChild(), stFan(1),
+  stAgent('agent_1', true, 1, '11'), stAgent('agent_2', true, 1, '11b'), stWfDone(1),
+  stPollFinal('En este caso el commit perdido iba dentro del push (una rama, menos de 20 commits) y llega a Duelo. No siempre ocurre: depende de que el siguiente push lo vuelva a cubrir.')]};
+
+/* ===== motor ===== */
+const reduceMq = matchMedia('(prefers-reduced-motion: reduce)');
+let allowMotion = false;
+const reduce = () => reduceMq.matches && !allowMotion;
+let scnKey = 'exito', idx = -1, playing = false, speed = 1, runId = 0, busy = false, skipPkt = null, state = null;
+
+function compute(upto) {
+  const scn = SCENARIOS[scnKey], s = initial(scn);
+  for (let i = 0; i <= upto; i++) {
+    const st = scn.steps[i]; s.hot = new Set(); s.bad = []; s.t += (st.dt || 0);
+    if (st.bad) s.bad = st.bad.slice();
+    st.fx(s);
+    if (st.bad && !st.bad.length) s.bad = [];
+  }
+  return s;
+}
+function renderNodes(s, st) {
+  Object.entries(nodeEls).forEach(([id, g]) => {
+    g.classList.toggle('on', !!(st && st.nodes && st.nodes.includes(id)));
+    g.classList.toggle('bad', !!(s && s.bad && s.bad.includes(id)));
+  });
+}
+function renderTables(s) {
+  const hot = (k) => (s.hot.has(k) ? ' class="hot"' : '');
+  const ch = s.changes.map((c) => '<tr' + hot(c.k) + '><td>' + c.id + '</td><td>' + c.kind + '</td><td>' + c.sha + '</td><td>' + c.status + '</td><td>' + c.run + '</td></tr>').join('');
+  const rv = s.reviews.map((r) => '<tr' + hot(r.k) + '><td>' + r.agent + '</td><td>' + r.run + '</td><td>' + (r.status === 'failed' ? '<span style="color:var(--danger)">failed</span>' : '<span style="color:var(--success)">completed</span>') + '</td><td>' + (r.score ?? '—') + '</td></tr>').join('');
+  const ev = s.events.map((e) => '<tr' + hot(e.k) + '><td>' + e.id + '</td><td>' + esc(e.type) + '</td><td>' + esc(e.detail) + '</td></tr>').join('');
+  $('#tables').innerHTML =
+    '<b class="muted">changes</b><table><tr><th>id</th><th>kind</th><th>head_sha</th><th>status</th><th>run</th></tr>' + (ch || '<tr><td colspan="5" class="muted">vacía</td></tr>') + '</table>' +
+    '<b class="muted">reviews</b><table><tr><th>agent</th><th>run</th><th>status</th><th>score</th></tr>' + (rv || '<tr><td colspan="4" class="muted">vacía</td></tr>') + '</table>' +
+    '<b class="muted">events</b><table><tr><th>id</th><th>type</th><th>detalle</th></tr>' + (ev || '<tr><td colspan="3" class="muted">vacía</td></tr>') + '</table>';
+}
+function renderLanes(s) {
+  const lane = (name, arr) => '<div class="lane"><b>cola ' + name + '</b><div class="items">' + (arr.length ? arr.map((w) => '<span class="wf ' + w.state + '">' + esc(w.label) + ' · ' + w.state + '</span>').join('') : '<span class="muted" style="font-size:.78rem">sin tareas</span>') + '</div></div>';
+  $('#lanes').innerHTML = lane('platform (workflows)', s.platform) + lane('agents (activities)', s.agents);
+}
+function renderLog(s) {
+  const box = $('#log');
+  box.innerHTML = s.log.map((l) => '<span class="l"><span class="t">' + l.t + '</span> <span class="lvl-' + l.lvl + '">' + l.lvl.padEnd(5) + '</span> ' + esc(l.who.padEnd(8)) + ' ' + esc(l.text) + '</span>').join('') || '<span class="muted">El log aparecerá aquí.</span>';
+  box.scrollTop = box.scrollHeight;
+}
+function renderUI(s) {
+  const u = s.ui, labels = {pending: 'Pendiente', running: 'En curso', completed: 'Completada', partial_failed: 'Parcial', failed: 'Con fallos'};
+  if (!u.badge) { $('#uimock').innerHTML = '<p class="muted" style="margin:0">«Aún no hay cambios». El canal está vacío.</p><p class="upd">' + (u.polls ? 'Actualizado hace unos segundos' : 'Esperando el primer sondeo…') + '</p>'; return; }
+  const ago = Math.max(0, Math.round((s.t - u.seenAt) / 1000));
+  $('#uimock').innerHTML = '<div class="uimock"><div class="row"><span class="chip">Commit</span><span class="ttl">' + esc(u.title) + '</span></div>' +
+    '<div class="row" style="margin-top:6px"><span class="muted">marta · ' + SHA + '</span><span class="badge ' + u.badge + '" id="uiBadge">' + labels[u.badge] + '</span><span class="muted">Run ' + u.run + '</span></div>' +
+    '<div class="row" style="margin-top:6px"><span class="muted">' + esc(u.counts) + '</span></div>' +
+    (u.retryable ? '<div class="row" style="margin-top:10px"><span class="tok">token (solo en memoria) ••••••••</span><button type="button" id="uiRetry">Reintentar review</button></div>' : '') +
+    '<div class="upd" style="margin-top:8px">Sondeo #' + u.polls + ' · «Actualizado hace ' + (ago < 60 ? ago + ' s' : Math.round(ago / 60) + ' min') + '»</div></div>';
+  const rb = $('#uiRetry'); if (rb) rb.addEventListener('click', () => { if (idx < SCENARIOS[scnKey].steps.length - 1) stepNext(); });
+}
+function renderAll(st) {
+  renderNodes(state, st); renderTables(state); renderLanes(state); renderLog(state); renderUI(state);
+  const n = SCENARIOS[scnKey].steps.length;
+  $('#prog').textContent = 'Paso ' + (idx + 1) + ' / ' + n; $('#seek').max = n; $('#seek').value = idx + 1;
+}
+const plain = (t) => t.replace(/^\d+[a-z]? · /, '');
+function showInfo(st, i) {
+  const n = SCENARIOS[scnKey].steps.length;
+  $('#explain').innerHTML = '<h3>' + plain(st.title) + ' <span class="muted" style="font-weight:400">(' + (i + 1) + '/' + n + ')</span></h3><p style="margin:0">' + st.text + '</p>' +
+    '<div class="refs">' + (st.ref || []).map((r) => '<span class="chip info">' + esc(r) + '</span>').join('') + '</div>';
+  const tmp = document.createElement('div'); tmp.innerHTML = plain(st.title) + '. ' + st.text; $('#announce').textContent = tmp.textContent;
+}
+function packet(st) {
+  return new Promise((resolve) => {
+    if (reduce() || st.noPacket || !NODES[st.from] || !NODES[st.to]) return resolve();
+    const a = NODES[st.from], b = NODES[st.to], dur = 1000 / speed, cls = st.badPkt ? 'bad' : (st.good ? 'good' : '');
+    const g = el('g', {class: 'pkt ' + cls}, gPkts); el('circle', {r: 7}, g);
+    if (st.label) { const t = el('text', {y: -13}, g); t.textContent = st.label; }
+    const t0 = performance.now(); let done = false;
+    const finish = () => { if (done) return; done = true; g.remove(); skipPkt = null; resolve(); };
+    skipPkt = finish;
+    (function frame(now) {
+      if (done) return;
+      const k = Math.min(1, (now - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      g.setAttribute('transform', 'translate(' + (a.x + (b.x - a.x) * e) + ',' + (a.y + (b.y - a.y) * e) + ')');
+      if (k >= 1) return finish();
+      requestAnimationFrame(frame);
+    })(t0);
+  });
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function hashSync() { try { history.replaceState(null, '', '#sim=' + scnKey + '&paso=' + (idx + 1)); } catch (e) { /* file:// restringido */ } }
+
+async function advance(animate) {
+  const steps = SCENARIOS[scnKey].steps;
+  if (idx >= steps.length - 1) return false;
+  if (busy) { if (skipPkt) skipPkt(); return true; }
+  busy = true; const my = runId, n = idx + 1, st = steps[n];
+  showInfo(st, n); renderNodes(state, st);
+  if (animate) await packet(st);
+  if (my !== runId) { busy = false; return false; }
+  idx = n; state = compute(idx); renderAll(st); hashSync(); busy = false; return true;
+}
+function stepNext() { advance(!reduce()); }
+function goto(i) {
+  runId++; busy = false; if (skipPkt) skipPkt(); gPkts.replaceChildren();
+  idx = Math.max(-1, Math.min(SCENARIOS[scnKey].steps.length - 1, i)); state = compute(idx);
+  const st = SCENARIOS[scnKey].steps[idx];
+  if (st) showInfo(st, idx); else $('#explain').innerHTML = '<h3>' + esc(SCENARIOS[scnKey].name) + '</h3><p class="muted" style="margin:0">Pulsa Reproducir o Paso ▶ para empezar.</p>';
+  renderAll(st); hashSync();
+}
+async function play() {
+  if (reduce()) return;
+  if (idx >= SCENARIOS[scnKey].steps.length - 1) goto(-1);
+  playing = true; setPlayUi(); const my = ++runId;
+  while (playing && my === runId) {
+    const ok = await advance(true); if (!ok || my !== runId) break;
+    await sleep(1500 / speed);
+  }
+  if (my === runId) { playing = false; setPlayUi(); }
+}
+function pause() { playing = false; setPlayUi(); }
+function setPlayUi() {
+  const b = $('#bPlay'); b.textContent = playing ? '⏸ Pausar' : '▶ Reproducir'; b.setAttribute('aria-label', playing ? 'Pausar' : 'Reproducir');
+  const dis = reduce(); b.setAttribute('aria-disabled', dis ? 'true' : 'false'); b.title = dis ? 'Tu sistema pide reducir el movimiento: avanza con «Paso ▶» o permite la animación.' : '';
+}
+/* ===== controles ===== */
+const sel = $('#scn');
+Object.entries(SCENARIOS).forEach(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.name; sel.appendChild(o); });
+sel.addEventListener('change', () => { pause(); scnKey = sel.value; goto(-1); });
+$('#bReset').addEventListener('click', () => { pause(); goto(-1); });
+$('#bBack').addEventListener('click', () => { pause(); goto(idx - 1); });
+$('#bNext').addEventListener('click', () => { pause(); stepNext(); });
+$('#bPlay').addEventListener('click', () => { if (reduce()) return; playing ? pause() : play(); });
+$('#spd').addEventListener('change', (e) => { speed = parseFloat(e.target.value) || 1; });
+$('#seek').addEventListener('input', (e) => { pause(); goto(parseInt(e.target.value, 10) - 1); });
+$('#motion').addEventListener('change', (e) => { allowMotion = e.target.checked; setPlayUi(); });
+$('#sim').addEventListener('keydown', (e) => {
+  if (e.target.matches('select,input[type=range],input[type=checkbox]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); pause(); stepNext(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); pause(); goto(idx - 1); }
+  else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); pause(); goto(-1); }
+  else if (e.key === ' ' && !e.target.matches('button')) { e.preventDefault(); if (!reduce()) playing ? pause() : play(); }
+});
+reduceMq.addEventListener('change', () => { $('#motionWrap').hidden = !reduceMq.matches; setPlayUi(); });
+$('#motionWrap').hidden = !reduceMq.matches;
+
+/* ===== arranque y enlace profundo (#sim=fallo&paso=7) ===== */
+(function init() {
+  const m = /sim=([a-z]+)(?:&paso=(\d+))?/.exec(location.hash);
+  if (m && SCENARIOS[m[1]]) scnKey = m[1];
+  sel.value = scnKey; setPlayUi();
+  goto(m && m[2] ? parseInt(m[2], 10) - 1 : -1);
+  window.__duelo = {goto, scenarios: Object.keys(SCENARIOS), steps: (k) => SCENARIOS[k].steps.length, set: (k) => { scnKey = k; sel.value = k; goto(-1); }};
+})();
+})();
+</script>
+</body>
+</html>

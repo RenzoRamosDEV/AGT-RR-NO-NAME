@@ -12,6 +12,15 @@ import type {
 interface ProjectDto {
   id: string;
   slug: string;
+  /** Local path, hook state and GitHub flag come with the local-projects API (all optional). */
+  path?: string | null;
+  hooks_installed?: boolean | null;
+  github?: boolean | string | null;
+}
+
+interface SyncPrsDto {
+  synced: number;
+  created: number;
 }
 
 interface ChangeSummaryDto {
@@ -75,6 +84,16 @@ interface ChangePageDto {
 export interface ProjectRef {
   slug: string;
   name: string;
+  /** Absolute path of the local repository, when the project was added from disk. */
+  path?: string;
+  hooksInstalled?: boolean;
+  /** The repository lives on GitHub, so its PRs can be synchronised. */
+  github?: boolean;
+}
+
+export interface SyncResult {
+  synced: number;
+  created: number;
 }
 
 export interface ChangePage {
@@ -105,6 +124,12 @@ export interface DataSource {
   health(): Promise<Health>;
   /** Starts a new review run for a failed change. Rejects with `ApiError` (401/404/409/503…). */
   retry(id: string, token: string): Promise<RetryResult>;
+  /** Registers a local git repository and installs its hooks. Rejects with `ApiError`. */
+  addProject(path: string, token: string): Promise<ProjectRef>;
+  /** Removes a project, its hooks and its history. */
+  removeProject(slug: string, token: string): Promise<void>;
+  /** Imports the repository's PRs through `gh`; 503 when `gh` is missing or not logged in. */
+  syncPrs(slug: string, token: string): Promise<SyncResult>;
 }
 
 export class ApiError extends Error {
@@ -118,6 +143,30 @@ export class ApiError extends Error {
 
   get notFound(): boolean {
     return this.status === 404;
+  }
+}
+
+function toProject(dto: ProjectDto): ProjectRef {
+  return {
+    slug: dto.slug,
+    name: dto.slug,
+    ...(dto.path ? { path: dto.path } : {}),
+    ...(dto.hooks_installed != null ? { hooksInstalled: dto.hooks_installed } : {}),
+    ...(dto.github != null ? { github: Boolean(dto.github) } : {}),
+  };
+}
+
+/** The slug may contain "/" (`owner/repo`); the backend routes accept it as a path. */
+const slugPath = (slug: string) => slug.split("/").map(encodeURIComponent).join("/");
+
+/** FastAPI sends `detail` as text for application errors and as a list for validation errors. */
+async function errorDetail(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json();
+    const detail = (body as { detail?: unknown } | null)?.detail;
+    return typeof detail === "string" && detail.trim() ? detail : null;
+  } catch {
+    return null;
   }
 }
 
@@ -169,8 +218,10 @@ export function createHttpSource(
       throw new ApiError("No se pudo conectar con el servidor.", null);
     }
     if (!response.ok) {
-      throw new ApiError(`El servidor respondió ${response.status}.`, response.status);
+      const detail = await errorDetail(response);
+      throw new ApiError(detail ?? `El servidor respondió ${response.status}.`, response.status);
     }
+    if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
   const get = <T>(path: string) => request<T>(path);
@@ -178,7 +229,7 @@ export function createHttpSource(
   return {
     async projects() {
       const projects = await get<ProjectDto[]>("/projects");
-      return projects.map((p) => ({ slug: p.slug, name: p.slug }));
+      return projects.map(toProject);
     },
     async changes(slug, { kind, status, q, cursor, limit } = {}) {
       const params = new URLSearchParams();
@@ -188,10 +239,7 @@ export function createHttpSource(
       if (cursor) params.set("cursor", cursor);
       if (limit) params.set("limit", String(limit));
       const qs = params.size > 0 ? `?${params}` : "";
-      // The slug may contain "/" (`owner/repo`); the backend route accepts it as a path.
-      const page = await get<ChangePageDto>(
-        `/projects/${slug.split("/").map(encodeURIComponent).join("/")}/changes${qs}`,
-      );
+      const page = await get<ChangePageDto>(`/projects/${slugPath(slug)}/changes${qs}`);
       return { items: page.items.map(toChange), nextCursor: page.next_cursor };
     },
     async change(id) {
@@ -229,6 +277,27 @@ export function createHttpSource(
         headers: { "X-Ingest-Token": token },
       });
       return { changeId: dto.change_id, run: dto.run };
+    },
+    async addProject(path, token) {
+      const dto = await request<ProjectDto>("/projects", {
+        method: "POST",
+        headers: { "X-Ingest-Token": token, "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      return toProject(dto);
+    },
+    async removeProject(slug, token) {
+      await request<void>(`/projects/${slugPath(slug)}`, {
+        method: "DELETE",
+        headers: { "X-Ingest-Token": token },
+      });
+    },
+    async syncPrs(slug, token) {
+      const dto = await request<SyncPrsDto>(`/projects/${slugPath(slug)}/sync-prs`, {
+        method: "POST",
+        headers: { "X-Ingest-Token": token },
+      });
+      return { synced: dto.synced, created: dto.created };
     },
   };
 }

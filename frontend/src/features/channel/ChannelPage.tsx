@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { CopyButton } from "../../components/CopyButton";
 import { ReviewCard } from "../../components/ReviewCard";
+import { UpdatedAgo } from "../../components/UpdatedAgo";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -169,6 +170,7 @@ export function ChannelPage({ slug }: { slug: string }) {
         <div>
           <h1>#{slug}</h1>
           <p>Commits y PRs revisados por Claude y Codex.</p>
+          <UpdatedAgo updatedAt={first.updatedAt} failed={first.refreshFailed} />
         </div>
       </div>
       <div className="toolbar">

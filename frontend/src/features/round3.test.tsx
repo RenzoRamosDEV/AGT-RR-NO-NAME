@@ -143,7 +143,9 @@ describe("compact channel", () => {
 
     await userEvent.type(screen.getByRole("searchbox"), "ana");
     await userEvent.click(screen.getByRole("button", { name: "Compacta" }));
-    await waitFor(() => expect(screen.queryByText("beta")).toBeNull());
+    // Wait for the filtered result itself: "beta" also disappears while the list is loading.
+    await waitFor(() => expect(document.querySelectorAll(".change-row")).toHaveLength(1));
+    expect(screen.queryByText("beta")).toBeNull();
 
     expect(screen.getByRole("button", { name: "Compacta" })).toHaveAttribute(
       "aria-pressed",

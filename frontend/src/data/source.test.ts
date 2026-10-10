@@ -50,3 +50,49 @@ describe("createMockSource", () => {
     expect(await status("c1", "tok")).toBe(409);
   });
 });
+
+describe("createMockSource local projects", () => {
+  const status = async (promise: Promise<unknown>) =>
+    ((await promise.catch((e: unknown) => e)) as ApiError).status;
+
+  it("adds a project with the same error rules as the API", async () => {
+    const source = createMockSource();
+    expect(await status(source.addProject("/home/me/foo/bar", " "))).toBe(401);
+    expect(await status(source.addProject("repo/relativo", "tok"))).toBe(422);
+    expect(await status(source.addProject("/", "tok"))).toBe(422);
+
+    const added = await source.addProject("/home/me/foo/bar", "tok");
+    expect(added).toMatchObject({
+      slug: "foo/bar",
+      path: "/home/me/foo/bar",
+      hooksInstalled: true,
+    });
+    expect((await source.projects()).map((p) => p.slug)).toContain("foo/bar");
+    expect(await status(source.addProject("/other/foo/bar", "tok"))).toBe(409);
+    expect(await source.changes("foo/bar")).toEqual({ items: [], nextCursor: null });
+  });
+
+  it("keeps projects per source", async () => {
+    const source = createMockSource();
+    await source.addProject("/x/foo/bar", "tok");
+    expect((await createMockSource().projects()).map((p) => p.slug)).not.toContain("foo/bar");
+  });
+
+  it("removes added and sample projects, and then they are gone", async () => {
+    const source = createMockSource();
+    await source.addProject("/x/foo/bar", "tok");
+    expect(await status(source.removeProject("foo/bar", ""))).toBe(401);
+    await source.removeProject("foo/bar", "tok");
+    for (const { slug } of await source.projects()) await source.removeProject(slug, "tok");
+    expect(await source.projects()).toEqual([]);
+    expect(await status(source.removeProject("duelo", "tok"))).toBe(404);
+    expect(await status(source.changes("duelo"))).toBe(404);
+  });
+
+  it("answers 503 when syncing a project that is not on GitHub", async () => {
+    const source = createMockSource();
+    expect(await status(source.syncPrs("duelo", ""))).toBe(401);
+    expect(await status(source.syncPrs("nope", "tok"))).toBe(404);
+    expect(await status(source.syncPrs("duelo", "tok"))).toBe(503);
+  });
+});

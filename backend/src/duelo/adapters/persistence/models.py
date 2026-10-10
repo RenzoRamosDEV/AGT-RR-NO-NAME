@@ -29,6 +29,12 @@ class ProjectModel(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     slug: Mapped[str] = mapped_column(String(255), unique=True)
+    # Solo los proyectos dados de alta desde una carpeta local: ruta del repo y estado de sus hooks.
+    path: Mapped[str | None] = mapped_column(String(4096), unique=True, nullable=True)
+    hooks_installed: Mapped[bool] = mapped_column(
+        Boolean(), default=False, server_default=text("false")
+    )
+    github: Mapped[bool] = mapped_column(Boolean(), default=False, server_default=text("false"))
 
 
 class ChangeModel(Base):

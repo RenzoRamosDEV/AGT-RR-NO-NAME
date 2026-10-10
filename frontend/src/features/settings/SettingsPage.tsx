@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/Button";
 import type { DependencyHealth, Health } from "../../data/mock";
 import { useDataSource } from "../../data/source";
 import { useAsync } from "../../lib/useAsync";
+import { ProjectsSettings } from "./ProjectsSettings";
 
 const DEPENDENCY_LABEL: Record<string, string> = { postgres: "Postgres", temporal: "Temporal" };
 const REASON_LABEL: Record<NonNullable<DependencyHealth["reason"]>, string> = {
@@ -41,7 +42,6 @@ function Diagnostics({ health }: { health: Health }) {
 
 export function SettingsPage() {
   const source = useDataSource();
-  const projects = useAsync(useCallback(() => source.projects(), [source]));
   const health = useAsync(useCallback(() => source.health(), [source]));
   return (
     <div className="page">
@@ -59,22 +59,7 @@ export function SettingsPage() {
         <span>Agentes activos</span>
         <span className="muted">Claude, Codex</span>
       </div>
-      <section aria-labelledby="settings-projects">
-        <h2 id="settings-projects">Proyectos vigilados</h2>
-        <AsyncBoundary state={projects} loadingLabel="Cargando proyectos…">
-          {(list) =>
-            list.length === 0 ? (
-              <p className="muted">Aún no hay proyectos vigilados.</p>
-            ) : (
-              <ul className="plain-list">
-                {list.map((p) => (
-                  <li key={p.slug}>{p.name}</li>
-                ))}
-              </ul>
-            )
-          }
-        </AsyncBoundary>
-      </section>
+      <ProjectsSettings />
       <section aria-labelledby="settings-health">
         <div className="row">
           <h2 id="settings-health">Diagnóstico</h2>

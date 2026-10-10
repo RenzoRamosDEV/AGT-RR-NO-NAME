@@ -178,3 +178,64 @@ def test_rate_limit_can_be_disabled_with_zero(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("RATE_LIMIT_REQUESTS", "0")
 
     assert Settings().rate_limit_requests == 0  # type: ignore[call-arg]
+
+
+# --- proyectos desde carpetas locales ---------------------------------------------------------
+
+
+def test_local_projects_settings_default_to_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "LOCAL_PROJECTS_ENABLED",
+        "INGEST_URL",
+        "PR_SYNC_INTERVAL_SECONDS",
+        "HOOK_ENV_PATH",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.local_projects_enabled is False
+    assert settings.ingest_url == "http://127.0.0.1:8000"
+    assert settings.pr_sync_interval_seconds == 0  # sin sincronización periódica
+    assert settings.hook_env_path is None
+
+
+def test_local_projects_settings_are_read_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("LOCAL_PROJECTS_ENABLED", "true")
+    monkeypatch.setenv("INGEST_URL", "http://localhost:8001/")
+    monkeypatch.setenv("PR_SYNC_INTERVAL_SECONDS", "300")
+    monkeypatch.setenv("HOOK_ENV_PATH", "/tmp/duelo/hook.env")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert settings.local_projects_enabled is True
+    assert settings.ingest_url == "http://localhost:8001"  # sin barra final
+    assert settings.pr_sync_interval_seconds == 300
+    assert settings.hook_env_path == "/tmp/duelo/hook.env"
+
+
+@pytest.mark.parametrize("url", ["", "localhost:8000", "ftp://x", "http://", "javascript:alert(1)"])
+def test_ingest_url_must_be_an_http_url_with_a_host(
+    monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("INGEST_URL", url)
+
+    with pytest.raises(ValidationError, match="INGEST_URL"):
+        Settings()  # type: ignore[call-arg]
+
+
+def test_a_negative_sync_interval_is_rejected_and_a_blank_hook_env_path_means_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INGEST_TOKEN", "t")
+    monkeypatch.setenv("HOOK_ENV_PATH", "  ")
+    assert Settings().hook_env_path is None  # type: ignore[call-arg]
+
+    monkeypatch.setenv("PR_SYNC_INTERVAL_SECONDS", "-1")
+    with pytest.raises(ValidationError):
+        Settings()  # type: ignore[call-arg]

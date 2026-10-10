@@ -76,7 +76,13 @@ async def test_a_pr_and_a_commit_show_up_in_the_channel_detail_and_stats(
     assert sorted(e["agent"] for e in events[1:]) == ["agent_1", "agent_2"]
     assert no_raw.status_code == 404
     assert commit.status_code == pr.status_code == 202 and commit_id != pr_id
-    assert {"id": str(project_id), "slug": slug} in projects
+    assert {
+        "id": str(project_id),
+        "slug": slug,
+        "path": None,
+        "hooks_installed": False,
+        "github": False,
+    } in projects
     # Mismo sha, dos changes: el PR (más reciente) primero y el commit en la segunda página.
     assert [i["id"] for i in first["items"] + second["items"]] == [pr_id, commit_id]
     assert second["next_cursor"] is None

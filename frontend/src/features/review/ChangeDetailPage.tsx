@@ -3,9 +3,13 @@ import { Link } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { CopyButton } from "../../components/CopyButton";
 import { ReviewCard } from "../../components/ReviewCard";
+import { UpdatedAgo } from "../../components/UpdatedAgo";
 import { Badge } from "../../components/ui/Badge";
+import type { Change } from "../../data/mock";
 import { useDataSource } from "../../data/source";
 import { UNNAMED_FILE, diffFiles, parseDiff } from "../../lib/diff";
+import { sameValue } from "../../lib/equal";
+import { usePollMs } from "../../lib/polling";
 import { projectPath } from "../../lib/projectPath";
 import { AGGREGATE_LABEL, AGGREGATE_TONE, isRetryable } from "../../lib/reviewStatus";
 import { safeHttpUrl, shortSha } from "../../lib/url";
@@ -15,9 +19,20 @@ import { RetryReview } from "./RetryReview";
 
 const fileAnchor = (rowId: number) => `diff-file-${rowId}`;
 
+/** A change whose reviews are still being produced keeps refreshing; a finished one does not. */
+const inProgress = (change: Change) =>
+  change.reviewStatus === "pending" || change.reviewStatus === "running";
+
 export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
   const source = useDataSource();
-  const state = useAsync(useCallback(() => source.change(id), [source, id]));
+  const state = useAsync(
+    useCallback(() => source.change(id), [source, id]),
+    {
+      pollMs: usePollMs(),
+      pollWhile: inProgress,
+      equals: (a: Change, b: Change) => sameValue(a, b),
+    },
+  );
   const [note, setNote] = useState<string | null>(null);
   const reload = state.retry;
 
@@ -53,6 +68,9 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                     </Badge>
                     {change.run !== undefined && <span className="muted">Run {change.run}</span>}
                   </p>
+                )}
+                {inProgress(change) && (
+                  <UpdatedAgo updatedAt={state.updatedAt} failed={state.refreshFailed} />
                 )}
               </div>
             </div>

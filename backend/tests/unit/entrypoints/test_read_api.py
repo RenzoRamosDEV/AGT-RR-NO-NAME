@@ -46,14 +46,22 @@ async def _add_change(
 # --- GET /projects ---------------------------------------------------------------------
 
 
-async def test_projects_lists_id_and_slug() -> None:
+async def test_projects_lists_id_slug_and_local_folder_data() -> None:
     api = build_fake_api()
 
     async with _client(api) as client:
         response = await client.get("/projects")
 
     assert response.status_code == 200
-    assert response.json() == [{"id": str(api.project.id), "slug": api.project.slug}]
+    assert response.json() == [
+        {
+            "id": str(api.project.id),
+            "slug": api.project.slug,
+            "path": None,
+            "hooks_installed": False,
+            "github": False,
+        }
+    ]
 
 
 # --- GET /projects/{slug}/changes ------------------------------------------------------

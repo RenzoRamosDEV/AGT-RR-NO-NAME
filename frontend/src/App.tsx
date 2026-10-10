@@ -1,26 +1,31 @@
-import { useCallback } from "react";
 import { Link, Navigate, Route, Routes, useParams } from "react-router";
 import { AsyncBoundary } from "./components/AsyncBoundary";
-import { useDataSource } from "./data/source";
+import { Button } from "./components/ui/Button";
 import { ChannelPage } from "./features/channel/ChannelPage";
+import { useProjects } from "./features/projects/ProjectsContext";
 import { ChangeDetailPage } from "./features/review/ChangeDetailPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { StatsPage } from "./features/stats/StatsPage";
 import { Shell } from "./layout/Shell";
 import { parseProjectPath, projectPath } from "./lib/projectPath";
-import { useAsync } from "./lib/useAsync";
 
 function FirstProject() {
-  const source = useDataSource();
-  const state = useAsync(useCallback(() => source.projects(), [source]));
+  const { projects, openAddProject } = useProjects();
   return (
     <div className="page">
-      <AsyncBoundary state={state} loadingLabel="Cargando proyectos…">
-        {(projects) =>
-          projects.length > 0 ? (
-            <Navigate to={projectPath(projects[0].slug)} replace />
+      <AsyncBoundary state={projects} loadingLabel="Cargando proyectos…">
+        {(list) =>
+          list.length > 0 ? (
+            <Navigate to={projectPath(list[0].slug)} replace />
           ) : (
-            <p className="muted">Aún no hay proyectos vigilados.</p>
+            <div className="stack">
+              <p className="muted">Aún no hay proyectos vigilados.</p>
+              <div className="actions">
+                <Button variant="primary" onClick={openAddProject}>
+                  Añadir proyecto
+                </Button>
+              </div>
+            </div>
           )
         }
       </AsyncBoundary>
