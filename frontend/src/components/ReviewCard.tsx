@@ -45,7 +45,7 @@ function Body({ review }: { review: Review }) {
       {review.status === "running" && <AgentThinking label={`${name} está revisando…`} />}
       {review.status === "failed" && <p className="muted">La review no pudo completarse.</p>}
       {reason && <p className="review-error">Motivo: {reason}</p>}
-      {review.status === "completed" && (
+      {review.status === "completed" && !review.partial && (
         <>
           <p>{review.summary}</p>
           <ul>

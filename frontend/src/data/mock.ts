@@ -25,6 +25,8 @@ export interface Review {
   score?: number | null;
   /** Failure reason as sent by the server; sanitize it before showing it. */
   error?: string | null;
+  /** Light version from the channel listing: no summary, findings or error until the detail loads. */
+  partial?: boolean;
 }
 
 export interface Change {
@@ -66,6 +68,8 @@ export interface DependencyHealth {
 export interface Health {
   status: "ok" | "degraded";
   dependencies: DependencyHealth[];
+  /** Agents configured in the backend (`AGENT_NAMES`); empty when the server does not say. */
+  agentNames: string[];
 }
 
 export interface Project {
@@ -195,6 +199,7 @@ export const health: Health = {
     { name: "postgres", status: "ok", latencyMs: 4 },
     { name: "temporal", status: "ok", latencyMs: 12 },
   ],
+  agentNames: ["claude", "codex"],
 };
 
 export function findProject(slug: string | undefined): Project | undefined {

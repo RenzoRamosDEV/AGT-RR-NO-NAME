@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
 import { CopyButton } from "../../components/CopyButton";
@@ -7,7 +7,9 @@ import { UpdatedAgo } from "../../components/UpdatedAgo";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import type { Change, ChangeKind } from "../../data/mock";
+import type { Change, ChangeKind, Review } from "../../data/mock";
+import { useAgentNames, useDataSource } from "../../data/source";
+import { agentList } from "../../lib/agents";
 import { ApiError } from "../../lib/api";
 import type { StateFilter } from "../../lib/channelQuery";
 import { ingestCommand } from "../../lib/ingestHint";
@@ -57,9 +59,9 @@ function Age({ iso }: { iso: string | undefined }) {
 
 type Tone = "neutral" | "success" | "danger" | "warning";
 
-/** Per-review counts when the source brings the reviews, else the aggregate status. */
+/** Per-review counts when the change has reviews, else the aggregate status (e.g. `pending`). */
 function summaryItems(change: Change): { key: string; tone: Tone; text: string }[] {
-  if (change.reviews) {
+  if (change.reviews && change.reviews.length > 0) {
     return summarizeReviews(change.reviews).map((item) => ({
       key: item.status,
       tone:
@@ -73,6 +75,39 @@ function summaryItems(change: Change): { key: string; tone: Tone; text: string }
     : [];
 }
 
+type FullReviews =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; reviews: Review[] };
+
+/**
+ * The channel listing only brings light reviews (agent, status, score, duration). When the thread
+ * is opened, the full ones (summary, findings, error) are requested from the change detail.
+ */
+function useFullReviews(change: Change, open: boolean): [FullReviews, () => void] {
+  const source = useDataSource();
+  const [full, setFull] = useState<FullReviews>({ status: "idle" });
+  const [attempt, setAttempt] = useState(0);
+  const needsDetail = (change.reviews ?? []).some((r) => r.partial);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` re-runs it on retry; a new run or status means new reviews
+  useEffect(() => {
+    if (!open || !needsDetail) return;
+    let current = true;
+    setFull((prev) => (prev.status === "ready" ? prev : { status: "loading" }));
+    source
+      .change(change.id)
+      .then((detail) => current && setFull({ status: "ready", reviews: detail.reviews ?? [] }))
+      .catch(() => current && setFull({ status: "error" }));
+    return () => {
+      current = false;
+    };
+  }, [open, needsDetail, source, change.id, change.run, change.reviewStatus, attempt]);
+
+  return [full, () => setAttempt((n) => n + 1)];
+}
+
 function ChangeThread({
   change,
   slug,
@@ -83,7 +118,9 @@ function ChangeThread({
   compact: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [full, retryFull] = useFullReviews(change, open);
   const panelId = useId();
+  const reviews = full.status === "ready" ? full.reviews : (change.reviews ?? []);
   return (
     <Card className={compact ? "change-row" : undefined}>
       <div className="row">
@@ -113,7 +150,17 @@ function ChangeThread({
       </Button>
       {open && (
         <div className="thread reviews" id={panelId}>
-          {(change.reviews ?? []).map((r) => (
+          {full.status === "loading" && <output className="muted">Cargando respuestas…</output>}
+          {full.status === "error" && (
+            <p className="notice" role="alert">
+              No se pudieron cargar las respuestas completas.{" "}
+              <Button onClick={retryFull}>Reintentar</Button>
+            </p>
+          )}
+          {reviews.length === 0 && full.status !== "loading" && (
+            <p className="muted">Aún no hay respuestas de los agentes.</p>
+          )}
+          {reviews.map((r) => (
             <ReviewCard key={r.id} review={r} />
           ))}
         </div>
@@ -122,7 +169,7 @@ function ChangeThread({
   );
 }
 
-function EmptyChannel({ slug }: { slug: string }) {
+function EmptyChannel({ slug, agents }: { slug: string; agents: string }) {
   const command = ingestCommand(slug, import.meta.env.VITE_API_URL);
   return (
     <Card className="empty">
@@ -130,8 +177,8 @@ function EmptyChannel({ slug }: { slug: string }) {
         <strong>Aún no hay cambios en este canal.</strong>
       </p>
       <p className="muted">
-        Envía un commit a la API para que Claude y Codex lo revisen. Sustituye{" "}
-        <code>$INGEST_TOKEN</code> por el token de ingesta configurado en el servidor.
+        Envía un commit a la API para que {agents} lo revisen. Sustituye <code>$INGEST_TOKEN</code>{" "}
+        por el token de ingesta configurado en el servidor.
       </p>
       <pre className="command">
         <code>{command}</code>
@@ -147,6 +194,7 @@ export function ChannelPage({ slug }: { slug: string }) {
   const [query, setQuery] = useState("");
   const [density, setDensity] = useState<Density>("cards");
   const searchId = useId();
+  const agents = agentList(useAgentNames());
   const search = useDebouncedValue(query.trim(), SEARCH_DELAY_MS);
   const { first, items, hasMore, moreState, loadMore } = useChannel(slug, {
     kind: filter === "all" ? undefined : filter,
@@ -169,7 +217,7 @@ export function ChannelPage({ slug }: { slug: string }) {
       <div className="page-header">
         <div>
           <h1>#{slug}</h1>
-          <p>Commits y PRs revisados por Claude y Codex.</p>
+          <p>Commits y PRs revisados por {agents}.</p>
           <UpdatedAgo updatedAt={first.updatedAt} failed={first.refreshFailed} />
         </div>
       </div>
@@ -226,7 +274,7 @@ export function ChannelPage({ slug }: { slug: string }) {
               {items.length === 0 && !emptyChannel && (
                 <output className="muted">Ningún cambio coincide con la búsqueda.</output>
               )}
-              {emptyChannel && <EmptyChannel slug={slug} />}
+              {emptyChannel && <EmptyChannel slug={slug} agents={agents} />}
               {items.map((c) => (
                 <ChangeThread key={c.id} change={c} slug={slug} compact={density === "compact"} />
               ))}

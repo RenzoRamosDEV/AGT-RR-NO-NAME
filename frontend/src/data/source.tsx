@@ -1,4 +1,4 @@
-import { type ReactNode, createContext, useContext } from "react";
+import { type ReactNode, createContext, useCallback, useContext } from "react";
 import {
   ApiError,
   type ChangePage,
@@ -9,6 +9,7 @@ import {
 import { isAbsolutePath, slugFromPath } from "../lib/localPath";
 import { aggregateStatus, isRetryable } from "../lib/reviewStatus";
 import { matchesQuery } from "../lib/search";
+import { useAsync } from "../lib/useAsync";
 import { type Change, agentStats, findChange, findProject, health, projects } from "./mock";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -37,7 +38,11 @@ export function createMockSource(): DataSource {
   function view(change: Change): Change {
     const run = restarted.get(change.id);
     const base = run === undefined ? change : { ...change, reviews: [], run };
-    return { ...base, run: base.run ?? 1, reviewStatus: aggregateStatus(base.reviews ?? []) };
+    return {
+      ...base,
+      run: base.run ?? 1,
+      reviewStatus: aggregateStatus(base.reviews ?? [], health.agentNames.length),
+    };
   }
 
   function find(id: string): Change | undefined {
@@ -141,4 +146,11 @@ export function DataSourceProvider({
 
 export function useDataSource(): DataSource {
   return useContext(DataSourceContext);
+}
+
+/** Agents configured in the backend, or `null` while unknown (loading or the server fails). */
+export function useAgentNames(): string[] | null {
+  const source = useDataSource();
+  const state = useAsync(useCallback(() => source.health(), [source]));
+  return state.status === "ready" ? state.data.agentNames : null;
 }

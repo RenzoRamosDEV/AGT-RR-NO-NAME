@@ -12,6 +12,7 @@ import { sameValue } from "../../lib/equal";
 import { usePollMs } from "../../lib/polling";
 import { projectPath } from "../../lib/projectPath";
 import { AGGREGATE_LABEL, AGGREGATE_TONE, isRetryable } from "../../lib/reviewStatus";
+import { splitRuns } from "../../lib/runs";
 import { safeHttpUrl, shortSha } from "../../lib/url";
 import { useAsync } from "../../lib/useAsync";
 import { FindingsPanel } from "./FindingsPanel";
@@ -48,7 +49,8 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
     >
       {(change) => {
         const url = safeHttpUrl(change.url);
-        const reviews = change.reviews ?? [];
+        // Only the current run counts; a retry keeps the earlier runs' reviews, shown collapsed.
+        const { current: reviews, previous } = splitRuns(change.reviews ?? [], change.run);
         const rows = parseDiff(change.diff);
         const files = diffFiles(rows);
         const anchored = new Set(files.map((f) => f.rowId));
@@ -154,6 +156,19 @@ export function ChangeDetailPage({ slug, id }: { slug: string; id: string }) {
                   <ReviewCard key={r.id} review={r} />
                 ))}
               </div>
+              {previous.map((p) => (
+                <details key={p.run} className="previous-run">
+                  <summary>
+                    Run {p.run} (anterior) · {p.reviews.length}{" "}
+                    {p.reviews.length === 1 ? "review" : "reviews"}
+                  </summary>
+                  <div className="reviews">
+                    {p.reviews.map((r) => (
+                      <ReviewCard key={r.id} review={r} />
+                    ))}
+                  </div>
+                </details>
+              ))}
             </div>
           </div>
         );

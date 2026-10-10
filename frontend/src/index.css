@@ -247,6 +247,21 @@ pre {
   border-radius: var(--radius-lg);
 }
 
+.previous-run {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+}
+
+.previous-run > summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+
+.previous-run[open] > summary {
+  margin-bottom: 12px;
+}
+
 .review-body {
   padding: 16px 18px;
   min-height: 132px;
