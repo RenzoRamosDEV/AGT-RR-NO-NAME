@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { Themed } from "./brand";
 import { HeroImage } from "./fx/HeroImage";
 
 /** Simple line illustration shared by the empty, error and not-found states. */
@@ -57,8 +58,11 @@ export function EmptyState({
   className = "",
 }: {
   kind?: "empty" | "missing" | "error";
-  /** Picture for the libraries.dev `img-fx` hero (loader that turns into the picture). Without it, the line illustration. */
-  hero?: string;
+  /**
+   * Picture for the libraries.dev `img-fx` hero (loader that turns into the picture): one image or
+   * one per theme. Without it, the line illustration.
+   */
+  hero?: string | Themed<string>;
   title: ReactNode;
   /** The title is the page's `<h1>` (not-found pages) instead of a plain paragraph. */
   heading?: boolean;
