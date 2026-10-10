@@ -123,27 +123,40 @@ def test_a_blank_binary_or_model_means_not_configured(
     assert (settings.claude_model, settings.codex_model) == (None, None)
 
 
-@pytest.mark.parametrize("value", ["0", "-1", "300", "301"])
-def test_the_agent_timeout_must_stay_below_the_activity_timeout(
+@pytest.mark.regression
+@pytest.mark.parametrize("value", ["0", "-1", "270.1", "299.9", "300", "301"])
+def test_the_agent_timeout_must_leave_a_margin_below_the_activity_timeout(
     monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
+    """Origen: se admitía hasta 299,9 s con una activity de 300 s: al vencer el CLI no quedaba
+    tiempo para limpiar y persistir la `Review(failed)`."""
     monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", value)
 
     with pytest.raises(ValidationError):
         WorkerSettings()
 
 
-def test_the_largest_agent_timeout_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "299.9")
+@pytest.mark.parametrize("value", ["1", "240", "269.9", "270"])
+def test_timeouts_up_to_the_ceiling_are_accepted(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", value)
 
-    assert WorkerSettings().agent_timeout_seconds == 299.9
+    assert WorkerSettings().agent_timeout_seconds == float(value)
 
 
-def test_the_timeout_ceiling_matches_the_workflow_activity_timeout() -> None:
-    """Si alguien sube el plazo de la activity, el techo de la configuración debe seguirlo."""
-    from duelo.workflows.review_change import RUN_REVIEW_START_TO_CLOSE
+def test_the_workflow_and_the_configuration_use_the_same_timeout_constants() -> None:
+    """Si alguien cambia el plazo de la activity en un sitio y no en el otro, esto lo detecta."""
+    from duelo import config
+    from duelo.application import review_timeouts
+    from duelo.workflows import review_change
 
-    assert MAX_AGENT_TIMEOUT_SECONDS == RUN_REVIEW_START_TO_CLOSE.total_seconds()
+    assert review_change.RUN_REVIEW_START_TO_CLOSE is review_timeouts.RUN_REVIEW_START_TO_CLOSE
+    assert config.MAX_AGENT_TIMEOUT_SECONDS == review_timeouts.MAX_AGENT_TIMEOUT_SECONDS
+
+
+def test_the_default_timeout_leaves_the_margin() -> None:
+    assert WorkerSettings.model_fields["agent_timeout_seconds"].default <= MAX_AGENT_TIMEOUT_SECONDS
 
 
 @pytest.mark.parametrize("name", ["AGENT_MAX_CONCURRENCY", "CLAUDE_MAX_BUDGET_USD"])

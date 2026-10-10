@@ -8,9 +8,9 @@ from urllib.parse import urlsplit
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from duelo.application.review_timeouts import MAX_AGENT_TIMEOUT_SECONDS
+
 MIN_OPERATOR_TOKEN = 16
-# El `start_to_close_timeout` de la activity `run_review` son 5 minutos: el CLI debe acabar antes.
-MAX_AGENT_TIMEOUT_SECONDS = 300
 
 
 def _split_csv(value: object) -> object:
@@ -31,8 +31,9 @@ class WorkerSettings(BaseSettings):
 
     # Agentes reales: `claude` y `codex` en AGENT_NAMES usan los CLI de la máquina (con la sesión
     # que el usuario ya tiene iniciada, sin claves de API); otro nombre es el agente de prueba.
-    # Plazo de cada ejecución: debe quedar por debajo de los 5 minutos de la activity.
-    agent_timeout_seconds: float = Field(default=240.0, gt=0, lt=MAX_AGENT_TIMEOUT_SECONDS)
+    # Plazo de cada ejecución. Como máximo el de la activity menos un margen de 30 s (para limpiar y
+    # guardar la review fallida al vencer): `application/review_timeouts.py`.
+    agent_timeout_seconds: float = Field(default=240.0, gt=0, le=MAX_AGENT_TIMEOUT_SECONDS)
     # Cuántos CLI pueden ejecutarse a la vez en este worker.
     agent_max_concurrency: int = Field(default=2, ge=1)
     # Ruta del ejecutable si no está en el PATH; vacío = buscarlo en el PATH.
