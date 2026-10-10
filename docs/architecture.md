@@ -64,6 +64,17 @@ que ya está en el spec o en `openspec/specs/`.
   `STALE_AFTER_SECONDS`. La migración `d4a8e1b5c602` reemplaza los índices del canal y la
   consulta del canal cuenta las reviews con un `LEFT JOIN LATERAL` (EXPLAIN con 60 000 changes:
   de ~58 ms a <1 ms).
+- `change-review`, `review-retry` y `stale-reviews` (change `recover-review-runs`): si una
+  activity `run_review` agota sus 3 intentos por un fallo de infraestructura, el workflow
+  ejecuta la activity compensatoria `record_review_infrastructure_failure` y guarda una review
+  `failed` con un mensaje fijo (nunca el texto de la excepción), idempotente por
+  `(change, agent, run)`; así el change pasa a `failed`/`partial_failed` y es reintentable. Un
+  error de configuración no reintentable (agente desconocido) sigue sin registrar nada. El cambio
+  va bajo `workflow.patched("compensate-infra-failure")` para no romper ejecuciones en vuelo.
+  `run_review` emite latidos cada 10 s mientras el agente trabaja (el `heartbeat_timeout` es de
+  30 s). `changes.run_started_at` (migración `f6c4d8a2b915`, rellena desde `created_at`) lo fija la
+  ingesta y lo refresca `advance_run`; `stale` se mide desde ahí, de modo que un reintento sobre
+  un change antiguo no nace `stale`.
 - `local-projects` (change `add-local-projects-backend`, apagado por defecto con
   `LOCAL_PROJECTS_ENABLED`): `POST /projects` da de alta un repo desde su carpeta (el slug sale de
   `origin`, `owner/repo`, o del nombre de la carpeta) e instala los hooks `post-commit` y

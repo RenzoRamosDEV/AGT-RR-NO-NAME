@@ -116,7 +116,11 @@ async def _workers(env: WorkflowEnvironment, session_factory: async_sessionmaker
             task_queue="platform",
             workflows=[ReviewChangeWorkflow, ReviewCommitWorkflow],
         ),
-        Worker(env.client, task_queue="agents", activities=[activities.run_review]),
+        Worker(
+            env.client,
+            task_queue="agents",
+            activities=[activities.run_review, activities.record_review_infrastructure_failure],
+        ),
     ):
         yield
 

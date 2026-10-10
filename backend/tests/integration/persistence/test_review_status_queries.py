@@ -19,6 +19,8 @@ from duelo.domain.review import Review, ReviewResult
 from duelo.domain.review_status import ChangeReviewStatus, review_status_from_counts
 from tests.integration.conftest import create_project
 
+_RETRIED_AT = datetime(2026, 2, 1, tzinfo=UTC)
+
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 
@@ -168,7 +170,9 @@ async def test_only_the_current_run_counts_for_the_status(
     await _review(session_factory, change, "a", 1, fail=True)
     await _review(session_factory, change, "b", 1, fail=True)
     async with session_factory() as session:
-        assert await SqlAlchemyChangeRepository(session).advance_run(change.id, from_run=1)
+        assert await SqlAlchemyChangeRepository(session).advance_run(
+            change.id, from_run=1, started_at=_RETRIED_AT
+        )
 
     (row,) = await _list(session_factory, project)
     assert (row.run, row.review_status) == (2, ChangeReviewStatus.PENDING)
@@ -241,7 +245,7 @@ async def test_advance_run_is_a_compare_and_swap(session_factory: async_sessionm
     async def advance(from_run: int) -> Change | None:
         async with session_factory() as session:
             return await SqlAlchemyChangeRepository(session).advance_run(
-                change.id, from_run=from_run
+                change.id, from_run=from_run, started_at=_RETRIED_AT
             )
 
     stale = await advance(5)  # run actual 1: no coincide
@@ -263,7 +267,9 @@ async def test_concurrent_advance_run_has_exactly_one_winner(
 
     async def advance() -> Change | None:
         async with session_factory() as session:
-            return await SqlAlchemyChangeRepository(session).advance_run(change.id, from_run=1)
+            return await SqlAlchemyChangeRepository(session).advance_run(
+                change.id, from_run=1, started_at=_RETRIED_AT
+            )
 
     results = await asyncio.gather(*(advance() for _ in range(8)))
 
@@ -279,4 +285,7 @@ async def test_advance_run_of_an_unknown_change_is_none(
     from uuid import uuid4
 
     async with session_factory() as session:
-        assert await SqlAlchemyChangeRepository(session).advance_run(uuid4(), from_run=1) is None
+        result = await SqlAlchemyChangeRepository(session).advance_run(
+            uuid4(), from_run=1, started_at=_RETRIED_AT
+        )
+        assert result is None

@@ -139,7 +139,7 @@ def build_fake_api(
 
     async def retry(change_id: UUID) -> Change:
         return await retry_review(
-            changes, reviews, starter, change_id, expected_agents=EXPECTED_AGENTS
+            changes, reviews, starter, change_id, expected_agents=EXPECTED_AGENTS, now=clock()
         )
 
     async def agent_stats(project_slug: str | None) -> list[AgentStats]:

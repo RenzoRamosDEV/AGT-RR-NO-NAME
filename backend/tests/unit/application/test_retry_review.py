@@ -15,6 +15,7 @@ from tests.fakes.review_repository import FakeReviewRepository
 from tests.fakes.review_starter import FakeReviewStarter
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
+RETRIED_AT = datetime(2026, 1, 8, tzinfo=UTC)
 AGENTS = ("a", "b")
 
 
@@ -71,7 +72,9 @@ async def _retry(
     starter: FakeReviewStarter,
     change: Change,
 ) -> Change:
-    return await retry_review(changes, reviews, starter, change.id, expected_agents=len(AGENTS))
+    return await retry_review(
+        changes, reviews, starter, change.id, expected_agents=len(AGENTS), now=RETRIED_AT
+    )
 
 
 @pytest.mark.parametrize("fails", [(True, True), (True, False)], ids=["failed", "partial_failed"])
@@ -88,6 +91,9 @@ async def test_a_failed_execution_starts_the_next_run_and_advances_run(
 
     assert retried.run == 2
     assert (await changes.get(change.id)) == retried
+    # El reintento reinicia el reloj de `stale`; la creación del change no cambia.
+    assert retried.run_started_at == RETRIED_AT
+    assert retried.created_at == change.created_at
     # El arranque lleva el run nuevo: el workflow id del run 1 no se reutiliza.
     started = starter.started[("pr", str(change.project_id), change.head_sha, 2)]
     assert started.id == change.id and started.run == 2
@@ -136,7 +142,9 @@ async def test_unknown_change() -> None:
     missing = uuid4()
 
     with pytest.raises(ChangeNotFound) as error:
-        await retry_review(changes, reviews, FakeReviewStarter(), missing, expected_agents=2)
+        await retry_review(
+            changes, reviews, FakeReviewStarter(), missing, expected_agents=2, now=RETRIED_AT
+        )
 
     assert error.value.change_id == missing
 
@@ -192,7 +200,9 @@ async def test_two_simultaneous_retries_start_one_execution_and_advance_run_once
 
 async def test_a_change_deleted_between_the_check_and_the_swap_is_reported_as_not_found() -> None:
     class VanishingChanges(FakeChangeRepository):
-        async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+        async def advance_run(
+            self, change_id: UUID, *, from_run: int, started_at: datetime
+        ) -> Change | None:
             self._by_id.pop(change_id)
             return None
 
@@ -210,4 +220,6 @@ async def test_not_found_carries_the_id_in_its_message() -> None:
     missing = uuid4()
 
     with pytest.raises(ChangeNotFound, match=str(missing)):
-        await retry_review(*_world(), FakeReviewStarter(), missing, expected_agents=2)
+        await retry_review(
+            *_world(), FakeReviewStarter(), missing, expected_agents=2, now=RETRIED_AT
+        )

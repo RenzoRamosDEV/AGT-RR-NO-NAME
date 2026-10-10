@@ -35,7 +35,11 @@ def build_workers(client: Client, settings: WorkerSettings) -> tuple[Worker, Wor
             task_queue="platform",
             workflows=[ReviewChangeWorkflow, ReviewCommitWorkflow],
         ),
-        Worker(client, task_queue="agents", activities=[activities.run_review]),
+        Worker(
+            client,
+            task_queue="agents",
+            activities=[activities.run_review, activities.record_review_infrastructure_failure],
+        ),
     )
 
 

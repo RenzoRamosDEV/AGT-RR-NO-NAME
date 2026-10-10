@@ -31,6 +31,7 @@ class ChangeSummary:
     review_status: ChangeReviewStatus
     run: int
     created_at: datetime
+    run_started_at: datetime
     diff_summary: DiffSummary
     # Lo calcula el caso de uso con su reloj; el repositorio no lo conoce.
     stale: bool = False

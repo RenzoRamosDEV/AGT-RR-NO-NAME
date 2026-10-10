@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 from uuid import UUID
 
 from duelo.application.read_models import ChangeCursor, ChangeSummary
@@ -40,11 +41,13 @@ class FakeChangeRepository:
     async def get(self, change_id: UUID) -> Change | None:
         return self._by_id.get(change_id)
 
-    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+    async def advance_run(
+        self, change_id: UUID, *, from_run: int, started_at: datetime
+    ) -> Change | None:
         change = self._by_id.get(change_id)
         if change is None or change.run != from_run:
             return None
-        advanced = replace(change, run=from_run + 1)
+        advanced = replace(change, run=from_run + 1, run_started_at=started_at)
         self._by_id[change_id] = advanced
         self._by_natural_key[(str(change.project_id), change.kind.value, change.head_sha)] = (
             advanced
@@ -94,6 +97,7 @@ class FakeChangeRepository:
                     review_status=review_status,
                     run=c.run,
                     created_at=c.created_at,
+                    run_started_at=c.run_started_at,
                     diff_summary=c.diff_summary,
                 )
             )

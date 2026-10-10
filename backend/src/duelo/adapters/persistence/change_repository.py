@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -41,6 +42,7 @@ class SqlAlchemyChangeRepository:
                     status=change.status.value,
                     run=change.run,
                     created_at=change.created_at,
+                    run_started_at=change.run_started_at,
                     diff_summary=_summary_to_json(change.diff_summary),
                 )
                 # La constraint UNIQUE (project_id, kind, head_sha) resuelve la
@@ -121,6 +123,7 @@ class SqlAlchemyChangeRepository:
                 ChangeModel.status,
                 ChangeModel.run,
                 ChangeModel.created_at,
+                ChangeModel.run_started_at,
                 ChangeModel.diff_summary,
                 completed.label("completed_reviews"),
                 failed.label("failed_reviews"),
@@ -170,17 +173,20 @@ class SqlAlchemyChangeRepository:
                 ),
                 run=r.run,
                 created_at=r.created_at,
+                run_started_at=r.run_started_at,
                 diff_summary=_summary_from_json(r.diff_summary),
             )
             for r in rows
         ]
 
-    async def advance_run(self, change_id: UUID, *, from_run: int) -> Change | None:
+    async def advance_run(
+        self, change_id: UUID, *, from_run: int, started_at: datetime
+    ) -> Change | None:
         row = (
             await self._session.execute(
                 update(ChangeModel)
                 .where(ChangeModel.id == change_id, ChangeModel.run == from_run)
-                .values(run=from_run + 1)
+                .values(run=from_run + 1, run_started_at=started_at)
                 .returning(ChangeModel)
             )
         ).scalar_one_or_none()
@@ -229,6 +235,7 @@ def _to_domain(row: ChangeModel) -> Change:
         status=ChangeStatus(row.status),
         run=row.run,
         created_at=row.created_at,
+        run_started_at=row.run_started_at,
         diff_summary=_summary_from_json(row.diff_summary),
     )
 
