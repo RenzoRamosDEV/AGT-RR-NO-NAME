@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { copyText } from "../lib/clipboard";
+import { CopyIcon } from "./icons";
 import { Button } from "./ui/Button";
 
 type Result = "idle" | "ok" | "fail";
@@ -19,6 +20,7 @@ export function CopyButton({ label, value }: { label: string; value: string }) {
   return (
     <span className="copy">
       <Button onClick={async () => setResult((await copyText(value)) ? "ok" : "fail")}>
+        <CopyIcon size={14} />
         {label}
       </Button>
       <output className="muted">{MESSAGE[result]}</output>

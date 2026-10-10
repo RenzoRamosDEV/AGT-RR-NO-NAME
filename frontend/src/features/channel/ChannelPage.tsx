@@ -1,12 +1,18 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
+import heroReview from "../../assets/hero-review.png";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
+import { Busy } from "../../components/Busy";
 import { CopyButton } from "../../components/CopyButton";
+import { EmptyState } from "../../components/EmptyState";
 import { ReviewCard } from "../../components/ReviewCard";
+import { StatusIcon } from "../../components/StatusIcon";
 import { UpdatedAgo } from "../../components/UpdatedAgo";
+import { Beam } from "../../components/fx/Beam";
+import { CommitIcon, PullRequestIcon, SearchIcon } from "../../components/icons";
+import { AgentAvatar, agentLabel } from "../../components/ui/AgentAvatar";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import type { Change, ChangeKind, Review } from "../../data/mock";
 import { useAgentNames, useDataSource } from "../../data/source";
 import { agentList } from "../../lib/agents";
@@ -14,12 +20,14 @@ import { ApiError } from "../../lib/api";
 import type { StateFilter } from "../../lib/channelQuery";
 import { ingestCommand } from "../../lib/ingestHint";
 import { useNow } from "../../lib/now";
+import { isWaiting } from "../../lib/pending";
 import { changePath } from "../../lib/projectPath";
 import { relativeTime } from "../../lib/relativeTime";
 import { AGGREGATE_LABEL, AGGREGATE_TONE } from "../../lib/reviewStatus";
 import { summarizeReviews } from "../../lib/reviewSummary";
 import { shortSha } from "../../lib/url";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
+import { PendingAgents } from "../review/PendingAgents";
 import { useChannel } from "./useChannel";
 
 type Filter = "all" | ChangeKind;
@@ -108,53 +116,100 @@ function useFullReviews(change: Change, open: boolean): [FullReviews, () => void
   return [full, () => setAttempt((n) => n + 1)];
 }
 
+const REVIEW_STATE_TEXT = { running: "en curso", completed: "completada", failed: "fallida" };
+
+/** The agents' "checks" on the right of a row: one avatar per review with its state. */
+function Checks({ reviews }: { reviews: Review[] }) {
+  if (reviews.length === 0) return null;
+  return (
+    <ul className="checks" aria-label="Checks de los agentes">
+      {reviews.map((r) => (
+        <li key={r.id}>
+          <span
+            className="check"
+            data-status={r.status}
+            role="img"
+            aria-label={`${agentLabel(r.agent)}: ${REVIEW_STATE_TEXT[r.status]}`}
+            title={`${agentLabel(r.agent)}: ${REVIEW_STATE_TEXT[r.status]}`}
+          >
+            <AgentAvatar agent={r.agent} size="sm" />
+            <span className="check-dot" aria-hidden="true" />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ChangeThread({
   change,
   slug,
-  compact,
+  agentNames,
 }: {
   change: Change;
   slug: string;
-  compact: boolean;
+  agentNames: readonly string[] | null;
 }) {
   const [open, setOpen] = useState(false);
   const [full, retryFull] = useFullReviews(change, open);
   const panelId = useId();
   const reviews = full.status === "ready" ? full.reviews : (change.reviews ?? []);
+  const KindIcon = change.kind === "pr" ? PullRequestIcon : CommitIcon;
   return (
-    <Card className={compact ? "change-row" : undefined}>
-      <div className="row">
-        <Badge>{change.kind === "pr" ? "PR" : "Commit"}</Badge>
-        <Link to={changePath(slug, change.id)}>
-          <strong>{change.title}</strong>
-        </Link>
-      </div>
-      <p className="muted">
-        {change.author} · <span className="mono">{shortSha(change.sha)}</span>
-        {change.createdAt && (
-          <>
-            {" · "}
-            <Age iso={change.createdAt} />
-          </>
-        )}
-      </p>
-      <ul className="review-summary" aria-label="Resumen de reviews">
-        {summaryItems(change).map((item) => (
-          <li key={item.key}>
-            <Badge tone={item.tone}>{item.text}</Badge>
-          </li>
-        ))}
-      </ul>
-      <Button aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((o) => !o)}>
-        {open ? "Ocultar respuestas" : "Ver respuestas"}
-      </Button>
+    <li className="change" data-status={change.reviewStatus}>
+      <Beam active={isWaiting(change.reviewStatus)}>
+        <div className="change-row">
+          <StatusIcon status={change.reviewStatus} />
+          <div className="change-main">
+            <div className="change-title">
+              <Link to={changePath(slug, change.id)}>
+                <strong>{change.title}</strong>
+              </Link>
+              <span className="kind-label" data-kind={change.kind}>
+                <KindIcon size={12} />
+                {change.kind === "pr" ? "PR" : "Commit"}
+              </span>
+            </div>
+            <p className="change-meta muted">
+              #<span className="mono">{shortSha(change.sha)}</span> · por {change.author}
+              {change.createdAt && (
+                <>
+                  {" · "}
+                  <Age iso={change.createdAt} />
+                </>
+              )}
+            </p>
+            <ul className="review-summary" aria-label="Resumen de reviews">
+              {summaryItems(change).map((item) => (
+                <li key={item.key}>
+                  <Badge tone={item.tone}>{item.text}</Badge>
+                </li>
+              ))}
+            </ul>
+            <PendingAgents change={change} agentNames={agentNames} />
+          </div>
+          <div className="change-side">
+            <Checks reviews={change.reviews ?? []} />
+            <Button
+              size="sm"
+              aria-expanded={open}
+              aria-controls={panelId}
+              onClick={() => setOpen((o) => !o)}
+            >
+              {open ? "Ocultar respuestas" : "Ver respuestas"}
+            </Button>
+          </div>
+        </div>
+      </Beam>
       {open && (
         <div className="thread reviews" id={panelId}>
-          {full.status === "loading" && <output className="muted">Cargando respuestas…</output>}
+          {full.status === "loading" && <Busy activity="load" label="Cargando respuestas…" />}
           {full.status === "error" && (
             <p className="notice" role="alert">
               No se pudieron cargar las respuestas completas.{" "}
-              <Button onClick={retryFull}>Reintentar</Button>
+              <Button size="sm" onClick={retryFull}>
+                Reintentar
+              </Button>
             </p>
           )}
           {reviews.length === 0 && full.status !== "loading" && (
@@ -165,17 +220,19 @@ function ChangeThread({
           ))}
         </div>
       )}
-    </Card>
+    </li>
   );
 }
 
 function EmptyChannel({ slug, agents }: { slug: string; agents: string }) {
   const command = ingestCommand(slug, import.meta.env.VITE_API_URL);
   return (
-    <Card className="empty">
-      <p>
-        <strong>Aún no hay cambios en este canal.</strong>
-      </p>
+    <EmptyState
+      hero={heroReview}
+      title="Aún no hay cambios en este canal."
+      className="empty"
+      action={<CopyButton label="Copiar comando" value={command} />}
+    >
       <p className="muted">
         Envía un commit a la API para que {agents} lo revisen. Sustituye <code>$INGEST_TOKEN</code>{" "}
         por el token de ingesta configurado en el servidor.
@@ -183,9 +240,66 @@ function EmptyChannel({ slug, agents }: { slug: string; agents: string }) {
       <pre className="command">
         <code>{command}</code>
       </pre>
-      <CopyButton label="Copiar comando" value={command} />
-    </Card>
+    </EmptyState>
   );
+}
+
+/** Placeholder rows while the first page loads; purely visual. */
+function ChangeSkeletons() {
+  return (
+    <ul className="change-list skeleton" aria-hidden="true">
+      {[0, 1, 2, 3].map((n) => (
+        <li key={n} className="change">
+          <div className="change-row">
+            <span className="sk sk-circle" />
+            <div className="change-main">
+              <span className="sk sk-line" style={{ width: `${62 - n * 8}%` }} />
+              <span className="sk sk-line sk-short" />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** "3 en curso · 1 con fallos · 12 completados" for the changes loaded so far. */
+function stateCounts(items: readonly Change[]): string {
+  const running = items.filter(
+    (c) => c.reviewStatus === "pending" || c.reviewStatus === "running",
+  ).length;
+  const failed = items.filter(
+    (c) => c.reviewStatus === "failed" || c.reviewStatus === "partial_failed",
+  ).length;
+  const done = items.filter((c) => c.reviewStatus === "completed").length;
+  return [
+    running > 0 && `${running} en curso`,
+    failed > 0 && `${failed} con fallos`,
+    done > 0 && `${done} completados`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Focuses the search box on "/", unless the user is already typing somewhere. */
+function useSlashToSearch(input: React.RefObject<HTMLInputElement | null>) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
+      if (document.querySelector("dialog[open]")) return;
+      e.preventDefault();
+      input.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [input]);
 }
 
 export function ChannelPage({ slug }: { slug: string }) {
@@ -194,7 +308,10 @@ export function ChannelPage({ slug }: { slug: string }) {
   const [query, setQuery] = useState("");
   const [density, setDensity] = useState<Density>("cards");
   const searchId = useId();
-  const agents = agentList(useAgentNames());
+  const searchRef = useRef<HTMLInputElement>(null);
+  useSlashToSearch(searchRef);
+  const agentNames = useAgentNames();
+  const agents = agentList(agentNames);
   const search = useDebouncedValue(query.trim(), SEARCH_DELAY_MS);
   const { first, items, hasMore, moreState, loadMore } = useChannel(slug, {
     kind: filter === "all" ? undefined : filter,
@@ -205,92 +322,129 @@ export function ChannelPage({ slug }: { slug: string }) {
   if (first.status === "error" && first.error instanceof ApiError && first.error.notFound) {
     return (
       <div className="page">
-        <h1>Proyecto no encontrado</h1>
+        <EmptyState kind="missing" heading title="Proyecto no encontrado">
+          <p className="muted">Este proyecto no existe o ya no se vigila.</p>
+        </EmptyState>
       </div>
     );
   }
 
   const unfiltered = filter === "all" && stateFilter === "all" && search === "";
   const emptyChannel = items.length === 0 && unfiltered && !hasMore;
+  const counts = stateCounts(items);
   return (
     <div className="page">
-      <div className="page-header">
-        <div>
-          <h1>#{slug}</h1>
-          <p>Commits y PRs revisados por {agents}.</p>
-          <UpdatedAgo updatedAt={first.updatedAt} failed={first.refreshFailed} />
-        </div>
+      <div className="channel-head">
+        <h1>#{slug}</h1>
+        <p className="channel-desc">Commits y PRs revisados por {agents}.</p>
+        <UpdatedAgo updatedAt={first.updatedAt} failed={first.refreshFailed} />
       </div>
       <div className="toolbar">
-        <label className="visually-hidden" htmlFor={searchId}>
-          Buscar cambios
-        </label>
-        <input
-          id={searchId}
-          className="search"
-          type="search"
-          placeholder="Buscar por título, autor, SHA o rama"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <fieldset className="filters" aria-label="Filtro">
+        <div className="search-box">
+          <SearchIcon />
+          <label className="visually-hidden" htmlFor={searchId}>
+            Buscar cambios
+          </label>
+          <input
+            id={searchId}
+            ref={searchRef}
+            className="search"
+            type="search"
+            placeholder="Buscar por título, autor, SHA o rama"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <span className="kbd" aria-hidden="true">
+            /
+          </span>
+        </div>
+        <fieldset className="segmented" aria-label="Filtro">
           {FILTERS.map((f) => (
-            <Button
+            <button
+              type="button"
+              className="segment"
               key={f.value}
               aria-pressed={filter === f.value}
               onClick={() => setFilter(f.value)}
             >
               {f.label}
-            </Button>
+            </button>
           ))}
         </fieldset>
-        <fieldset className="filters" aria-label="Densidad">
+        <fieldset className="segmented" aria-label="Densidad">
           {DENSITIES.map((d) => (
-            <Button
+            <button
+              type="button"
+              className="segment"
               key={d.value}
               aria-pressed={density === d.value}
               onClick={() => setDensity(d.value)}
             >
               {d.label}
-            </Button>
-          ))}
-        </fieldset>
-        <fieldset className="filters" aria-label="Estado de la review">
-          {STATE_FILTERS.map((f) => (
-            <Button
-              key={f.value}
-              aria-pressed={stateFilter === f.value}
-              onClick={() => setStateFilter(f.value)}
-            >
-              {f.label}
-            </Button>
+            </button>
           ))}
         </fieldset>
       </div>
-      <div className="stack">
-        <AsyncBoundary state={first} loadingLabel="Cargando cambios…">
+      <div className="list-box" data-density={density}>
+        <div className="list-head">
+          <fieldset className="state-tabs" aria-label="Estado de la review">
+            {STATE_FILTERS.map((f) => (
+              <button
+                type="button"
+                className="state-tab"
+                key={f.value}
+                aria-pressed={stateFilter === f.value}
+                onClick={() => setStateFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </fieldset>
+          {items.length > 0 && (
+            <span className="list-count muted">
+              {items.length}
+              {hasMore ? "+" : ""} {items.length === 1 && !hasMore ? "cambio" : "cambios"}
+              {counts && ` · ${counts}`}
+            </span>
+          )}
+        </div>
+        <AsyncBoundary
+          state={first}
+          loadingLabel="Cargando cambios…"
+          skeleton={<ChangeSkeletons />}
+        >
           {() => (
             <>
               {items.length === 0 && !emptyChannel && (
-                <output className="muted">Ningún cambio coincide con la búsqueda.</output>
+                <output className="list-empty muted">
+                  Ningún cambio coincide con la búsqueda.
+                </output>
               )}
               {emptyChannel && <EmptyChannel slug={slug} agents={agents} />}
-              {items.map((c) => (
-                <ChangeThread key={c.id} change={c} slug={slug} compact={density === "compact"} />
-              ))}
+              {items.length > 0 && (
+                <ul className="change-list">
+                  {items.map((c) => (
+                    <ChangeThread key={c.id} change={c} slug={slug} agentNames={agentNames} />
+                  ))}
+                </ul>
+              )}
               {moreState === "error" && (
                 <p className="notice" role="alert">
                   No se pudieron cargar más cambios.
                 </p>
               )}
               {hasMore && (
-                <Button onClick={loadMore} disabled={moreState === "loading"}>
-                  {moreState === "loading"
-                    ? "Cargando…"
-                    : moreState === "error"
-                      ? "Reintentar"
-                      : "Cargar más"}
-                </Button>
+                <div className="list-foot">
+                  <Button onClick={loadMore} disabled={moreState === "loading"}>
+                    {moreState === "loading" ? (
+                      <Busy activity="more" label="Cargando…" inline />
+                    ) : moreState === "error" ? (
+                      "Reintentar"
+                    ) : (
+                      "Cargar más"
+                    )}
+                  </Button>
+                </div>
               )}
             </>
           )}

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
+import { ThemeSwitch } from "../../components/ThemeSwitch";
 import { agentLabel } from "../../components/ui/AgentAvatar";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -53,26 +54,47 @@ export function SettingsPage() {
       <div className="page-header">
         <div>
           <h1>Ajustes</h1>
-          <p>Estado del servidor y proyectos vigilados; el resto aún no se persiste.</p>
+          <p>Apariencia, estado del servidor y proyectos vigilados.</p>
         </div>
       </div>
-      <div className="setting">
-        <span>Voto ciego</span>
-        <Badge>Próximamente</Badge>
-      </div>
-      <div className="setting">
-        <span>Agentes activos</span>
-        <span className="muted">
-          {health.status === "ready" ? agentNamesText(health.data.agentNames) : "—"}
-        </span>
-      </div>
+      <section className="box" aria-labelledby="settings-appearance">
+        <h2 className="box-title" id="settings-appearance">
+          Apariencia
+        </h2>
+        <div className="setting">
+          <span>
+            Tema
+            <span className="setting-hint muted">
+              «Sistema» sigue la preferencia de tu sistema operativo.
+            </span>
+          </span>
+          <ThemeSwitch />
+        </div>
+      </section>
+      <section className="box" aria-labelledby="settings-general">
+        <h2 className="box-title" id="settings-general">
+          General
+        </h2>
+        <div className="setting">
+          <span>Voto ciego</span>
+          <Badge>Próximamente</Badge>
+        </div>
+        <div className="setting">
+          <span>Agentes activos</span>
+          <span className="muted">
+            {health.status === "ready" ? agentNamesText(health.data.agentNames) : "—"}
+          </span>
+        </div>
+      </section>
       <ProjectsSettings />
-      <section aria-labelledby="settings-health">
-        <div className="row">
+      <section className="box" aria-labelledby="settings-health">
+        <div className="box-title row">
           <h2 id="settings-health">Diagnóstico</h2>
-          <Button onClick={health.retry}>Actualizar</Button>
+          <Button size="sm" onClick={health.retry}>
+            Actualizar
+          </Button>
         </div>
-        <AsyncBoundary state={health} loadingLabel="Comprobando dependencias…">
+        <AsyncBoundary state={health} loadingLabel="Comprobando dependencias…" activity="connect">
           {(data) => <Diagnostics health={data} />}
         </AsyncBoundary>
       </section>

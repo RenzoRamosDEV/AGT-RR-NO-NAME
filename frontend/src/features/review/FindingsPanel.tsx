@@ -1,13 +1,7 @@
 import { agentLabel } from "../../components/ui/AgentAvatar";
 import { Badge } from "../../components/ui/Badge";
 import type { Review } from "../../data/mock";
-import { findingLine, groupFindings, severityRank } from "../../lib/findings";
-
-function tone(severity: string): "danger" | "warning" | "neutral" {
-  const rank = severityRank(severity);
-  if (rank <= 1) return "danger";
-  return rank === 2 ? "warning" : "neutral";
-}
+import { findingLine, groupFindings, severityTone as tone } from "../../lib/findings";
 
 /** Findings of every review grouped by file; renders nothing when there are none. */
 export function FindingsPanel({ reviews }: { reviews: Review[] }) {
@@ -23,7 +17,7 @@ export function FindingsPanel({ reviews }: { reviews: Review[] }) {
             {group.findings.map((f) => {
               const line = findingLine(f);
               return (
-                <li key={f.key}>
+                <li key={f.key} data-tone={tone(f.severity)}>
                   <Badge tone={tone(f.severity)}>{f.severity}</Badge>{" "}
                   {line !== undefined && <span className="mono muted">L{line} </span>}
                   {f.message} <span className="muted">· {agentLabel(f.agent)}</span>

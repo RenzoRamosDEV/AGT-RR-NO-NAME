@@ -1,6 +1,8 @@
 import { type FormEvent, useId, useState } from "react";
 import { AsyncBoundary } from "../../components/AsyncBoundary";
+import { Busy } from "../../components/Busy";
 import { Modal } from "../../components/Modal";
+import { MetalButton } from "../../components/fx/MetalButton";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { useDataSource } from "../../data/source";
@@ -111,7 +113,7 @@ function RemoveDialog({
             Cancelar
           </Button>
           <Button type="submit" variant="danger" disabled={sending}>
-            {sending ? "Quitando…" : "Quitar proyecto"}
+            {sending ? <Busy activity="connect" label="Quitando…" inline /> : "Quitar proyecto"}
           </Button>
         </div>
       </form>
@@ -146,14 +148,27 @@ function ProjectRow({
         )}
         {project.github && (
           <Button
+            size="sm"
             onClick={onSync}
             disabled={syncing}
-            aria-label={`Sincronizar PRs de ${project.name}`}
+            aria-busy={syncing}
+            // While it runs the visible text is the name ("Sincronizando…"): a fixed aria-label
+            // would hide it from assistive technology.
+            aria-label={syncing ? undefined : `Sincronizar PRs de ${project.name}`}
           >
-            {syncing ? "Sincronizando…" : "Sincronizar PRs"}
+            {syncing ? (
+              <Busy activity="connect" label="Sincronizando…" inline />
+            ) : (
+              "Sincronizar PRs"
+            )}
           </Button>
         )}
-        <Button onClick={onRemove} aria-label={`Quitar proyecto ${project.name}`}>
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={onRemove}
+          aria-label={`Quitar proyecto ${project.name}`}
+        >
           Quitar proyecto
         </Button>
       </div>
@@ -204,16 +219,18 @@ export function ProjectsSettings() {
   }
 
   return (
-    <section aria-labelledby="settings-projects">
-      <div className="row">
+    <section className="box" aria-labelledby="settings-projects">
+      <div className="box-title row">
         <h2 id="settings-projects">Proyectos vigilados</h2>
-        <Button onClick={openAddProject}>Añadir proyecto</Button>
+        <MetalButton size="sm" variant="primary" onClick={openAddProject}>
+          Añadir proyecto
+        </MetalButton>
       </div>
-      {notice && <output className="notice">{notice}</output>}
+      {notice && <output className="notice flat success">{notice}</output>}
       <AsyncBoundary state={projects} loadingLabel="Cargando proyectos…">
         {(list) =>
           list.length === 0 ? (
-            <p className="muted">Aún no hay proyectos vigilados.</p>
+            <p className="muted box-pad">Aún no hay proyectos vigilados.</p>
           ) : (
             <>
               <div className="retry">

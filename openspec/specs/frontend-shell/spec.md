@@ -6,17 +6,9 @@ una estructura de canales por proyecto y una representación clara de los estado
 
 ## Requirements
 
-### Requirement: Tema negro único
-La interfaz SHALL renderizarse siempre con un tema negro, independientemente de la preferencia
-de color del sistema, sin parpadeo de otro tema en la carga.
-
-#### Scenario: Sistema en modo claro
-- **WHEN** el navegador declara `prefers-color-scheme: light` y se abre la aplicación
-- **THEN** el fondo y las superficies son negros desde el primer pintado
-
 ### Requirement: Navegación por canales
 La interfaz SHALL mostrar una barra lateral con un canal por proyecto y una sección General con
-enlaces a Estadísticas y Ajustes, y SHALL marcar el destino activo.
+enlaces a Estadísticas y Ajustes, y SHALL marcar el destino activo con el color de énfasis.
 
 #### Scenario: Abrir un canal
 - **WHEN** el usuario selecciona un proyecto en la barra lateral
@@ -31,23 +23,31 @@ con `aria-expanded` y operable con teclado.
 - **THEN** se muestran las reviews de cada agente y `aria-expanded` pasa a `true`
 
 ### Requirement: Estado de review en curso
-Una review en curso SHALL mostrar una animación de carga de IA; una completada o fallida SHALL
-mostrarse sin animación y con indicación textual del estado.
+Una review en curso SHALL mostrarse como un mensaje con el orbe de «pensando» y su etiqueta; una
+completada o fallida SHALL mostrarse sin animación y con indicación textual del estado.
 
 #### Scenario: Review en curso
 - **WHEN** una review está en estado "en curso"
-- **THEN** se muestra un indicador animado de "pensando" y un borde animado
+- **THEN** se muestra un indicador animado de "pensando" con el nombre del agente
 
 #### Scenario: Movimiento reducido
 - **WHEN** el usuario tiene `prefers-reduced-motion: reduce`
-- **THEN** las animaciones de carga se sustituyen por un indicador estático con texto
+- **THEN** las animaciones de carga y las transiciones se desactivan y el orbe se sustituye por un
+  indicador estático con texto
 
 ### Requirement: Contraste accesible
-El texto y los controles interactivos SHALL cumplir contraste WCAG AA sobre el fondo negro.
+El texto y los controles interactivos SHALL cumplir contraste WCAG AA en el tema claro y en el
+oscuro: el texto atenuado sobre cada superficie, los colores de estado sobre las superficies y
+sobre sus fondos tintados, el botón principal (normal y con el cursor encima), el elemento
+seleccionado de la barra lateral y el texto sobre los fondos del diff.
 
 #### Scenario: Texto secundario
-- **WHEN** se muestra texto atenuado sobre una superficie
+- **WHEN** se muestra texto atenuado sobre una superficie, en cualquiera de los dos temas
 - **THEN** su ratio de contraste es al menos 4.5:1
+
+#### Scenario: Estados sobre su fondo
+- **WHEN** se muestra un estado (éxito, fallo, aviso) sobre su fondo tintado
+- **THEN** su ratio de contraste es al menos 4.5:1 en ambos temas
 
 ### Requirement: Navegación adaptable
 En pantallas estrechas la barra lateral SHALL ocultar sus enlaces tras un botón "Menú" que
@@ -537,3 +537,270 @@ de reviews en el título. Sin runs anteriores no SHALL haber sección colapsada.
 #### Scenario: Un solo run
 - **WHEN** todas las reviews son del run actual
 - **THEN** no aparece ninguna sección colapsada
+
+### Requirement: Indicador de carga con orbes
+Toda carga o acción en curso de la interfaz SHALL mostrar un orbe de `thinking-orbs` de 20 px, con
+el tema vigente (claro u oscuro), junto a una etiqueta de texto visible, sin cambiar la maquetación
+(el orbe reserva su hueco). El estado del orbe SHALL depender de la actividad: cargas de listas,
+páginas, proyectos, detalle y estadísticas `searching`; «Cargar más» y agentes revisando `working`;
+reintento de una review `solving`; añadir, quitar o sincronizar proyectos y el diagnóstico
+`connecting`. El indicador SHALL ser accesible (región de estado anunciada con la etiqueta; el orbe
+es decorativo) y, con `prefers-reduced-motion`, SHALL sustituir el orbe animado por un «…» estático
+sin montar ningún canvas.
+
+#### Scenario: Carga de una página
+- **WHEN** el canal, el detalle, las estadísticas, los proyectos o el diagnóstico están cargando
+- **THEN** se muestra su etiqueta («Cargando cambios…», «Comprobando dependencias…», etc.) con un
+  orbe del estado que le corresponde
+
+#### Scenario: Acción en curso en un botón
+- **WHEN** el usuario envía «Reintentar review», «Añadir», «Quitar proyecto» o «Sincronizar PRs», o
+  pulsa «Cargar más» y la petición está en curso
+- **THEN** el botón queda deshabilitado y su texto lleva un orbe en línea del estado de esa acción
+
+#### Scenario: Movimiento reducido
+- **WHEN** el usuario prefiere movimiento reducido
+- **THEN** ninguna carga monta un canvas animado y todas conservan su etiqueta de texto
+
+#### Scenario: Sondeo silencioso
+- **WHEN** una página se refresca sola por el sondeo
+- **THEN** no aparece ningún orbe y los datos anteriores siguen visibles
+
+#### Scenario: Tema claro
+- **WHEN** el tema vigente es el claro
+- **THEN** el orbe se dibuja con la tinta oscura del tema claro
+
+### Requirement: Agentes pendientes de un change
+Las tarjetas del canal y el detalle de un change con estado agregado `pending` o `running` SHALL
+mostrar un orbe `working` con el nombre de cada agente esperado (`agent_names` del diagnóstico) que
+aún no tiene review del run actual, y SHALL retirarlo cuando esa review llega. Un agente con review
+de un run anterior SHALL seguir contando como pendiente en el run actual. Mientras los agentes
+esperados no se conozcan, SHALL mostrarse un único orbe genérico en lugar de inventar nombres. Un
+change `completed`, `failed` o `partial_failed` no SHALL mostrar agentes pendientes.
+
+#### Scenario: Ninguna review todavía
+- **WHEN** un change `pending` tiene agentes esperados `agent_1` y `agent_2` y ninguna review
+- **THEN** se muestran dos orbes, «Agent_1 está revisando…» y «Agent_2 está revisando…»
+
+#### Scenario: Review parcial
+- **WHEN** `agent_1` ya entregó su review y `agent_2` no
+- **THEN** solo queda el orbe de `agent_2`
+
+#### Scenario: Todos entregaron
+- **WHEN** el change pasa a `completed`
+- **THEN** no queda ningún orbe de agente pendiente
+
+#### Scenario: Reintento
+- **WHEN** un change tiene reviews del run 1 y está `pending` en el run 2
+- **THEN** ambos agentes figuran como pendientes del run 2
+
+#### Scenario: Agentes desconocidos
+- **WHEN** el diagnóstico aún no ha informado de los agentes y el change está `pending`
+- **THEN** se muestra un único orbe «Esperando a los agentes…»
+
+### Requirement: Temas claro y oscuro
+La interfaz SHALL ofrecer un tema oscuro (por defecto) y uno claro, definidos como tokens CSS, y un
+selector Sistema / Claro / Oscuro en la cabecera y en Ajustes que SHALL permanecer sincronizado.
+«Sistema» SHALL seguir `prefers-color-scheme`, también cuando cambie con la página abierta. El tema
+SHALL fijarse antes del primer pintado, sin parpadeo del otro, y lo único que se guarda es la
+preferencia elegida (`localStorage`), nunca datos del usuario.
+
+#### Scenario: Sistema en modo claro
+- **WHEN** no hay preferencia guardada y el navegador declara `prefers-color-scheme: light`
+- **THEN** la página se pinta en el tema claro desde el primer fotograma
+
+#### Scenario: Elegir un tema
+- **WHEN** el usuario pulsa «Oscuro» en Ajustes
+- **THEN** `<html data-theme>` pasa a `dark`, se guarda `duelo-theme=dark` y el selector de la
+  cabecera marca también el oscuro
+
+#### Scenario: Volver a Sistema
+- **WHEN** el usuario pulsa «Sistema»
+- **THEN** se borra la preferencia guardada y el tema vuelve a seguir al sistema operativo
+
+#### Scenario: Almacenamiento bloqueado
+- **WHEN** `localStorage` no se puede escribir
+- **THEN** el tema cambia igualmente y la elección dura hasta cerrar la página
+
+### Requirement: Marco de la aplicación
+La interfaz SHALL tener una barra superior con la marca (enlace al inicio) y el selector de tema, y
+una barra lateral estilo Slack con la sección Proyectos como lista de canales (`#`), colapsable con
+`aria-expanded`, una acción «Añadir proyecto» y la sección General. En pantallas estrechas la barra
+lateral SHALL ser un cajón con velo que se cierra con Escape, con el velo o al navegar, y sus
+enlaces no SHALL ser alcanzables con Tab mientras esté cerrado.
+
+#### Scenario: Colapsar los proyectos
+- **WHEN** el usuario pulsa «Proyectos» en la barra lateral
+- **THEN** la lista de canales se oculta, `aria-expanded` pasa a `false` y los enlaces de General
+  siguen disponibles
+
+#### Scenario: Orden de tabulación
+- **WHEN** el usuario recorre la página con Tab
+- **THEN** pasa por el menú, la marca, el selector de tema, la barra lateral y la página
+
+### Requirement: Lista de changes estilo PR
+El canal SHALL listar sus changes como la lista de PRs de GitHub: un icono de estado con texto
+alternativo (pendiente, en curso, fallo parcial, fallida, completada), el título enlazado en
+negrita, `#sha · por autor · antigüedad`, una etiqueta Commit o PR y, a la derecha, un «check» por
+agente con su estado como texto. La cabecera de la lista SHALL ofrecer el filtro de estado como
+pestañas y contar lo **cargado** por estado, añadiendo «+» cuando haya otra página.
+
+#### Scenario: Estado con texto alternativo
+- **WHEN** se muestra un change con `review_status` `partial_failed`
+- **THEN** su icono es una imagen con el texto «Fallo parcial»
+
+#### Scenario: Checks de los agentes
+- **WHEN** un change tiene reviews de `agent_1` (completada) y `agent_2` (fallida)
+- **THEN** la fila muestra dos checks con los nombres «Agent_1: completada» y «Agent_2: fallida»
+
+#### Scenario: Sin reviews todavía
+- **WHEN** un change aún no tiene ninguna review
+- **THEN** la fila no muestra checks y sí los agentes pendientes
+
+#### Scenario: Contadores de lo cargado
+- **WHEN** hay tres changes cargados y hay otra página
+- **THEN** la cabecera dice «3+ cambios» seguido del desglose por estado
+
+### Requirement: Reviews como mensajes
+Cada review SHALL mostrarse como un mensaje de una app: avatar con color estable por agente,
+nombre, etiqueta «APP», estado, resumen, hallazgos con una barra de color por severidad (rojo para
+`critical`, `bug` y `high`; ámbar para `risk` y `medium`; neutro para el resto) y, como
+«reacciones», el run, la duración y la nota. Dos agentes cuyos nombres solo difieren en un carácter
+SHALL tener colores claramente distintos.
+
+#### Scenario: Severidad con color
+- **WHEN** una review tiene hallazgos `bug`, `risk` y `nit`
+- **THEN** sus barras son roja, ámbar y neutra respectivamente
+
+#### Scenario: Agente sin respuesta
+- **WHEN** un agente esperado aún no ha entregado su review
+- **THEN** aparece como un mensaje «escribiendo» con su orbe y «Agent_1 está revisando…»
+
+### Requirement: Detalle como conversación
+El detalle de un change SHALL organizarse en una cabecera con la píldora de estado (icono y texto),
+la conversación de los agentes y «Archivos cambiados». Los hallazgos SHALL listarse una sola vez
+en el panel agrupado por archivo (no repetidos dentro de los mensajes), las reviews SHALL salir
+ordenadas por agente, y el diff SHALL mostrar una cabecera por archivo con `+N −M` y la barra de
+cinco cuadrados (decorativa, oculta a los lectores de pantalla), cabeceras de hunk diferenciadas,
+numeración y fondos distintos para líneas añadidas y borradas.
+
+#### Scenario: Hallazgos sin duplicar
+- **WHEN** se abre un change con un hallazgo
+- **THEN** su mensaje aparece una vez en el panel de hallazgos y no dentro del mensaje del agente
+
+#### Scenario: Barra de cuadrados
+- **WHEN** un archivo tiene 8 líneas añadidas y 2 borradas
+- **THEN** su barra tiene cuatro cuadrados verdes y uno rojo, y está oculta a la tecnología asistiva
+
+### Requirement: Atajo de búsqueda
+En el canal, pulsar «/» SHALL enfocar el buscador sin escribir la barra, salvo que el foco esté ya
+en un campo de texto o haya un diálogo abierto.
+
+#### Scenario: Pulsar «/»
+- **WHEN** el usuario pulsa «/» con el foco fuera de un campo
+- **THEN** el buscador recibe el foco y queda vacío
+
+### Requirement: Ajustes en cajas
+Ajustes SHALL organizarse en cajas con título (Apariencia, General, Proyectos vigilados,
+Diagnóstico); Apariencia contiene el selector de tema y las acciones destructivas («Quitar
+proyecto») se muestran en rojo y con confirmación.
+
+#### Scenario: Cambiar el tema desde Ajustes
+- **WHEN** el usuario elige «Claro» en la caja Apariencia
+- **THEN** la interfaz pasa al tema claro
+
+### Requirement: Tarjetas de resumen en estadísticas
+Estadísticas SHALL mostrar, sobre la tabla, tarjetas con el total de reviews, completadas, con
+fallo y las medias globales de duración y nota, ponderadas por las reviews de cada agente, con un
+guion cuando nadie reporta la media.
+
+#### Scenario: Medias ponderadas
+- **WHEN** `agent_1` tiene 3 reviews con 1 s y `agent_2` 1 review con 5 s
+- **THEN** la duración media mostrada es 2 s
+
+### Requirement: Estados vacíos y de error con ilustración
+Los estados vacíos, de error y de página no encontrada SHALL mostrar una ilustración decorativa, un
+título, una explicación y la acción principal; mientras carga el canal SHALL verse una estructura
+de esqueleto oculta a la tecnología asistiva junto al texto de carga.
+
+#### Scenario: Página no encontrada
+- **WHEN** se abre una dirección que no existe
+- **THEN** se ve el título «No encontrado» como encabezado de la página y un botón «Volver al
+  inicio»
+
+### Requirement: Brillo de borde en lo que está en curso
+Las filas del canal con estado agregado `pending` o `running` y el panel «Revisión de los agentes»
+del detalle de un change en ese estado SHALL llevar un brillo ámbar que recorre su borde inferior
+(`border-beam`). Un change `completed`, `failed` o `partial_failed` NO SHALL llevarlo. El brillo SHALL
+ser decorativo (no sustituye al icono ni al texto de estado), SHALL leer el tema efectivo de la
+aplicación y SHALL desaparecer cuando el change termina en el siguiente refresco. Con
+`prefers-reduced-motion` NO SHALL animarse ni cargarse.
+
+#### Scenario: Filas en curso y terminadas
+- **WHEN** el canal lista cambios `pending`, `running`, `completed` y `failed`
+- **THEN** solo las filas `pending` y `running` llevan el brillo
+
+#### Scenario: El change termina
+- **WHEN** un change con brillo pasa a `completed` en el siguiente refresco
+- **THEN** la fila conserva su contenido y pierde el brillo
+
+#### Scenario: Movimiento reducido
+- **WHEN** el usuario prefiere movimiento reducido
+- **THEN** ninguna fila ni panel se envuelve con el brillo
+
+### Requirement: Selector de tema con indicador líquido
+El selector Sistema/Claro/Oscuro SHALL pintarse primero como un control segmentado normal, usable de
+inmediato, y SHALL mostrar el segmento activo como un indicador líquido que se desliza a la opción
+elegida (`liquid-gooey`, efecto `move`) cuando la capa diferida está cargada. Los botones SHALL seguir
+siendo botones reales (`aria-pressed`, nombre accesible) por encima del indicador, que SHALL ser
+decorativo (`aria-hidden`). Con `prefers-reduced-motion` NO SHALL haber indicador y el botón pulsado
+SHALL quedar teñido.
+
+#### Scenario: Primer pintado
+- **WHEN** se muestra el selector antes de que llegue la capa líquida
+- **THEN** los tres botones funcionan y no hay indicador líquido
+
+#### Scenario: Cambio de tema
+- **WHEN** el usuario elige «Oscuro» con la capa líquida cargada
+- **THEN** el tema cambia, el botón queda `aria-pressed` y el indicador se desplaza a esa opción
+
+#### Scenario: Movimiento reducido
+- **WHEN** el usuario prefiere movimiento reducido
+- **THEN** no hay indicador líquido y el selector sigue cambiando el tema
+
+### Requirement: Botones con anillo de metal en las acciones clave
+«Añadir proyecto» (estado vacío de la portada y Ajustes) y «Reintentar review» SHALL ser un
+`MetalButton`: con WebGL2 y sin movimiento reducido llevan un anillo de metal líquido (`metal-fx`) y,
+en caso contrario, son exactamente el mismo botón sin anillo. Como el anillo sustituye el fondo del
+botón, el botón SHALL usar siempre el aspecto neutro (color de texto normal, nunca el blanco sobre
+verde de un botón primario), con o sin anillo, para que el texto cumpla el contraste AA y no haya
+saltos al cargar. El botón SHALL seguir siendo un botón real, con foco visible y estado deshabilitado.
+
+#### Scenario: Sin WebGL2
+- **WHEN** el navegador no tiene WebGL2
+- **THEN** «Añadir proyecto» es un botón neutro legible, sin anillo
+
+#### Scenario: Con WebGL2
+- **WHEN** hay WebGL2 y el usuario no pide movimiento reducido
+- **THEN** el botón se muestra dentro del anillo de metal y responde a los clics
+
+### Requirement: Héroe de los estados vacíos
+La portada sin proyectos y el canal sin cambios SHALL mostrar como héroe una ilustración propia de la
+marca (`HeroImage`). Con WebGL y sin movimiento reducido SHALL aparecer con el cargador «generando…»
+de `img-fx` que se convierte en la imagen, en un solo pase, y quedarse en la imagen; en caso contrario,
+o mientras llega la capa diferida, SHALL ser la misma imagen fija. La ilustración SHALL ser decorativa
+(`alt` vacío). La capa de WebGL, y `three` con ella, NO SHALL formar parte del bundle principal. La
+página «No encontrado» SHALL conservar su ilustración de líneas.
+
+#### Scenario: Con WebGL
+- **WHEN** se muestra un estado vacío en un navegador con WebGL
+- **THEN** la imagen fija se ve mientras llega la capa y después se reproduce el efecto
+
+#### Scenario: Sin WebGL o con movimiento reducido
+- **WHEN** no hay WebGL o el usuario prefiere movimiento reducido
+- **THEN** se muestra la imagen fija y no se descarga la capa de WebGL
+
+#### Scenario: Peso del bundle
+- **WHEN** se compila la aplicación
+- **THEN** `border-beam`, `liquid-gooey`, `metal-fx` e `img-fx` (con `three`) van en chunks propios y
+  el bundle principal no crece de forma apreciable

@@ -1,6 +1,8 @@
 import { Link, Navigate, Route, Routes, useParams } from "react-router";
+import heroDuelo from "./assets/hero-duelo.png";
 import { AsyncBoundary } from "./components/AsyncBoundary";
-import { Button } from "./components/ui/Button";
+import { EmptyState } from "./components/EmptyState";
+import { MetalButton } from "./components/fx/MetalButton";
 import { ChannelPage } from "./features/channel/ChannelPage";
 import { useProjects } from "./features/projects/ProjectsContext";
 import { ChangeDetailPage } from "./features/review/ChangeDetailPage";
@@ -18,14 +20,19 @@ function FirstProject() {
           list.length > 0 ? (
             <Navigate to={projectPath(list[0].slug)} replace />
           ) : (
-            <div className="stack">
-              <p className="muted">Aún no hay proyectos vigilados.</p>
-              <div className="actions">
-                <Button variant="primary" onClick={openAddProject}>
+            <EmptyState
+              hero={heroDuelo}
+              title="Aún no hay proyectos vigilados."
+              action={
+                <MetalButton variant="primary" onClick={openAddProject}>
                   Añadir proyecto
-                </Button>
-              </div>
-            </div>
+                </MetalButton>
+              }
+            >
+              <p className="muted">
+                Añade la carpeta de un repositorio git y Duelo revisará cada commit y push.
+              </p>
+            </EmptyState>
           )
         }
       </AsyncBoundary>
@@ -36,9 +43,18 @@ function FirstProject() {
 function NotFoundPage() {
   return (
     <div className="page">
-      <h1>No encontrado</h1>
-      <p className="muted">Esta dirección no corresponde a ninguna página.</p>
-      <Link to="/">Volver al inicio</Link>
+      <EmptyState
+        kind="missing"
+        heading
+        title="No encontrado"
+        action={
+          <Link className="btn btn-primary" to="/">
+            Volver al inicio
+          </Link>
+        }
+      >
+        <p className="muted">Esta dirección no corresponde a ninguna página.</p>
+      </EmptyState>
     </div>
   );
 }

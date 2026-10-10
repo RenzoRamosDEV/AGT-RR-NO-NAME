@@ -1,11 +1,39 @@
 import { describe, expect, it } from "vitest";
 import { makeFinding, makeReview } from "../test/fixtures";
-import { findingFile, findingLine, findingLocation, groupFindings, severityRank } from "./findings";
+import {
+  findingFile,
+  findingLine,
+  findingLocation,
+  groupFindings,
+  severityRank,
+  severityTone,
+} from "./findings";
 
 describe("severityRank", () => {
   it("orders known severities and sends unknown ones last", () => {
     expect(severityRank("critical")).toBeLessThan(severityRank("HIGH"));
     expect(severityRank("info")).toBeLessThan(severityRank("nit"));
+    expect(severityRank("nit")).toBeLessThan(severityRank("something else"));
+  });
+
+  it("knows the backend's own severities, most serious first", () => {
+    const order = ["bug", "risk", "improvement", "nit"].map(severityRank);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+});
+
+describe("severityTone", () => {
+  it.each([
+    ["critical", "danger"],
+    ["BUG", "danger"],
+    ["high", "danger"],
+    ["risk", "warning"],
+    ["medium", "warning"],
+    ["improvement", "neutral"],
+    ["nit", "neutral"],
+    ["whatever", "neutral"],
+  ] as const)("%s is %s", (severity, tone) => {
+    expect(severityTone(severity)).toBe(tone);
   });
 });
 

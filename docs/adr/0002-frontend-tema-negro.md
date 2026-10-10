@@ -1,6 +1,6 @@
 # 0002. Frontend con tema negro único
 
-- Estado: Aceptada
+- Estado: Sustituida por [0003](0003-frontend-estetica-github-slack.md)
 - Fecha: 2026-10-09
 
 ## Contexto

@@ -1,17 +1,6 @@
-import { ThinkingOrb } from "thinking-orbs";
-import { useReducedMotion } from "../lib/useReducedMotion";
+import { Busy } from "./Busy";
 
-/** "Agent is thinking" indicator: animated orb, or static text under reduced motion. */
+/** "Agent is thinking" indicator: an orb next to the label, or a static "…" under reduced motion. */
 export function AgentThinking({ label }: { label: string }) {
-  const reduced = useReducedMotion();
-  return (
-    <output className="thinking">
-      {reduced ? (
-        <span aria-hidden="true">…</span>
-      ) : (
-        <ThinkingOrb state="working" size={20} theme="dark" aria-label={label} />
-      )}
-      <span>{label}</span>
-    </output>
-  );
+  return <Busy activity="agent" label={label} className="thinking" />;
 }

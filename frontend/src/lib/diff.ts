@@ -82,3 +82,19 @@ export function diffFiles(rows: DiffRow[]): DiffFile[] {
   }
   return files;
 }
+
+/**
+ * GitHub's five-square bar for a file: how many squares are additions, deletions and neutral.
+ * With changes, a side that has any gets at least one square; the total is always 5.
+ */
+export function diffSquares(
+  additions: number,
+  deletions: number,
+): { add: number; del: number; neutral: number } {
+  const total = additions + deletions;
+  if (total === 0) return { add: 0, del: 0, neutral: 5 };
+  let add = Math.round((additions / total) * 5);
+  if (additions > 0 && add === 0) add = 1;
+  if (deletions > 0 && add === 5) add = 4;
+  return { add, del: 5 - add, neutral: 0 };
+}

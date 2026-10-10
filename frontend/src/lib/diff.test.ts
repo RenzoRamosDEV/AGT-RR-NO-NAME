@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UNNAMED_FILE, diffFiles, parseDiff } from "./diff";
+import { UNNAMED_FILE, diffFiles, diffSquares, parseDiff } from "./diff";
 
 describe("parseDiff", () => {
   it("numbers old and new lines independently", () => {
@@ -94,5 +94,36 @@ describe("diffFiles", () => {
 
   it("returns no files for an empty diff", () => {
     expect(diffFiles(parseDiff(""))).toEqual([]);
+  });
+});
+
+describe("diffSquares", () => {
+  it("is five neutral squares for a file with no changes", () => {
+    expect(diffSquares(0, 0)).toEqual({ add: 0, del: 0, neutral: 5 });
+  });
+
+  it.each([
+    [10, 0, 5, 0],
+    [0, 10, 0, 5],
+    [5, 5, 3, 2],
+    [8, 2, 4, 1],
+    [1, 1, 3, 2],
+  ])("%i additions and %i deletions fill %i green and %i red squares", (a, d, add, del) => {
+    expect(diffSquares(a, d)).toEqual({ add, del, neutral: 0 });
+  });
+
+  it("never leaves a side that has changes without a square, and always totals five", () => {
+    expect(diffSquares(1, 100)).toEqual({ add: 1, del: 4, neutral: 0 });
+    expect(diffSquares(100, 1)).toEqual({ add: 4, del: 1, neutral: 0 });
+    for (const [a, d] of [
+      [1, 1],
+      [3, 97],
+      [97, 3],
+      [50, 50],
+      [7, 0],
+    ]) {
+      const s = diffSquares(a, d);
+      expect(s.add + s.del + s.neutral).toBe(5);
+    }
   });
 });

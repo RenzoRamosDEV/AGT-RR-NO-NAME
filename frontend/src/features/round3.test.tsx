@@ -139,12 +139,14 @@ describe("compact channel", () => {
     });
     renderWith({ changes }, "/p/demo");
     await screen.findByText("alpha");
-    expect(document.querySelectorAll(".change-row")).toHaveLength(0);
+    const list = () => document.querySelector(".list-box");
+    expect(list()).toHaveAttribute("data-density", "cards");
 
     await userEvent.type(screen.getByRole("searchbox"), "ana");
     await userEvent.click(screen.getByRole("button", { name: "Compacta" }));
     // Wait for the filtered result itself: "beta" also disappears while the list is loading.
     await waitFor(() => expect(document.querySelectorAll(".change-row")).toHaveLength(1));
+    expect(list()).toHaveAttribute("data-density", "compact");
     expect(screen.queryByText("beta")).toBeNull();
 
     expect(screen.getByRole("button", { name: "Compacta" })).toHaveAttribute(

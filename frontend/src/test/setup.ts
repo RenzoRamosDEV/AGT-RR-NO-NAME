@@ -19,3 +19,16 @@ if (!window.matchMedia) {
     }) as MediaQueryList;
 }
 HTMLCanvasElement.prototype.getContext = (() => null) as never;
+
+// Observers used by the libraries.dev effects (liquid-gooey, metal-fx, border-beam); jsdom has none.
+class NoopObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+const browser = window as unknown as Record<string, unknown>;
+browser.ResizeObserver ??= NoopObserver;
+browser.IntersectionObserver ??= NoopObserver;
